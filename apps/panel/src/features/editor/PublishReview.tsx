@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowUpRight,
   ArrowLeft,
@@ -15,6 +16,7 @@ import {
   type ProjectInput,
 } from "@veca/content";
 import { Button } from "../../components/ui";
+import { Modal } from "../../components/Modal";
 export function PublishReview({
   draft,
   slug,
@@ -24,20 +26,17 @@ export function PublishReview({
   updating,
   hasBeenPublished,
   socialShareQueued,
-  shareOnSocial,
-  onShareOnSocialChange,
 }: {
   draft: ProjectInput;
   slug: string;
   busy: boolean;
-  onPublish: (shareOnSocial: boolean) => void;
+  onPublish: () => void;
   onEdit: () => void;
   updating: boolean;
   hasBeenPublished: boolean;
   socialShareQueued: boolean;
-  shareOnSocial: boolean;
-  onShareOnSocialChange: (share: boolean) => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
   const issues = publicationIssues(draft),
     cover = draft.images.find((image) => image.id === draft.coverId),
     seo = seoFor(draft, slug);
@@ -136,22 +135,13 @@ export function PublishReview({
             </ul>
           )}
           <div className="publish-final-action">
-            {!hasBeenPublished && (
-              <label className="publish-social-option">
-                <input
-                  type="checkbox"
-                  checked={shareOnSocial}
-                  onChange={(event) =>
-                    onShareOnSocialChange(event.currentTarget.checked)
-                  }
-                />
-                Compartir en redes
-              </label>
-            )}
             {socialShareQueued && <small>Envío a redes registrado.</small>}
             <Button
               disabled={busy || !!issues.length}
-              onClick={() => onPublish(!hasBeenPublished && shareOnSocial)}
+              onClick={() => {
+                if (hasBeenPublished) onPublish();
+                else setConfirming(true);
+              }}
             >
               <Send size={18} />
               {busy
@@ -160,10 +150,7 @@ export function PublishReview({
                   ? "Publicar cambios"
                   : "Publicar en VECA"}
             </Button>
-            <small>
-              Guardar un borrador lo mantiene privado. Solo este botón lo
-              publica en la web.
-            </small>
+            <small>Guardar un borrador lo mantiene privado.</small>
           </div>
           <div className="publication-seo">
             <span>ASÍ APARECERÁ EN BUSCADORES</span>
@@ -173,6 +160,32 @@ export function PublishReview({
           </div>
         </div>
       </div>
+      {confirming && (
+        <Modal
+          title="¿Publicar esta obra?"
+          description="La obra quedará visible en veca.com.pe. Su portada y descripción también se compartirán automáticamente en Instagram, Facebook y LinkedIn."
+          onClose={() => setConfirming(false)}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button variant="ghost" onClick={() => setConfirming(false)}>
+                Cancelar
+              </Button>
+              <Button
+                disabled={busy || !!issues.length}
+                onClick={() => {
+                  setConfirming(false);
+                  onPublish();
+                }}
+              >
+                <Send size={17} />
+                Confirmar publicación
+              </Button>
+            </footer>
+          }
+        >
+          {null}
+        </Modal>
+      )}
     </section>
   );
 }
@@ -197,7 +210,9 @@ export function PublishSuccess({
         La historia ya tiene su lugar en la web. Puedes compartirla o volver
         cuando quieras para seguir editando.
       </span>
-      {project.socialShareQueuedAt && <span>Envío a redes registrado.</span>}
+      {project.socialShareQueuedAt && (
+        <span>Envío de la portada y el texto a redes registrado.</span>
+      )}
       <div className="publication-success-actions">
         <a
           className="btn btn-primary"

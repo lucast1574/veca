@@ -128,7 +128,7 @@ export class ProjectsService {
       }),
     );
   }
-  async publish(id: string, version: number, shareOnSocial = false) {
+  async publish(id: string, version: number) {
     const d = await this.repo.get(id);
     const value = await this.validated(d.draft);
     const issues = publicationIssues(value);
@@ -151,7 +151,7 @@ export class ProjectsService {
         published,
         publishedVersion: version + 1,
         firstPublishedAt: firstPublishedAt ?? now,
-        ...(!firstPublishedAt && shareOnSocial && !d.socialShare
+        ...(!firstPublishedAt && !d.socialShare
           ? { socialShare: { queuedAt: now, publishedVersion: version + 1 } }
           : {}),
         updatedAt: now,
