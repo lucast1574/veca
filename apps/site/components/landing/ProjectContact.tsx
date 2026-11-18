@@ -1,10 +1,21 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
-import { REQUEST_TYPES, publicLeadSchema } from "@veca/content";
+import {
+  REQUEST_TYPES,
+  publicLeadSchema,
+  socialLeadSchema,
+  type SocialChannel,
+} from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { WHATSAPP } from "./content";
 import { Arrow } from "./Controls";
-export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
+export function ProjectContact({
+  submissionUrl,
+  source,
+}: {
+  submissionUrl: string;
+  source?: SocialChannel;
+}) {
   const [type, setType] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -13,7 +24,7 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
   const trigger = useRef<HTMLButtonElement>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!type) {
+    if (!source && !type) {
       setError("Elige el tipo de trabajo que tienes en mente.");
       trigger.current?.focus();
       return;
@@ -24,13 +35,17 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
       name: String(form.get("name") || ""),
       email: String(form.get("email") || ""),
       phone: String(form.get("phone") || ""),
-      district: String(form.get("district") || ""),
-      idea: String(form.get("idea") || ""),
-      requestType: type,
       website: String(form.get("website") || ""),
       submissionId: operation.current,
     };
-    const parsed = publicLeadSchema.safeParse(data);
+    const parsed = source
+      ? socialLeadSchema.safeParse({ ...data, source })
+      : publicLeadSchema.safeParse({
+          ...data,
+          district: String(form.get("district") || ""),
+          idea: String(form.get("idea") || ""),
+          requestType: type,
+        });
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);
       return;
@@ -63,39 +78,47 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
   }
   return (
     <section
-      className="ve-inquiry"
+      className={source ? "ve-inquiry ve-inquiry--social" : "ve-inquiry"}
       id="contacto"
-      aria-labelledby="ve-contact-title"
+      aria-labelledby={source ? "ve-social-contact-title" : "ve-contact-title"}
     >
       <div className="ve-inquiry-scene">
         <img
           src="/assets/vivienda.webp"
-          alt="Ambiente residencial abierto a la luz por sus ventanas"
+          alt={
+            source
+              ? ""
+              : "Ambiente residencial abierto a la luz por sus ventanas"
+          }
           width="1600"
           height="1067"
           loading="lazy"
         />
         <div className="ve-inquiry-shade" />
-        <div className="ve-inquiry-heading">
-          <p>Tu espacio puede ser el siguiente</p>
-          <h2 id="ve-contact-title">
-            Todo empieza
-            <br />
-            con tu idea.
-          </h2>
-          <span>
-            Cuéntanos qué quieres transformar.
-            <br />
-            El siguiente paso lo damos contigo.
-          </span>
-        </div>
-        <div className="ve-inquiry-contact">
-          <span>¿Prefieres conversar directamente?</span>
-          <a href={WHATSAPP} target="_blank" rel="noopener noreferrer">
-            +51 908 917 621 <Arrow />
-          </a>
-          <small>WhatsApp Business · Atención en toda Lima</small>
-        </div>
+        {!source && (
+          <div className="ve-inquiry-heading">
+            <p>Tu espacio puede ser el siguiente</p>
+            <h2 id="ve-contact-title">
+              Todo empieza
+              <br />
+              con tu idea.
+            </h2>
+            <span>
+              Cuéntanos qué quieres transformar.
+              <br />
+              El siguiente paso lo damos contigo.
+            </span>
+          </div>
+        )}
+        {!source && (
+          <div className="ve-inquiry-contact">
+            <span>¿Prefieres conversar directamente?</span>
+            <a href={WHATSAPP} target="_blank" rel="noopener noreferrer">
+              +51 908 917 621 <Arrow />
+            </a>
+            <small>WhatsApp Business · Atención en toda Lima</small>
+          </div>
+        )}
       </div>
       <div className="ve-inquiry-panel">
         {reference ? (
@@ -113,14 +136,14 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
               </svg>
             </span>
             <p>Consulta recibida</p>
-            <h3>
+            <h3 id={source ? "ve-social-contact-title" : undefined}>
               Tu idea ya está
               <br />
               en nuestras manos.
             </h3>
             <p>
-              Guardamos tus datos y los detalles del proyecto. Nuestro equipo
-              podrá contactarte por el teléfono o correo que indicaste.
+              Nuestro equipo te contactará por el teléfono o correo que
+              indicaste.
             </p>
             <span>Referencia {reference.slice(-8).toUpperCase()}</span>
             <a
@@ -135,31 +158,45 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
         ) : (
           <form onSubmit={submit}>
             <div className="ve-inquiry-form-head">
-              <span>De la primera idea al primer contacto</span>
-              <h3>Hablemos de tu proyecto</h3>
+              {source ? (
+                <h1
+                  id="ve-social-contact-title"
+                  className="ve-inquiry-form-title"
+                >
+                  Hablemos de tu proyecto
+                </h1>
+              ) : (
+                <>
+                  <span>De la primera idea al primer contacto</span>
+                  <h3>Hablemos de tu proyecto</h3>
+                </>
+              )}
               <p>
-                Déjanos los detalles para conocer tu espacio y coordinar
-                contigo.
+                {source
+                  ? "Déjanos tus datos y te contactaremos para conversar sobre tu proyecto."
+                  : "Déjanos los detalles para conocer tu espacio y coordinar contigo."}
               </p>
             </div>
-            <div className="ve-inquiry-type">
-              <label htmlFor="project-space">¿Qué tienes en mente?</label>
-              <Select
-                id="project-space"
-                label="Tipo de trabajo"
-                value={type}
-                options={REQUEST_TYPES.map((t) => ({
-                  value: t.id,
-                  label: t.name,
-                  description: t.description,
-                }))}
-                onChange={(value) => {
-                  setType(value);
-                  setError("");
-                }}
-                triggerRef={trigger}
-              />
-            </div>
+            {!source && (
+              <div className="ve-inquiry-type">
+                <label htmlFor="project-space">¿Qué tienes en mente?</label>
+                <Select
+                  id="project-space"
+                  label="Tipo de trabajo"
+                  value={type}
+                  options={REQUEST_TYPES.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                    description: t.description,
+                  }))}
+                  onChange={(value) => {
+                    setType(value);
+                    setError("");
+                  }}
+                  triggerRef={trigger}
+                />
+              </div>
+            )}
             <div className="ve-inquiry-fields">
               <label>
                 Tu nombre
@@ -193,28 +230,32 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
                   maxLength={180}
                 />
               </label>
+              {!source && (
+                <label>
+                  Distrito del proyecto
+                  <input
+                    name="district"
+                    autoComplete="address-level2"
+                    placeholder="¿En qué distrito está?"
+                    required
+                    maxLength={120}
+                  />
+                </label>
+              )}
+            </div>
+            {!source && (
               <label>
-                Distrito del proyecto
-                <input
-                  name="district"
-                  autoComplete="address-level2"
-                  placeholder="¿En qué distrito está?"
+                Cuéntanos tu idea
+                <textarea
+                  name="idea"
+                  placeholder="El espacio, lo que quieres cambiar, medidas aproximadas…"
                   required
-                  maxLength={120}
+                  minLength={10}
+                  maxLength={4000}
+                  rows={3}
                 />
               </label>
-            </div>
-            <label>
-              Cuéntanos tu idea
-              <textarea
-                name="idea"
-                placeholder="El espacio, lo que quieres cambiar, medidas aproximadas…"
-                required
-                minLength={10}
-                maxLength={4000}
-                rows={3}
-              />
-            </label>
+            )}
             <div className="ve-honeypot" aria-hidden="true">
               <label>
                 Sitio web
@@ -227,12 +268,17 @@ export function ProjectContact({ submissionUrl }: { submissionUrl: string }) {
               </p>
             )}
             <button className="ve-action" disabled={busy} type="submit">
-              {busy ? "Enviando tu consulta…" : "Enviar mi proyecto"}
+              {busy
+                ? "Enviando tu consulta…"
+                : source
+                  ? "Enviar mis datos"
+                  : "Enviar mi proyecto"}
               <Arrow />
             </button>
             <p className="ve-inquiry-privacy">
               Usaremos tus datos para atender esta consulta y coordinar tu
-              proyecto.
+              proyecto.{" "}
+              {source && <a href="/privacidad/">Política de privacidad</a>}
             </p>
           </form>
         )}

@@ -9,6 +9,7 @@ import {
   LEAD_STAGES,
   LEAD_SEGMENTS,
   REQUEST_TYPES,
+  LEAD_SOURCE_LABELS,
   type LeadInput,
   type PhotoMetadata,
   type Lead,
@@ -318,11 +319,12 @@ export function LeadDetail({
         <div>
           <p>
             Ficha {id.slice(-8).toUpperCase()} ·{" "}
-            {lead.source === "web" ? "Consulta web" : "Registro del equipo"}
+            {LEAD_SOURCE_LABELS[lead.source]}
           </p>
           <h1>{lead.name}</h1>
           <span>
-            {lead.district} · Recibido el {date(lead.createdAt)}
+            {lead.district && `${lead.district} · `}Recibido el{" "}
+            {date(lead.createdAt)}
           </span>
         </div>
         <div className="ops-contact-links">

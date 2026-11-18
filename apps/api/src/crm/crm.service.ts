@@ -7,6 +7,9 @@ import { ObjectId } from "mongodb";
 import type { Filter } from "mongodb";
 import {
   crmLeadDefaults,
+  LEAD_SOURCE_LABELS,
+  socialLeadSchema,
+  type Lead,
   LEAD_STAGES,
   REQUEST_TYPES,
   leadUpdateSchema,
@@ -27,7 +30,24 @@ export class CrmService {
     source: "web" | "manual" = "web",
     actor = "Web",
   ) {
-    const data = parse(publicLeadSchema, input);
+    return this.storeLead(parse(publicLeadSchema, input), source, actor);
+  }
+  async createFromSocial(input: unknown) {
+    const { source, ...data } = parse(socialLeadSchema, input);
+    return this.storeLead(
+      { ...data, district: "", requestType: "", idea: "" },
+      source,
+      LEAD_SOURCE_LABELS[source],
+    );
+  }
+  private async storeLead(
+    data: Pick<
+      LeadInput,
+      "name" | "phone" | "email" | "district" | "requestType" | "idea"
+    > & { submissionId: string; website: string },
+    source: Lead["source"],
+    actor: string,
+  ) {
     if (data.website) return { reference: "received" };
     const existing = await this.repository.collection.findOne({
       submissionId: data.submissionId,
@@ -41,7 +61,8 @@ export class CrmService {
       ...crmLeadDefaults,
       submissionId,
       source,
-      segment: REQUEST_TYPES.find((t) => t.id === data.requestType)!.segment,
+      segment:
+        REQUEST_TYPES.find((t) => t.id === data.requestType)?.segment ?? "",
       stage: "prelead",
       version: 1,
       createdAt: now,
@@ -56,7 +77,9 @@ export class CrmService {
           text:
             source === "web"
               ? "Consulta recibida desde la web."
-              : "Oportunidad registrada por el equipo.",
+              : source === "manual"
+                ? "Oportunidad registrada por el equipo."
+                : `Consulta recibida desde ${LEAD_SOURCE_LABELS[source]}.`,
         },
       ],
     };
@@ -163,6 +186,26 @@ export class CrmService {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.appointment))
       data.appointment += ":00-05:00";
     const old = await this.repository.get(id);
+    if (
+      old.source === "web" ||
+      old.source === "manual" ||
+      ["coordination", "execution", "completed"].includes(data.stage)
+    ) {
+      parse(
+        publicLeadSchema.pick({
+          district: true,
+          requestType: true,
+          idea: true,
+        }),
+        {
+          district: data.district,
+          requestType: data.requestType,
+          idea: data.idea,
+        },
+      );
+      if (!data.segment)
+        throw new BadRequestException("Selecciona el tipo de lead.");
+    }
     const stages = [
       "prelead",
       "contacted",

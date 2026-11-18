@@ -3,6 +3,7 @@ import {
   LEAD_STAGES,
   LEAD_SEGMENTS,
   REQUEST_TYPES,
+  LEAD_SOURCE_LABELS,
   type Lead,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
@@ -253,14 +254,18 @@ export function LeadBoard({
                       <GripVertical size={14} />
                     </div>
                     <h3>{lead.name}</h3>
-                    <p>
-                      {lead.district} ·{" "}
-                      {
-                        REQUEST_TYPES.find((t) => t.id === lead.requestType)
-                          ?.name
-                      }
-                    </p>
-                    <p className="ops-card-idea">{lead.idea}</p>
+                    {(lead.district || lead.requestType) && (
+                      <p>
+                        {[
+                          lead.district,
+                          REQUEST_TYPES.find((t) => t.id === lead.requestType)
+                            ?.name,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                    {lead.idea && <p className="ops-card-idea">{lead.idea}</p>}
                     <div className="ops-card-contact">
                       <span>
                         <Phone size={12} />
@@ -276,7 +281,7 @@ export function LeadBoard({
                         {new Date(lead.createdAt).toLocaleDateString("es-PE")}
                       </span>
                       <span>
-                        {lead.source === "web" ? "Web" : "Equipo"}
+                        {LEAD_SOURCE_LABELS[lead.source]}
                         <ArrowUpRight size={14} />
                       </span>
                     </footer>

@@ -17,7 +17,7 @@ export type LeadDetailData = {
 export const stageName = (id: string) =>
   LEAD_STAGES.find((s) => s.id === id)?.name || id;
 export const segmentName = (id: string) =>
-  LEAD_SEGMENTS.find((s) => s.id === id)?.name || id;
+  LEAD_SEGMENTS.find((s) => s.id === id)?.name || id || "Sin clasificar";
 export const unitName = (id: string) =>
   MATERIAL_UNITS.find((u) => u.id === id)?.name || id;
 export const date = (s: string) =>

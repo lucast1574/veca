@@ -92,6 +92,7 @@ export function ProjectEditor({
   const [saved, setSaved] = useState<Project | null>(initial);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [shareOnSocial, setShareOnSocial] = useState(true);
   const [uploading, setUploading] = useState(false);
   const busy = saving || uploading;
   const [error, setError] = useState("");
@@ -161,7 +162,10 @@ export function ProjectEditor({
     accept(result);
     return result;
   }
-  async function action(kind: "save" | "publish" | "unpublish") {
+  async function action(
+    kind: "save" | "publish" | "unpublish",
+    shareOnSocial = false,
+  ) {
     if (
       kind === "unpublish" &&
       !confirm(
@@ -184,6 +188,7 @@ export function ProjectEditor({
         if (kind === "publish") {
           result = await post<Project>(`/admin/projects/${result.id}/publish`, {
             version: result.version,
+            shareOnSocial,
           });
           accept(result);
           setPublishedResult(result);
@@ -305,7 +310,13 @@ export function ProjectEditor({
             busy={busy}
             updating={saved?.status === "published"}
             onEdit={() => goToStep(0)}
-            onPublish={() => void action("publish")}
+            hasBeenPublished={Boolean(
+              saved?.hasBeenPublished || saved?.status === "published",
+            )}
+            socialShareQueued={Boolean(saved?.socialShareQueuedAt)}
+            shareOnSocial={shareOnSocial}
+            onShareOnSocialChange={setShareOnSocial}
+            onPublish={(shareOnSocial) => void action("publish", shareOnSocial)}
           />
         ) : (
           <div className="editor-columns">

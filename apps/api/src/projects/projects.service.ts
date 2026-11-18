@@ -37,6 +37,8 @@ export class ProjectsService {
       publishedAt: d.published?.publishedAt || null,
       seo: seoFor(d.draft, d.slug),
       hasUnpublishedChanges: !!d.published && d.publishedVersion !== d.version,
+      hasBeenPublished: Boolean(d.firstPublishedAt || d.published),
+      socialShareQueuedAt: d.socialShare?.queuedAt,
     };
   }
   async list() {
@@ -126,7 +128,7 @@ export class ProjectsService {
       }),
     );
   }
-  async publish(id: string, version: number) {
+  async publish(id: string, version: number, shareOnSocial = false) {
     const d = await this.repo.get(id);
     const value = await this.validated(d.draft);
     const issues = publicationIssues(value);
@@ -143,10 +145,15 @@ export class ProjectsService {
       updatedAt: now,
       publishedAt: d.published?.publishedAt || now,
     };
+    const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
     const saved = this.admin(
       await this.repo.update(id, version, {
         published,
         publishedVersion: version + 1,
+        firstPublishedAt: firstPublishedAt ?? now,
+        ...(!firstPublishedAt && shareOnSocial && !d.socialShare
+          ? { socialShare: { queuedAt: now, publishedVersion: version + 1 } }
+          : {}),
         updatedAt: now,
       }),
     );
@@ -171,10 +178,13 @@ export class ProjectsService {
     return saved;
   }
   async unpublish(id: string, version: number) {
+    const d = await this.repo.get(id);
     return this.admin(
       await this.repo.update(id, version, {
         published: null,
         publishedVersion: null,
+        firstPublishedAt:
+          d.firstPublishedAt ?? d.published?.publishedAt ?? null,
         updatedAt: new Date().toISOString(),
       }),
     );

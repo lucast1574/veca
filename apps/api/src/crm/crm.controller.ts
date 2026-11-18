@@ -39,6 +39,11 @@ class ConsultationController {
   create(@Body() body: unknown) {
     return this.crm.create(body);
   }
+  @PublicEndpoint()
+  @Post("social")
+  createFromSocial(@Body() body: unknown) {
+    return this.crm.createFromSocial(body);
+  }
 }
 @RequirePermission("leads")
 @Controller("admin/crm")
