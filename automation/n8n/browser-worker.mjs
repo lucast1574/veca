@@ -198,10 +198,20 @@ function inspectPage(expectedUrl, signals) {
       "a,button,header,h1,h2,[role=button],[role=heading]",
     ),
   ).filter(visible);
+  const normalize = (text) =>
+    text
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   const labels = new Set([
-    ...(document.body?.innerText ?? "").split("\n").map((line) => line.trim()),
+    ...(document.body?.innerText ?? "").split("\n").map(normalize),
     ...controls.map((element) =>
-      (element.getAttribute("aria-label") || element.textContent || "").trim(),
+      normalize(
+        element.getAttribute("aria-label") ||
+          element.innerText ||
+          element.textContent ||
+          "",
+      ),
     ),
   ]);
   return signals.some((signal) => labels.has(signal))
@@ -222,14 +232,15 @@ async function inspectAccounts(group) {
       try {
         await driver(root + "/url", "POST", { url });
         let status;
-        for (let attempt = 0; attempt < 5; attempt++) {
+        const deadline = Date.now() + 14000;
+        do {
           status = await driver(root + "/execute/sync", "POST", {
             script: "return (" + inspectPage.toString() + ")(...arguments);",
             args: [url, signals],
           });
           if (status === "verified" || status === "login") break;
           await new Promise((resolve) => setTimeout(resolve, 650));
-        }
+        } while (Date.now() < deadline);
         if (
           actions &&
           status === "verified" &&
