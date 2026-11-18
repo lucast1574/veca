@@ -69,6 +69,26 @@ export const contactFields = {
   requestType: requestSchema,
   idea: text(4000).min(10, "Cuéntanos un poco más de tu proyecto."),
 };
+export const SOCIAL_CHANNELS = ["facebook", "instagram", "linkedin"] as const;
+export const socialChannelSchema = z.enum(SOCIAL_CHANNELS);
+export type SocialChannel = z.infer<typeof socialChannelSchema>;
+export const LEAD_SOURCE_LABELS = {
+  web: "Web",
+  manual: "Equipo",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  linkedin: "LinkedIn",
+} as const;
+export const socialLeadSchema = z
+  .object({
+    name: contactFields.name,
+    phone: contactFields.phone,
+    email: contactFields.email,
+    source: socialChannelSchema,
+    submissionId: z.string().uuid(),
+    website: text(200).optional().default(""),
+  })
+  .strict();
 export const publicLeadSchema = z
   .object({
     ...contactFields,
@@ -79,8 +99,11 @@ export const publicLeadSchema = z
 export const leadUpdateSchema = z
   .object({
     ...contactFields,
+    district: contactFields.district.or(z.literal("")),
+    requestType: requestSchema.or(z.literal("")),
+    idea: contactFields.idea.or(z.literal("")),
     version: z.number().int().positive(),
-    segment: segmentSchema,
+    segment: segmentSchema.or(z.literal("")),
     stage: stageSchema,
     assignedTo: text(100),
     contactResult: text(1000),
@@ -112,7 +135,7 @@ export type LeadEvent = {
 export type Lead = Omit<LeadInput, "version"> & {
   id: string;
   version: number;
-  source: "web" | "manual";
+  source: keyof typeof LEAD_SOURCE_LABELS;
   createdAt: string;
   updatedAt: string;
   contactedAt: string | null;

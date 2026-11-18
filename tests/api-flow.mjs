@@ -138,10 +138,18 @@ assert.equal(
 );
 r = await request(`/admin/projects/${project.id}/publish`, {
   method: "POST",
-  data: { version: project.version },
+  data: { version: project.version, shareOnSocial: true },
 });
 assert.equal(r.res.status, 201, JSON.stringify(r.body));
 project = r.body;
+assert.equal(project.hasBeenPublished, true);
+assert.ok(project.socialShareQueuedAt);
+const socialShareQueuedAt = project.socialShareQueuedAt;
+assert.equal(
+  (await request("/public/projects/" + project.slug, { auth: false })).body
+    .socialShareQueuedAt,
+  undefined,
+);
 assert.equal(
   (await request("/public/projects/" + project.slug, { auth: false })).body
     .title,
@@ -190,7 +198,7 @@ assert.ok(
 );
 assert.ok(homeHtml.includes(draft.title));
 assert.ok(!homeHtml.includes(update.title));
-assert.ok(!homeHtml.includes("panel.veca.com.pe"));
+assert.ok(homeHtml.includes('href="https://panel.veca.com.pe"'));
 assert.ok(homeHtml.includes("https://wa.me/51908917621"));
 const html = await (
   await fetch(
@@ -216,6 +224,8 @@ r = await request(`/admin/projects/${project.id}/unpublish`, {
 });
 assert.equal(r.res.status, 201);
 project = r.body;
+assert.equal(project.hasBeenPublished, true);
+assert.equal(project.socialShareQueuedAt, socialShareQueuedAt);
 assert.equal(
   (await request("/public/projects/" + project.slug, { auth: false })).res
     .status,
@@ -241,6 +251,17 @@ assert.ok(emptyHome.includes('id="proyectos"'));
 assert.ok(emptyHome.includes('href="/proyectos/"'));
 assert.ok(!emptyHome.includes('class="public-project-card"'));
 assert.ok(emptyHome.includes("Entra a la galería"));
+const republished = await request(`/admin/projects/${project.id}/publish`, {
+  method: "POST",
+  data: { version: project.version, shareOnSocial: true },
+});
+assert.equal(republished.res.status, 201, JSON.stringify(republished.body));
+assert.equal(republished.body.socialShareQueuedAt, socialShareQueuedAt);
+const cleanup = await request(`/admin/projects/${project.id}/unpublish`, {
+  method: "POST",
+  data: { version: republished.body.version },
+});
+assert.equal(cleanup.res.status, 201);
 console.log(
-  "PASS: admin authentication, CSRF, private drafts/media, image validation and S3 round-trip, publication rules, stale-save conflicts, draft isolation, filters, rendered SEO/sitemap and unpublication.",
+  "PASS: editorial flow, private drafts and media, SEO, and one social share request per project.",
 );

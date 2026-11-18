@@ -226,6 +226,8 @@ export type Project = ProjectInput & {
     image: string | null;
   };
   hasUnpublishedChanges?: boolean;
+  hasBeenPublished?: boolean;
+  socialShareQueuedAt?: string;
 };
 export function publicationIssues(project: ProjectInput): string[] {
   const issues: string[] = [];

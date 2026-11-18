@@ -618,4 +618,25 @@
   max-width: 390px;
   margin-inline: auto;
 }
-.project-design .segment { background: var(--panel-soft); border-color: var(--panel-edge); }
+.project-design .segment {
+  background: var(--panel-soft);
+  border-color: var(--panel-edge);
+}
+
+.publish-social-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.publish-social-option input {
+  accent-color: var(--panel-brand);
+  outline: none;
+}
+
+.publish-social-option:focus-within {
+  background: var(--panel-brand-surface);
+}

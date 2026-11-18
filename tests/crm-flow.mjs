@@ -85,6 +85,31 @@ assert.deepEqual(
   expect(await req("/public/consultations", "POST", input, false), 201),
   ref,
 );
+const social = {
+  name: "Consulta de Instagram",
+  email: "instagram@example.invalid",
+  phone: "+51 900 000 001",
+  source: "instagram",
+  submissionId: randomUUID(),
+};
+const socialRoute = "/public/consultations/social";
+const socialRef = expect(await req(socialRoute, "POST", social, false), 201);
+assert.deepEqual(
+  expect(await req(socialRoute, "POST", social, false), 201),
+  socialRef,
+);
+const socialLead = expect(
+  await req("/admin/crm/leads/" + socialRef.reference),
+  200,
+).lead;
+assert.equal(socialLead.source, "instagram");
+assert.equal(socialLead.stage, "prelead");
+assert.equal(socialLead.requestType, "");
+assert.equal(socialLead.segment, "");
+expect(
+  await req(socialRoute, "POST", { ...social, source: "web" }, false),
+  400,
+);
 const path = "/admin/crm/leads/" + ref.reference;
 let lead = expect(await req(path), 200).lead;
 assert.equal(lead.segment, "high");

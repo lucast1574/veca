@@ -7,6 +7,9 @@ import { parse } from "../common/validation";
 const versionSchema = z
   .object({ version: z.number().int().positive() })
   .strict();
+const publishSchema = versionSchema.extend({
+  shareOnSocial: z.boolean().default(false),
+});
 @Controller("admin/projects")
 @RequirePermission("projects")
 export class ProjectsController {
@@ -27,7 +30,8 @@ export class ProjectsController {
     @Param("id") id: string,
     @Body() input: unknown,
   ) {
-    return this.projects.publish(id, parse(versionSchema, input).version);
+    const { version, shareOnSocial } = parse(publishSchema, input);
+    return this.projects.publish(id, version, shareOnSocial);
   }
   @Post(":id/unpublish") unpublish(
     @Param("id") id: string,

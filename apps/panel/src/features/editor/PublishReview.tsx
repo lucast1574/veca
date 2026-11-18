@@ -22,13 +22,21 @@ export function PublishReview({
   onPublish,
   onEdit,
   updating,
+  hasBeenPublished,
+  socialShareQueued,
+  shareOnSocial,
+  onShareOnSocialChange,
 }: {
   draft: ProjectInput;
   slug: string;
   busy: boolean;
-  onPublish: () => void;
+  onPublish: (shareOnSocial: boolean) => void;
   onEdit: () => void;
   updating: boolean;
+  hasBeenPublished: boolean;
+  socialShareQueued: boolean;
+  shareOnSocial: boolean;
+  onShareOnSocialChange: (share: boolean) => void;
 }) {
   const issues = publicationIssues(draft),
     cover = draft.images.find((image) => image.id === draft.coverId),
@@ -128,7 +136,23 @@ export function PublishReview({
             </ul>
           )}
           <div className="publish-final-action">
-            <Button disabled={busy || !!issues.length} onClick={onPublish}>
+            {!hasBeenPublished && (
+              <label className="publish-social-option">
+                <input
+                  type="checkbox"
+                  checked={shareOnSocial}
+                  onChange={(event) =>
+                    onShareOnSocialChange(event.currentTarget.checked)
+                  }
+                />
+                Compartir en redes
+              </label>
+            )}
+            {socialShareQueued && <small>Envío a redes registrado.</small>}
+            <Button
+              disabled={busy || !!issues.length}
+              onClick={() => onPublish(!hasBeenPublished && shareOnSocial)}
+            >
               <Send size={18} />
               {busy
                 ? "Publicando tu proyecto…"
@@ -173,6 +197,7 @@ export function PublishSuccess({
         La historia ya tiene su lugar en la web. Puedes compartirla o volver
         cuando quieras para seguir editando.
       </span>
+      {project.socialShareQueuedAt && <span>Envío a redes registrado.</span>}
       <div className="publication-success-actions">
         <a
           className="btn btn-primary"

@@ -13,6 +13,7 @@ const schema = z.object({
   SMTP_PASSWORD: z.string().default(""),
   EMAIL_TEST_ENDPOINT: z.string().default(""),
   ADMIN_BOOTSTRAP_KEY: z.string().default(""),
+  SOCIAL_DELIVERY_TOKEN: z.string().min(32).or(z.literal("")).default(""),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

@@ -6,9 +6,14 @@ import {
 } from "./projects.controller";
 import { ProjectsService } from "./projects.service";
 import { ProjectsRepository } from "./projects.repository";
+import { SocialDeliveryController } from "./social-delivery.controller";
 @Module({
   imports: [AuthModule],
-  controllers: [ProjectsController, PublicProjectsController],
+  controllers: [
+    ProjectsController,
+    PublicProjectsController,
+    SocialDeliveryController,
+  ],
   providers: [ProjectsService, ProjectsRepository],
 })
 export class ProjectsModule {}

@@ -1062,6 +1062,29 @@ html:has(.ve-home) {
   color: var(--ve-text);
   min-height: 800px;
 }
+.ve-social-contact-header {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+  padding: 8px max(24px, 5vw);
+  background: #242641;
+}
+.ve-inquiry--social {
+  min-height: 0;
+}
+.ve-inquiry--social .ve-inquiry-scene {
+  min-height: 560px;
+  justify-content: center;
+}
+.ve-inquiry--social .ve-inquiry-privacy a {
+  text-decoration: underline;
+}
+@media (max-width: 900px) {
+  .ve-inquiry--social .ve-inquiry-scene {
+    order: 1;
+    min-height: 300px;
+  }
+}
 .ve-inquiry-scene {
   position: relative;
   isolation: isolate;
@@ -1139,7 +1162,7 @@ html:has(.ve-home) {
   font-size: 10px;
   color: #7b6358;
 }
-.ve-inquiry h3 {
+.ve-inquiry :is(h3, .ve-inquiry-form-title) {
   font-size: clamp(27px, 3vw, 42px);
   margin: 16px 0;
 }
@@ -1295,7 +1318,7 @@ html:has(.ve-home) {
     padding: 45px 24px;
     min-height: 490px;
   }
-  .ve-inquiry h3 {
+  .ve-inquiry :is(h3, .ve-inquiry-form-title) {
     font-size: 30px;
   }
   .ve-inquiry-contact > a {

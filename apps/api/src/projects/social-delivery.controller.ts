@@ -1,0 +1,155 @@
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Param,
+  Post,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
+import { socialChannelSchema } from "@veca/content";
+import { equal } from "../auth/auth.crypto";
+import { PublicEndpoint } from "../auth/route-access";
+import { config } from "../common/config";
+import { parse } from "../common/validation";
+import { ProjectsRepository } from "./projects.repository";
+
+const outcomeSchema = z
+  .object({
+    claim: z.uuid(),
+    outcome: z.enum(["published", "review", "retry"]),
+    reason: z.enum([
+      "",
+      "session",
+      "editor",
+      "media",
+      "confirmation",
+      "withdrawn",
+    ]),
+  })
+  .strict();
+
+@PublicEndpoint()
+@Controller("integrations/social")
+export class SocialDeliveryController {
+  constructor(private readonly projects: ProjectsRepository) {}
+
+  private authorize(authorization: string | undefined) {
+    if (
+      !config.SOCIAL_DELIVERY_TOKEN ||
+      !equal(authorization ?? "", "Bearer " + config.SOCIAL_DELIVERY_TOKEN)
+    ) {
+      throw new UnauthorizedException();
+    }
+  }
+
+  @Post(":channel/claim")
+  @HttpCode(200)
+  async claim(
+    @Headers("authorization") authorization: string | undefined,
+    @Param("channel") input: string,
+  ) {
+    this.authorize(authorization);
+    const channel = parse(socialChannelSchema, input);
+    const field = `socialShare.channels.${channel}`;
+    const at = new Date().toISOString();
+    const claim = randomUUID();
+    const job = await this.projects.collection.findOneAndUpdate(
+      {
+        "socialShare.queuedAt": { $exists: true },
+        published: { $ne: null },
+        $or: [
+          { [field]: { $exists: false } },
+          { [field + ".state"]: "retry", [field + ".nextAt"]: { $lte: at } },
+        ],
+      },
+      { $set: { [field]: { state: "processing", claim, at } } },
+      { sort: { "socialShare.queuedAt": 1 }, returnDocument: "after" },
+    );
+    if (!job?.published) return { job: null };
+    const project = job.published;
+    if (!project.coverId)
+      throw new BadRequestException("La obra no tiene portada.");
+    return {
+      job: {
+        id: String(job._id),
+        claim,
+        title: project.title,
+        description: project.excerpt || project.seo.description,
+        url: new URL(`/proyectos/${job.slug}/`, config.SITE_ORIGIN).href,
+        cover: new URL(`/media/${project.coverId}`, config.PUBLIC_API_URL).href,
+      },
+    };
+  }
+
+  @Post(":channel/:id/check")
+  @HttpCode(200)
+  async check(
+    @Headers("authorization") authorization: string | undefined,
+    @Param("channel") input: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    this.authorize(authorization);
+    const channel = parse(socialChannelSchema, input);
+    const { claim } = parse(z.object({ claim: z.uuid() }).strict(), body);
+    const doc = await this.projects.get(id);
+    const delivery = doc.socialShare?.channels?.[channel];
+    return {
+      ready:
+        !!doc.published &&
+        delivery?.state === "processing" &&
+        delivery.claim === claim,
+    };
+  }
+
+  @Post(":channel/:id/complete")
+  @HttpCode(200)
+  async complete(
+    @Headers("authorization") authorization: string | undefined,
+    @Param("channel") input: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    this.authorize(authorization);
+    const channel = parse(socialChannelSchema, input);
+    const { claim, outcome, reason } = parse(outcomeSchema, body);
+    const field = `socialShare.channels.${channel}`;
+    const idValue = this.projects.id(id);
+    const current = await this.projects.collection.findOne(
+      { _id: idValue },
+      { projection: { [field]: 1 } },
+    );
+    if (!current) throw new NotFoundException();
+    const prior = current.socialShare?.channels?.[channel];
+    if (prior?.claim === claim && prior.state === outcome) return { ok: true };
+    const saved = await this.projects.collection.updateOne(
+      {
+        _id: idValue,
+        [field + ".state"]: "processing",
+        [field + ".claim"]: claim,
+      },
+      {
+        $set: {
+          [field]: {
+            state: outcome,
+            reason,
+            claim,
+            at: new Date().toISOString(),
+            ...(outcome === "retry" && {
+              nextAt: new Date(Date.now() + 3600000).toISOString(),
+            }),
+          },
+        },
+      },
+    );
+    if (!saved.matchedCount)
+      throw new ConflictException("La entrega ya cambió.");
+    return { ok: true };
+  }
+}
