@@ -5,9 +5,23 @@ import {
   Package,
   Users,
   Images,
+  ShieldCheck,
 } from "lucide-react";
-import type { Permission } from "@veca/content";
-export type WorkspaceView = Permission | "profile";
+import {
+  canViewAdministration,
+  type Permission,
+  type SessionUser,
+} from "@veca/content";
+export type WorkspaceView = Permission | "profile" | "administration";
+export function canOpenWorkspace(view: WorkspaceView, user: SessionUser) {
+  if (view === "profile") return true;
+  if (view === "administration") return canViewAdministration(user);
+  return (
+    user.status === "active" &&
+    user.emailVerified &&
+    user.permissions.includes(view)
+  );
+}
 export const WORKSPACE_ITEMS = [
   {
     id: "dashboard",
@@ -49,6 +63,13 @@ export const WORKSPACE_ITEMS = [
     label: "Equipo",
     description: "Personas y accesos",
     Icon: Users,
+    group: "Empresa",
+  },
+  {
+    id: "administration",
+    label: "Administración",
+    description: "Conexiones y actividad",
+    Icon: ShieldCheck,
     group: "Empresa",
   },
 ] as const;

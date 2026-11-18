@@ -13,7 +13,12 @@ import {
 import type { SessionUser } from "@veca/content";
 import { Modal } from "../Modal";
 import { UserAvatar } from "./UserAvatar";
-import { WORKSPACE_ITEMS, VIEW_LABELS, type WorkspaceView } from "./navigation";
+import {
+  canOpenWorkspace,
+  WORKSPACE_ITEMS,
+  VIEW_LABELS,
+  type WorkspaceView,
+} from "./navigation";
 import "./workspace-shell.css";
 function NavigationItem({
   label,
@@ -124,8 +129,8 @@ export function WorkspaceShell({
     return () => screen.removeEventListener("change", change);
   }, [closeMobile]);
   const active = user.status === "active" && user.emailVerified;
-  const items = WORKSPACE_ITEMS.filter(
-    (item) => active && user.permissions.includes(item.id),
+  const items = WORKSPACE_ITEMS.filter((item) =>
+    canOpenWorkspace(item.id, user),
   );
   function go(next: WorkspaceView) {
     if (onNavigate(next)) closeMobile();

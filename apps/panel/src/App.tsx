@@ -1,5 +1,6 @@
 import { WorkspaceShell } from "./components/workspace/WorkspaceShell";
 import {
+  canOpenWorkspace,
   currentView,
   type WorkspaceView as View,
 } from "./components/workspace/navigation";
@@ -8,6 +9,7 @@ import { AuthScreen } from "./features/access/AuthScreen";
 import { PendingAccess } from "./features/access/PendingAccess";
 import { Team } from "./features/access/Team";
 import { Dashboard } from "./features/dashboard/Dashboard";
+import { Administration } from "./features/administration/Administration";
 import { type AuthSession } from "@veca/content";
 
 import { PrivateGallery } from "./features/gallery/PrivateGallery";
@@ -121,9 +123,7 @@ export default function App() {
     return <div className="loading-screen">Abriendo el estudio de VECA…</div>;
   if (!session) return <AuthScreen onLogin={login} />;
   const active = session.user.status === "active" && session.user.emailVerified;
-  const can = (permission: View) =>
-    permission === "profile" ||
-    (active && session.user.permissions.includes(permission));
+  const can = (view: View) => canOpenWorkspace(view, session.user);
   async function logout() {
     await post("/auth/logout", {});
     setCsrf("");
@@ -176,6 +176,8 @@ export default function App() {
         <Dashboard user={session.user} />
       ) : view === "users" ? (
         <Team currentId={session.user.id} />
+      ) : view === "administration" ? (
+        <Administration />
       ) : view === "gallery" ? (
         <PrivateGallery canOpenLead={can("leads")} />
       ) : view !== "projects" ? (

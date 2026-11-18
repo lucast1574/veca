@@ -12,12 +12,45 @@ import {
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { socialChannelSchema } from "@veca/content";
+import {
+  SOCIAL_CHANNELS,
+  socialChannelSchema,
+  type ConnectionSnapshot,
+  type SocialCheckGroup,
+} from "@veca/content";
 import { equal } from "../auth/auth.crypto";
 import { PublicEndpoint } from "../auth/route-access";
 import { config } from "../common/config";
 import { parse } from "../common/validation";
 import { ProjectsRepository } from "./projects.repository";
+import { Database } from "../database/database.module";
+
+const checkSchema = z
+  .object({
+    group: z.enum(["publications", "inboxes"]),
+    accounts: z
+      .array(
+        z
+          .object({
+            channel: socialChannelSchema,
+            status: z.enum([
+              "verified",
+              "login",
+              "redirected",
+              "unconfirmed",
+              "unavailable",
+            ]),
+          })
+          .strict(),
+      )
+      .length(SOCIAL_CHANNELS.length)
+      .refine(
+        (accounts) =>
+          new Set(accounts.map(({ channel }) => channel)).size ===
+          SOCIAL_CHANNELS.length,
+      ),
+  })
+  .strict();
 
 const outcomeSchema = z
   .object({
@@ -37,7 +70,10 @@ const outcomeSchema = z
 @PublicEndpoint()
 @Controller("integrations/social")
 export class SocialDeliveryController {
-  constructor(private readonly projects: ProjectsRepository) {}
+  constructor(
+    private readonly projects: ProjectsRepository,
+    private readonly database: Database,
+  ) {}
 
   private authorize(authorization: string | undefined) {
     if (
@@ -46,6 +82,27 @@ export class SocialDeliveryController {
     ) {
       throw new UnauthorizedException();
     }
+  }
+
+  @Post("health")
+  @HttpCode(200)
+  async reportHealth(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() input: unknown,
+  ) {
+    this.authorize(authorization);
+    const { group, accounts } = parse(checkSchema, input);
+    const checkedAt = new Date().toISOString();
+    await this.database.db
+      .collection<
+        ConnectionSnapshot & { _id: SocialCheckGroup }
+      >("social_checks")
+      .updateOne(
+        { _id: group },
+        { $set: { accounts, checkedAt } },
+        { upsert: true },
+      );
+    return { ok: true, checkedAt };
   }
 
   @Post(":channel/claim")
