@@ -3,29 +3,29 @@ export const spaces = [
   {
     id: "viviendas",
     name: "Viviendas",
-    title: "Abre tu casa a una nueva luz.",
+    title: "Ventanas y mamparas para viviendas",
     description:
-      "Ventanas y mamparas que conectan tus ambientes con el exterior. Más claridad para los espacios donde sucede tu día a día.",
+      "Evaluamos el vano, el tipo de apertura y el uso del ambiente para definir las ventanas y mamparas.",
     image: "vivienda.webp",
     alt: "Sala de vivienda con amplias ventanas y luz natural",
-    details: ["Ventanas", "Mamparas", "Ambientes luminosos"],
+    details: ["Ventanas", "Mamparas", "Aberturas corredizas"],
     href: "/ventanas-vidrio-lima/",
   },
   {
     id: "edificios",
     name: "Edificios",
-    title: "Una visión que se construye en grande.",
+    title: "Fachadas de vidrio para edificios",
     description:
-      "Soluciones en vidrio para fachadas y proyectos inmobiliarios. Revisamos las necesidades de cada espacio, desde la primera idea hasta sus detalles.",
+      "Revisamos planos, dimensiones y el tipo de apertura para plantear una solución de fachada.",
     image: "facade.webp",
     alt: "Fachada de vidrio de un edificio reflejando el cielo",
-    details: ["Fachadas", "Proyectos inmobiliarios", "Arquitectura"],
+    details: ["Fachadas", "Muros cortina", "Ventanas proyectantes"],
     href: "/vidrios-edificios-lima/",
   },
   {
     id: "interiores",
     name: "Interiores",
-    title: "Separa ambientes. Conserva la amplitud.",
+    title: "Divisiones y cerramientos de vidrio",
     description:
       "Divisiones y cerramientos de vidrio para espacios de trabajo y ambientes que necesitan privacidad sin renunciar a la luz.",
     image: "mamparas.webp",
@@ -36,12 +36,12 @@ export const spaces = [
   {
     id: "remodelaciones",
     name: "Remodelaciones",
-    title: "Mira tu espacio con otros ojos.",
+    title: "Reemplazo de ventanas y vidrios",
     description:
-      "Renueva ventanas y elementos de vidrio. Cuéntanos qué te gustaría cambiar y exploremos una solución que dialogue con lo que ya tienes.",
+      "Cuéntanos qué necesitas reemplazar y comparte fotos del marco y del vidrio actual para revisar el alcance.",
     image: "interior.webp",
     alt: "Interior arquitectónico iluminado a través de superficies de vidrio",
-    details: ["Reemplazos", "Renovación", "Nuevas ideas"],
+    details: ["Reemplazos", "Renovación", "Medidas y acabados"],
     href: "/vidrios-remodelaciones-lima/",
   },
 ];

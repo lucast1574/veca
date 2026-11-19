@@ -4,7 +4,9 @@ import { withHomeCover } from "../lib/home-cover";
 import { api, projects } from "../lib/api";
 import { FeaturedProjects } from "../components/FeaturedProjects";
 import { VecaLanding } from "../components/VecaLanding";
+import { CompanyIntro, FeaturedCase } from "../components/landing/WorkFeature";
 import "./landing.css";
+import "./landing-proof.css";
 export const dynamic = "force-dynamic";
 export const metadata = { alternates: { canonical: "https://veca.com.pe/" } };
 const showcaseProjects = [
@@ -39,9 +41,15 @@ export default async function Home() {
       (item): item is Project => item !== null && !featuredIds.has(item.id),
     ),
   ];
+  const caseStudy = portfolio.find(
+    ({ slug }) => slug === "clinica-procabell-882c61",
+  );
+  const office = portfolio.find(({ slug }) => slug === "oficinas-onu-882c3e");
   return (
     <>
       <VecaLanding
+        caseStudy={caseStudy && <FeaturedCase project={caseStudy} />}
+        company={<CompanyIntro office={office} />}
         featured={
           <FeaturedProjects items={portfolio.slice(0, 12).map(withHomeCover)} />
         }

@@ -97,22 +97,15 @@ export function ProjectContact({
         <div className="ve-inquiry-shade" />
         {!source && (
           <div className="ve-inquiry-heading">
-            <p>Tu espacio puede ser el siguiente</p>
-            <h2 id="ve-contact-title">
-              Todo empieza
-              <br />
-              con tu idea.
-            </h2>
+            <h2 id="ve-contact-title">Cotiza tu proyecto</h2>
             <span>
-              Cuéntanos qué quieres transformar.
-              <br />
-              El siguiente paso lo damos contigo.
+              Ten a mano el distrito, fotos del espacio y medidas aproximadas.
             </span>
           </div>
         )}
         {!source && (
           <div className="ve-inquiry-contact">
-            <span>¿Prefieres conversar directamente?</span>
+            <span>Envíanos tus fotos o planos por WhatsApp</span>
             <a href={WHATSAPP} target="_blank" rel="noopener noreferrer">
               +51 908 917 621 <Arrow />
             </a>
@@ -167,14 +160,13 @@ export function ProjectContact({
                 </h1>
               ) : (
                 <>
-                  <span>De la primera idea al primer contacto</span>
-                  <h3>Hablemos de tu proyecto</h3>
+                  <h3>Cuéntanos qué necesitas instalar</h3>
                 </>
               )}
               <p>
                 {source
                   ? "Déjanos tus datos y te contactaremos para conversar sobre tu proyecto."
-                  : "Déjanos los detalles para conocer tu espacio y coordinar contigo."}
+                  : "Indica el distrito y describe el trabajo. Puedes incluir medidas aproximadas."}
               </p>
             </div>
             {!source && (

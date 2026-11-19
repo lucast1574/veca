@@ -24,10 +24,10 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
       aria-labelledby="ve-solutions-title"
     >
       <div className="ve-section-head">
-        <h2 id="ve-solutions-title">Vidrio para cada espacio.</h2>
+        <h2 id="ve-solutions-title">Soluciones de vidrio y aluminio</h2>
         <p>
-          Explora nuestras soluciones para viviendas, edificios, interiores y
-          remodelaciones.
+          Descubre qué instalamos en viviendas, edificios e interiores y mira
+          ejemplos de nuestro trabajo.
         </p>
       </div>
       <div

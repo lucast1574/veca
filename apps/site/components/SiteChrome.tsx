@@ -34,7 +34,54 @@ const publicProfiles = [
     name: "LinkedIn",
     href: "https://www.linkedin.com/company/vidrios-veca-peru/",
   },
-];
+] as const;
+
+function SocialMark({
+  name,
+}: {
+  name: (typeof publicProfiles)[number]["name"];
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="17"
+      height="17"
+      aria-hidden="true"
+      focusable="false"
+      fill="currentColor"
+    >
+      {name === "Instagram" && (
+        <>
+          <rect
+            x="3"
+            y="3"
+            width="18"
+            height="18"
+            rx="5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          />
+          <circle cx="17.4" cy="6.8" r="1.15" />
+        </>
+      )}
+      {name === "Facebook" && (
+        <path d="M14 21v-8h2.7l.5-3H14V8.1c0-.9.3-1.5 1.6-1.5h1.7V4c-.3 0-1.3-.1-2.5-.1-2.5 0-4.1 1.5-4.1 4.2V10H8v3h2.7v8H14Z" />
+      )}
+      {name === "LinkedIn" && (
+        <path d="M5.2 8.1a1.8 1.8 0 1 1 0-3.6 1.8 1.8 0 0 1 0 3.6ZM3.7 9.6h3.1v10H3.7zM9 9.6h3v1.4h.1a3.3 3.3 0 0 1 3-1.6c3.2 0 3.8 2.1 3.8 4.8v5.4h-3.1v-4.8c0-1.2-.1-2.7-1.7-2.7s-1.9 1.3-1.9 2.6v4.9H9z" />
+      )}
+    </svg>
+  );
+}
 
 export function SiteFooter() {
   return (
@@ -54,23 +101,26 @@ export function SiteFooter() {
           de ver tu espacio.
         </p>
       </div>
-      <nav aria-label="Navegación de pie de página">
-        <a href="/#soluciones">Soluciones</a>
-        <a href="/proyectos/">Proyectos</a>
-        <a href="/#contacto">Contacto</a>
-        <a href="/privacidad/">Privacidad</a>
-        <TeamAccess />
-      </nav>
-      <nav
-        className="ve-footer-social"
-        aria-label="Redes sociales de Vidrios VECA"
-      >
-        {publicProfiles.map(({ name, href }) => (
-          <a key={name} href={href} target="_blank" rel="noopener noreferrer">
-            {name} <Icon name="arrow-up-right" size={15} />
-          </a>
-        ))}
-      </nav>
+      <div className="ve-footer-links">
+        <nav aria-label="Navegación de pie de página">
+          <a href="/#soluciones">Soluciones</a>
+          <a href="/proyectos/">Proyectos</a>
+          <a href="/#contacto">Contacto</a>
+          <a href="/privacidad/">Privacidad</a>
+          <TeamAccess />
+        </nav>
+        <nav
+          className="ve-footer-social"
+          aria-label="Redes sociales de Vidrios VECA"
+        >
+          {publicProfiles.map(({ name, href }) => (
+            <a key={name} href={href} target="_blank" rel="noopener noreferrer">
+              <SocialMark name={name} />
+              {name}
+            </a>
+          ))}
+        </nav>
+      </div>
       <div className="ve-footer-bottom">
         <span>© {new Date().getFullYear()} Vidrios VECA</span>
         <span>San Luis, Lima · Atención en toda Lima</span>

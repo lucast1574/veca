@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, type ReactNode } from "react";
-import { SOLUTION_SLOTS, type Project } from "@veca/content";
+import type { Project } from "@veca/content";
 import { SiteFooter } from "./SiteChrome";
 import { Icon } from "@veca/ui/src/Icon";
 import { WHATSAPP, questions } from "./landing/content";
@@ -11,10 +11,14 @@ import { LogoEntrance } from "./landing/LogoEntrance";
 import { ProjectContact } from "./landing/ProjectContact";
 export function VecaLanding({
   featured,
+  company,
+  caseStudy,
   consultationUrl,
   solutionProjects = [],
 }: {
   featured: ReactNode;
+  company: ReactNode;
+  caseStudy: ReactNode;
   consultationUrl: string;
   solutionProjects?: Project[];
 }) {
@@ -92,145 +96,37 @@ export function VecaLanding({
             </div>
           </div>
         </section>
-        <div className="ve-intro-band">
-          <p>
-            Vidrio que conecta.
-            <br />
-            <span>Espacios que se sienten.</span>
-          </p>
-          <div>
-            {SOLUTION_SLOTS.map((slot) => (
-              <a key={slot.id} href={`/proyectos/categoria/${slot.id}/`}>
-                {slot.name}
+        <section
+          className="ve-project-intro ve-section"
+          aria-labelledby="ve-project-intro-title"
+        >
+          <div className="ve-proof-inner ve-project-intro-inner">
+            <div>
+              <h2 id="ve-project-intro-title">
+                Instalación de vidrio y aluminio en Lima
+              </h2>
+              <p>
+                Ventanas, mamparas y fachadas para viviendas, edificios y
+                comercios.
+              </p>
+            </div>
+            <div className="ve-project-intro-actions">
+              <Action href="#contacto" light>
+                Cotiza tu proyecto
+              </Action>
+              <a className="ve-proof-link" href="#proyectos">
+                Ver obras realizadas <Arrow />
               </a>
-            ))}
+            </div>
           </div>
-        </div>
+        </section>
         {featured}
         <SolutionExplorer projects={solutionProjects} />
-        <section
-          className="ve-statement ve-observe"
-          aria-labelledby="ve-statement-title"
-        >
-          <img
-            src="/assets/detail.webp"
-            alt="Detalle de ventanas y reflejos en una fachada de vidrio"
-            width="1600"
-            height="2398"
-            loading="lazy"
-          />
-          <div className="ve-statement-overlay" />
-          <div>
-            <p className="ve-kicker">Más allá de una ventana</p>
-            <h2 id="ve-statement-title">
-              Hay espacios que
-              <br />
-              cambian cómo
-              <br />
-              te sientes.
-            </h2>
-            <p>
-              La luz que entra. La vista que se abre.
-              <br />
-              El ambiente que vuelve a conectar.
-            </p>
-            <Action href="#contacto" light>
-              Imaginemos el tuyo
-            </Action>
-          </div>
-          <span className="ve-statement-mark" aria-hidden="true">
-            VECA
-          </span>
-        </section>
-        <section
-          className="ve-about ve-section"
-          id="nosotros"
-          aria-labelledby="ve-about-title"
-        >
-          <div className="ve-about-copy">
-            <p className="ve-kicker">Somos Vidrios VECA</p>
-            <h2 id="ve-about-title">
-              El detalle hace
-              <br />
-              la diferencia.
-            </h2>
-            <p>
-              Somos una empresa de vidrios en Lima. Acompañamos proyectos de
-              vivienda, edificios y remodelaciones con una idea clara: cada
-              espacio merece una solución pensada para él.
-            </p>
-            <p>
-              Desde nuestra sede en San Luis, atendemos toda Lima. Queremos
-              conocer lo que imaginas y ayudarte a encontrar una manera de
-              hacerlo posible.
-            </p>
-            <a className="ve-inline-link" href="#contacto">
-              Conversemos sobre tu espacio <Arrow />
-            </a>
-          </div>
-          <div className="ve-about-photo ve-observe">
-            <img
-              src="/assets/oficina.webp"
-              alt="Oficina con ventanas amplias y divisiones de vidrio"
-              width="1200"
-              height="1600"
-              loading="lazy"
-            />
-            <div>
-              <span>Una idea compartida.</span>
-              <strong>Una solución a tu medida.</strong>
-            </div>
-          </div>
-        </section>
-        <section
-          className="ve-process ve-section"
-          aria-labelledby="ve-process-title"
-        >
-          <div className="ve-section-head">
-            <div>
-              <p className="ve-kicker">De tu idea al siguiente paso</p>
-              <h2 id="ve-process-title">
-                Empecemos
-                <br />
-                con claridad.
-              </h2>
-            </div>
-            <p>
-              No necesitas tenerlo todo resuelto. Estos tres pasos nos ayudan a
-              conocer tu proyecto.
-            </p>
-          </div>
-          <ol>
-            {[
-              {
-                title: "Muéstranos tu espacio",
-                text: "Envíanos fotos, medidas aproximadas y la ubicación del proyecto.",
-              },
-              {
-                title: "Cuéntanos tu idea",
-                text: "Qué quieres cambiar, cómo usas el ambiente y qué resultado imaginas.",
-              },
-              {
-                title: "Exploremos la solución",
-                text: "Revisamos contigo las posibilidades y los detalles que necesita tu proyecto.",
-              },
-            ].map((step, i) => (
-              <li key={step.title}>
-                <span className="ve-step-number">0{i + 1}</span>
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
+        {caseStudy}
+        {company}
         <section className="ve-faq ve-section" aria-labelledby="ve-faq-title">
           <div>
-            <p className="ve-kicker">Antes de empezar</p>
-            <h2 id="ve-faq-title">
-              Resolvamos
-              <br />
-              tus dudas.
-            </h2>
+            <h2 id="ve-faq-title">Preguntas frecuentes</h2>
             <a
               className="ve-inline-link"
               href={WHATSAPP}

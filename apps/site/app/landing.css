@@ -170,34 +170,6 @@ html:has(.ve-home) {
   color: #edf1f4;
   line-height: 1.8;
 }
-.ve-intro-band {
-  display: flex;
-  justify-content: space-between;
-  gap: 35px;
-  padding: 24px 5vw;
-  background: var(--ve-night);
-  color: #fff;
-  align-items: center;
-}
-.ve-intro-band > p {
-  font-size: 22px;
-  line-height: 1.4;
-  letter-spacing: -0.04em;
-}
-.ve-intro-band > p span {
-  color: #c1c8d2;
-}
-.ve-intro-band > div {
-  display: flex;
-  gap: 25px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: #c1c8d2;
-}
-.ve-intro-band > div > a {
-  padding-left: 15px;
-  border-left: 1px solid #6a7082;
-}
 .ve-section-head {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
@@ -319,137 +291,11 @@ html:has(.ve-home) {
 .ve-home .project-showcase h2 {
   font-size: clamp(32px, 3.2vw, 48px);
 }
-.ve-statement {
-  height: 680px;
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background: var(--ve-night);
-  color: white;
-  padding: 80px 8vw;
-  display: flex;
-  align-items: center;
-}
-.ve-statement > img {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  inset: 0;
-  z-index: -2;
-  object-position: 50% 45%;
-}
-.ve-statement-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(90deg, #20283ae6, #20283a33);
-}
-.ve-statement > div:not(.ve-statement-overlay) {
-  position: relative;
-  z-index: 1;
-}
-.ve-statement h2 {
-  font-size: clamp(44px, 6.3vw, 92px);
-  margin-bottom: 30px;
-}
-.ve-statement .ve-kicker {
-  color: #ddd;
-}
-.ve-statement p:not(.ve-kicker) {
-  font-size: 14px;
-  margin-bottom: 30px;
-  line-height: 1.7;
-}
-.ve-statement-mark {
-  position: absolute;
-  right: -15px;
-  bottom: -65px;
-  font-size: clamp(140px, 25vw, 390px);
-  letter-spacing: -0.1em;
-  font-weight: 800;
-  color: #ffffff12;
-  line-height: 1;
-  pointer-events: none;
-}
-.ve-observe.ve-in-view .ve-statement-mark {
-  animation: ve-mark 1.5s both;
-}
-.ve-about {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9vw;
-  align-items: center;
-}
-.ve-about-copy > p:not(.ve-kicker) {
-  font-size: 14px;
-  color: var(--ve-muted);
-  margin-top: 27px;
-  max-width: 440px;
-}
-.ve-about .ve-inline-link {
-  margin-top: 35px;
-}
-.ve-about-photo {
-  height: 570px;
-  position: relative;
-  overflow: hidden;
-}
-.ve-about-photo > img {
-  width: 100%;
-  height: 100%;
-  transition: transform 1.4s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.ve-about-photo.ve-in-view > img {
-  transform: scale(1.035);
-}
-.ve-about-photo > div {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: #242641bd;
-  backdrop-filter: blur(14px);
-  padding: 28px;
-  color: white;
-  font-size: 13px;
-  line-height: 1.8;
-}
-.ve-about-photo strong {
-  display: block;
-  font-weight: 500;
-  font-size: 20px;
-  letter-spacing: -0.03em;
-}
-.ve-process {
-  background: #fff;
-}
-.ve-process ol {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 45px;
-}
-.ve-process li {
-  border-top: 1px solid #c8cecd;
-  padding-top: 25px;
-}
 .ve-step-number {
   color: #c24a31;
   font-size: 12px;
   display: block;
   margin-bottom: 45px;
-}
-.ve-process h3 {
-  font-size: 25px;
-  margin-bottom: 18px;
-  letter-spacing: -0.04em;
-}
-.ve-process li p {
-  font-size: 13px;
-  color: var(--ve-muted);
-  max-width: 320px;
 }
 .ve-faq {
   display: grid;
@@ -602,7 +448,7 @@ html:has(.ve-home) {
   display: block;
   background: #1c1f35;
   color: white;
-  padding: 55px 5vw 30px;
+  padding: 55px 5vw 90px;
   border: 0;
 }
 .ve-footer > div:first-child {
@@ -616,40 +462,41 @@ html:has(.ve-home) {
   line-height: 1.4;
   letter-spacing: -0.04em;
 }
-.ve-footer > nav {
+.ve-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 30px;
+  margin: 28px 0 24px;
+}
+
+.ve-footer-links nav {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 30px;
-  font-size: 12px;
-  margin: 35px 0 40px;
-}
-.ve-footer > nav:first-of-type {
-  margin-bottom: 18px;
+  gap: 2px 24px;
+  font-size: 13px;
 }
 
-.ve-footer > .ve-footer-social {
-  gap: 8px;
-  margin: 0 0 24px;
+.ve-footer-links .ve-footer-social {
+  gap: 2px 16px;
 }
 
 .ve-footer-social a {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   min-height: 44px;
-  padding: 8px 12px;
   color: white;
-  background: #30334d;
-  border-radius: 4px;
   text-decoration: none;
 }
 
 .ve-footer-social a:is(:hover, :focus-visible) {
+  color: #ffb19a;
   outline: none;
   text-decoration: underline;
   text-underline-offset: 3px;
-  background: #424661;
 }
 
 .ve-footer-social svg {
@@ -743,9 +590,6 @@ html:has(.ve-home) {
     padding-top: 85px;
     padding-bottom: 85px;
   }
-  .ve-about-photo {
-    height: 500px;
-  }
   .ve-contact {
     gap: 5vw;
   }
@@ -801,21 +645,6 @@ html:has(.ve-home) {
   }
   .ve-hero-content {
     padding-top: 155px;
-  }
-  .ve-intro-band {
-    padding: 30px 24px;
-    display: block;
-  }
-  .ve-intro-band > p {
-    font-size: 22px;
-  }
-  .ve-intro-band > div {
-    margin-top: 25px;
-    gap: 16px;
-    font-size: 10px;
-  }
-  .ve-intro-band > div > a {
-    padding-left: 9px;
   }
   .ve-section {
     padding: 65px 24px;
@@ -874,55 +703,9 @@ html:has(.ve-home) {
   .ve-explorer .ve-action {
     width: 100%;
   }
-  .ve-statement {
-    height: 610px;
-    padding: 65px 24px;
-  }
-  .ve-statement h2 {
-    font-size: clamp(40px, 8vw, 60px);
-  }
-  .ve-statement > img {
-    object-position: 55% center;
-  }
-  .ve-statement-overlay {
-    background: #20283a99;
-  }
-  .ve-statement-mark {
-    bottom: -18px;
-    right: 0;
-    font-size: 33vw;
-  }
-  .ve-about {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-  .ve-about-photo {
-    height: 430px;
-  }
-  .ve-about-copy p:not(.ve-kicker) {
-    font-size: 13px;
-  }
-  .ve-process ol {
-    grid-template-columns: 1fr;
-    gap: 30px;
-  }
-  .ve-process li {
-    display: grid;
-    grid-template-columns: 34px 1fr;
-    column-gap: 18px;
-    padding-top: 25px;
-  }
   .ve-step-number {
     grid-row: 1/3;
     margin: 4px 0 0;
-  }
-  .ve-process h3 {
-    font-size: 25px;
-    margin-bottom: 12px;
-  }
-  .ve-process li p {
-    max-width: 100%;
-    grid-column: 2;
   }
   .ve-faq {
     grid-template-columns: 1fr;
@@ -964,9 +747,14 @@ html:has(.ve-home) {
   .ve-footer > div:first-child > p {
     font-size: 18px;
   }
-  .ve-footer > nav {
-    gap: 24px;
-    margin-bottom: 30px;
+  .ve-footer-links {
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 24px 0;
+  }
+
+  .ve-footer-links nav {
+    column-gap: 16px;
   }
   .ve-footer-bottom {
     flex-wrap: wrap;
@@ -1020,9 +808,6 @@ html:has(.ve-home) {
   .ve-footer > div:first-child > p {
     font-size: 16px;
   }
-  .ve-intro-band > div {
-    gap: 12px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -1033,9 +818,6 @@ html:has(.ve-home) {
   .ve-home *:after {
     animation: none !important;
     transition: none !important;
-  }
-  .ve-about-photo.ve-in-view > img {
-    transform: none;
   }
 }
 @media (min-width: 761px) and (max-width: 1050px) {
@@ -1516,7 +1298,7 @@ html:has(.ve-home) {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-.ve-footer > nav > .ve-team-access {
+.ve-footer-links > nav > .ve-team-access {
   margin-left: auto;
 }
 .ve-navigation-panel > .ve-team-access {
@@ -1531,7 +1313,7 @@ html:has(.ve-home) {
   height: 16px;
 }
 @media (max-width: 760px) {
-  .ve-footer > nav > .ve-team-access {
+  .ve-footer-links > nav > .ve-team-access {
     margin-left: 0;
     flex-basis: 100%;
   }
@@ -1591,21 +1373,6 @@ html:has(.ve-home) {
 
 .ve-explorer.ve-project-explorer {
   display: block;
-}
-
-.ve-intro-band > div > a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  color: #e2e5ed;
-  transition: color 0.2s;
-}
-.ve-intro-band > div > a:is(:hover, :focus-visible) {
-  color: #ff9678;
-  text-decoration: underline;
-  text-underline-offset: 5px;
-  outline: none;
-  box-shadow: none;
 }
 
 /* Logo entrance: one short reveal per session, with an immediate way through. */
@@ -1805,11 +1572,6 @@ html:has(.ve-home) {
   }
 }
 @supports (animation-timeline: view()) {
-  .ve-statement > img {
-    animation: ve-glass-depth linear both;
-    animation-timeline: view();
-    animation-range: entry 0% exit 100%;
-  }
   @keyframes ve-glass-depth {
     from {
       transform: scale(1.06) translateY(-2%);
@@ -1820,8 +1582,7 @@ html:has(.ve-home) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ve-hero-image:after,
-  .ve-statement > img {
+  .ve-hero-image:after {
     animation: none !important;
   }
   .ve-questions summary > .ve-icon {
