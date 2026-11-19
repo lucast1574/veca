@@ -33,9 +33,14 @@ export class CrmService {
     return this.storeLead(parse(publicLeadSchema, input), source, actor);
   }
   async createFromSocial(input: unknown) {
-    const { source, ...data } = parse(socialLeadSchema, input);
+    const {
+      source,
+      requestType = "",
+      idea = "",
+      ...data
+    } = parse(socialLeadSchema, input);
     return this.storeLead(
-      { ...data, district: "", requestType: "", idea: "" },
+      { ...data, district: "", requestType, idea },
       source,
       LEAD_SOURCE_LABELS[source],
     );

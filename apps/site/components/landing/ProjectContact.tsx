@@ -24,7 +24,7 @@ export function ProjectContact({
   const trigger = useRef<HTMLButtonElement>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!source && !type) {
+    if (!type) {
       setError("Elige el tipo de trabajo que tienes en mente.");
       trigger.current?.focus();
       return;
@@ -36,6 +36,8 @@ export function ProjectContact({
       email: String(form.get("email") || ""),
       phone: String(form.get("phone") || ""),
       website: String(form.get("website") || ""),
+      idea: String(form.get("idea") || ""),
+      requestType: type,
       submissionId: operation.current,
     };
     const parsed = source
@@ -43,8 +45,6 @@ export function ProjectContact({
       : publicLeadSchema.safeParse({
           ...data,
           district: String(form.get("district") || ""),
-          idea: String(form.get("idea") || ""),
-          requestType: type,
         });
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);
@@ -165,30 +165,28 @@ export function ProjectContact({
               )}
               <p>
                 {source
-                  ? "Déjanos tus datos y te contactaremos para conversar sobre tu proyecto."
+                  ? "Déjanos tus datos y cuéntanos qué quieres hacer. Te contactaremos para ayudarte con tu proyecto."
                   : "Indica el distrito y describe el trabajo. Puedes incluir medidas aproximadas."}
               </p>
             </div>
-            {!source && (
-              <div className="ve-inquiry-type">
-                <label htmlFor="project-space">¿Qué tienes en mente?</label>
-                <Select
-                  id="project-space"
-                  label="Tipo de trabajo"
-                  value={type}
-                  options={REQUEST_TYPES.map((t) => ({
-                    value: t.id,
-                    label: t.name,
-                    description: t.description,
-                  }))}
-                  onChange={(value) => {
-                    setType(value);
-                    setError("");
-                  }}
-                  triggerRef={trigger}
-                />
-              </div>
-            )}
+            <div className="ve-inquiry-type">
+              <label htmlFor="project-space">¿Qué tienes en mente?</label>
+              <Select
+                id="project-space"
+                label="Tipo de trabajo"
+                value={type}
+                options={REQUEST_TYPES.map((t) => ({
+                  value: t.id,
+                  label: t.name,
+                  description: t.description,
+                }))}
+                onChange={(value) => {
+                  setType(value);
+                  setError("");
+                }}
+                triggerRef={trigger}
+              />
+            </div>
             <div className="ve-inquiry-fields">
               <label>
                 Tu nombre
@@ -235,19 +233,21 @@ export function ProjectContact({
                 </label>
               )}
             </div>
-            {!source && (
-              <label>
-                Cuéntanos tu idea
-                <textarea
-                  name="idea"
-                  placeholder="El espacio, lo que quieres cambiar, medidas aproximadas…"
-                  required
-                  minLength={10}
-                  maxLength={4000}
-                  rows={3}
-                />
-              </label>
-            )}
+            <label>
+              {source ? "Cuéntanos qué quieres hacer" : "Cuéntanos tu idea"}
+              <textarea
+                name="idea"
+                placeholder={
+                  source
+                    ? "Por ejemplo, quiero instalar una mampara de vidrio en el baño."
+                    : "El espacio, lo que quieres cambiar, medidas aproximadas…"
+                }
+                required
+                minLength={10}
+                maxLength={4000}
+                rows={3}
+              />
+            </label>
             <div className="ve-honeypot" aria-hidden="true">
               <label>
                 Sitio web
@@ -260,11 +260,7 @@ export function ProjectContact({
               </p>
             )}
             <button className="ve-action" disabled={busy} type="submit">
-              {busy
-                ? "Enviando tu consulta…"
-                : source
-                  ? "Enviar mis datos"
-                  : "Enviar mi proyecto"}
+              {busy ? "Enviando tu consulta…" : "Enviar mi proyecto"}
               <Arrow />
             </button>
             <p className="ve-inquiry-privacy">

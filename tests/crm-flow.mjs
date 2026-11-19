@@ -10,12 +10,20 @@ if (!["localhost", "127.0.0.1"].includes(new URL(base).hostname))
   throw new Error("CRM fixtures are local-only.");
 let cookie = "",
   csrf = "";
-async function req(path, method = "GET", data, auth = true, token = csrf) {
+async function req(
+  path,
+  method = "GET",
+  data,
+  auth = true,
+  token = csrf,
+  headers = {},
+) {
   const form = data instanceof FormData;
   const r = await fetch(base + path, {
     method,
     headers: {
       Origin: "http://localhost:3300",
+      ...headers,
       ...(auth ? { Cookie: cookie, "X-Veca-Csrf": token } : {}),
       ...(!form && data ? { "Content-Type": "application/json" } : {}),
     },
@@ -50,7 +58,7 @@ csrf = login.body.csrf;
 expect(await req("/admin/crm/leads?page=no"), 400);
 const input = {
   name: "Cliente de prueba local",
-  email: "cliente@example.invalid",
+  email: `cliente-${randomUUID()}@example.invalid`,
   phone: "+51 900 000 000",
   district: "San Luis",
   requestType: "premium",
@@ -110,6 +118,41 @@ expect(
   await req(socialRoute, "POST", { ...social, source: "web" }, false),
   400,
 );
+const submitSocialProject = (data) =>
+  req(socialRoute, "POST", data, false, undefined, {
+    "X-Forwarded-For": "192.0.2.10",
+  });
+const socialIdea = "Necesitamos instalar una fachada de vidrio en un edificio.";
+const socialProject = {
+  ...social,
+  submissionId: randomUUID(),
+  requestType: "building",
+  idea: socialIdea,
+};
+expect(await submitSocialProject({ ...socialProject, idea: undefined }), 400);
+expect(await submitSocialProject({ ...socialProject, segment: "low" }), 400);
+for (const [source, requestType, segment] of [
+  ["facebook", "building", "large"],
+  ["instagram", "repair", "low"],
+  ["linkedin", "premium", "high"],
+]) {
+  const project = {
+    ...socialProject,
+    submissionId: randomUUID(),
+    source,
+    requestType,
+  };
+  const result = expect(await submitSocialProject(project), 201);
+  const lead = expect(
+    await req("/admin/crm/leads/" + result.reference),
+    200,
+  ).lead;
+  assert.equal(lead.source, source);
+  assert.equal(lead.stage, "prelead");
+  assert.equal(lead.requestType, requestType);
+  assert.equal(lead.idea, socialIdea);
+  assert.equal(lead.segment, segment);
+}
 const path = "/admin/crm/leads/" + ref.reference;
 let lead = expect(await req(path), 200).lead;
 assert.equal(lead.segment, "high");
