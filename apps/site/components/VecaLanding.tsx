@@ -81,7 +81,7 @@ export function VecaLanding({
           <div className="ve-hero-content">
             <p className="ve-hero-location">
               <span />
-              Vidrios VECA · Lima, Perú
+              Vidrios VECA · Lima y provincias
             </p>
             <h1 id="ve-title">
               Tu espacio.

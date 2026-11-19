@@ -156,7 +156,7 @@ assert.ok(article.includes("layout-alternating-right"));
 assert.ok(article.includes("collage-3"));
 assert.ok(article.includes("El resultado local"));
 const home = await (await fetch(site)).text();
-assert.ok(home.includes("veca-solution-card"));
+assert.ok(home.includes('id="ve-solution-panel"'));
 assert.ok(home.includes(draft.title));
 assert.ok(!home.includes("ve-glass-pane"));
 r = await request("/admin/projects/" + project.id, "PUT", {
@@ -235,10 +235,14 @@ for (let i = 0; i < 4; i++) {
   spotlight.push(response.body);
 }
 const spotlightHome = await (await fetch(site)).text();
-assert.equal(
-  (spotlightHome.match(/class="public-project-card"/g) || []).length,
-  3,
-);
+assert.ok(spotlightHome.includes('id="home-work-track"'));
+for (const item of spotlight) {
+  assert.ok(
+    spotlightHome.includes(
+      `class="home-work-card" href="/proyectos/${item.slug}/"`,
+    ),
+  );
+}
 const spotlightGallery = await (
   await fetch(site + "/proyectos/?q=Foco&tag=Ventanas")
 ).text();

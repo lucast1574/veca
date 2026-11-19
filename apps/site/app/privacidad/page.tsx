@@ -35,16 +35,17 @@ export default function Privacy() {
         <p>
           Esta política describe cómo se utilizan los datos personales en la web
           veca.com.pe y en el panel de trabajo panel.veca.com.pe. Vidrios VECA,
-          con sede principal en San Luis y atención en Lima, es el equipo que
-          recibe las consultas y gestiona las cuentas de esta plataforma. Puedes
-          consultar esta página sin registrarte ni iniciar sesión.
+          con sede principal en San Luis, Lima, es el equipo que recibe las
+          consultas y gestiona las cuentas de esta plataforma. Puedes consultar
+          esta página sin registrarte ni iniciar sesión.
         </p>
         <h2>Información que proporcionas</h2>
         <p>
           El formulario solicita nombre, correo electrónico, teléfono o
-          WhatsApp, distrito, tipo de trabajo y los detalles que decidas
-          compartir. El equipo de Vidrios VECA utiliza esta información para
-          atender la consulta, contactar contigo y dar seguimiento al proyecto.
+          WhatsApp, ubicación de la obra, tipo de trabajo y los detalles que
+          decidas compartir. El equipo de Vidrios VECA utiliza esta información
+          para atender la consulta, contactar contigo y dar seguimiento al
+          proyecto.
         </p>
         <h2>Acceso al panel</h2>
         <p>

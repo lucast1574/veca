@@ -8,11 +8,11 @@ import { WhatsAppButton } from "../components/SiteChrome";
 export const metadata: Metadata = {
   metadataBase: new URL("https://veca.com.pe"),
   title: {
-    default: "Vidrios VECA | Vidrios y ventanas en Lima",
+    default: "Vidrios VECA | Instalaciones en Lima y provincias",
     template: "%s | Vidrios VECA",
   },
   description:
-    "Ventanas y soluciones en vidrio para edificios, viviendas y remodelaciones. Conoce los proyectos de Vidrios VECA en Lima.",
+    "Instalamos ventanas, mamparas y fachadas de vidrio en Lima y provincias. Conoce nuestras obras y solicita una cotización para tu proyecto.",
   openGraph: {
     siteName: "Vidrios VECA",
     locale: "es_PE",

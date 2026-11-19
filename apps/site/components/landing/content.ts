@@ -48,7 +48,7 @@ export const spaces = [
 export const questions = [
   [
     "¿En qué zonas atienden?",
-    "Atendemos proyectos en toda Lima. Nuestra sede principal está en San Luis; cuéntanos en qué distrito se encuentra tu espacio para coordinar contigo.",
+    "Atendemos proyectos en Lima y provincias. Nuestra sede está en San Luis, Lima. Indícanos la ciudad o el distrito de tu obra para coordinar la instalación.",
   ],
   [
     "¿Qué necesito para consultar por mi proyecto?",

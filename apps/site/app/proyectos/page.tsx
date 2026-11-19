@@ -12,9 +12,9 @@ export async function generateMetadata({
 }) {
   const p = await searchParams;
   return {
-    title: "Proyectos de vidrio en Lima",
+    title: "Proyectos de vidrio en Lima y provincias",
     description:
-      "Explora los proyectos de Vidrios VECA: ventanas, mamparas, fachadas y remodelaciones en Lima.",
+      "Explora las ventanas, mamparas, fachadas y remodelaciones de Vidrios VECA en Lima y provincias.",
     alternates: { canonical: "https://veca.com.pe/proyectos/" },
     robots: p.q || p.tag ? { index: false, follow: true } : undefined,
   };

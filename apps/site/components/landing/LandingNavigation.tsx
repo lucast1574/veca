@@ -84,7 +84,7 @@ export function LandingNavigation({ home = false }: { home?: boolean }) {
           ))}
           <TeamAccess onNavigate={() => setOpen(false)} />
           <span className="ve-navigation-signature">
-            Vidrios VECA · Lima, Perú
+            Vidrios VECA · Lima y provincias
           </span>
         </nav>
       )}

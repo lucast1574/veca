@@ -5,6 +5,8 @@ const paths = {
   plus: "M12 5v14M5 12h14",
   close: "m6 6 12 12M18 6 6 18",
   check: "m5 12 4 4L19 6",
+  "map-pin":
+    "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0ZM15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
   user: "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2",
 };
 export function Icon({

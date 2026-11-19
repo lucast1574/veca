@@ -16,8 +16,8 @@ export async function generateMetadata({ params, searchParams }: Props) {
   const c = CATEGORIES.find((c) => c.id === category);
   if (!c) notFound();
   return {
-    title: `Proyectos de ${c.name.toLowerCase()} en Lima`,
-    description: `${c.description}. Descubre los proyectos de Vidrios VECA en Lima.`,
+    title: `Proyectos de ${c.name.toLowerCase()}`,
+    description: `${c.description}. Explora las obras de Vidrios VECA.`,
     alternates: {
       canonical: `https://veca.com.pe/proyectos/categoria/${category}/`,
     },

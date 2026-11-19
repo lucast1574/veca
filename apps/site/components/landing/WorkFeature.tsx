@@ -1,4 +1,5 @@
 import type { Project } from "@veca/content";
+import { Icon } from "@veca/ui/src/Icon";
 import { Action, Arrow } from "./Controls";
 
 type ProjectImage = Project["images"][number];
@@ -89,7 +90,7 @@ export function CompanyIntro({ office }: { office?: Project | null }) {
           <h2 id="ve-about-title">Vidrios VECA, desde San Luis</h2>
           <p>
             Instalamos ventanas, mamparas y soluciones de fachada para
-            viviendas, edificios y locales comerciales en Lima.
+            viviendas, edificios y locales comerciales en Lima y provincias.
           </p>
           <p>
             Al conversar sobre tu proyecto revisamos el uso del espacio, las
@@ -119,20 +120,22 @@ export function CompanyIntro({ office }: { office?: Project | null }) {
 }
 
 export function QuoteIntro({ project }: { project?: Project }) {
-  const image = project?.images.find(
-    (entry) => entry.id === "6afe878a2b79ec6d83882c24",
-  );
+  const image = project?.images.find((entry) => entry.id === project.coverId);
   return (
     <section
-      className="ve-project-intro ve-section"
+      className="ve-project-intro ve-section ve-observe"
       aria-labelledby="ve-project-intro-title"
     >
       <div className="ve-proof-inner ve-project-intro-inner">
         <div className="ve-quote-copy">
-          <h2 id="ve-project-intro-title">Cotiza tu instalación de vidrio</h2>
+          <h2 id="ve-project-intro-title">Cotiza tu instalación</h2>
           <p>
-            Cuéntanos qué necesitas instalar y en qué distrito. Trabajamos
-            ventanas, mamparas y fachadas en Lima.
+            Instalamos ventanas, mamparas y fachadas de vidrio. Cuéntanos qué
+            necesitas y dónde está tu obra.
+          </p>
+          <p className="ve-quote-coverage">
+            <Icon name="map-pin" />
+            Proyectos en Lima y provincias
           </p>
           <div className="ve-project-intro-actions">
             <Action href="#contacto">Solicitar cotización</Action>
@@ -141,21 +144,36 @@ export function QuoteIntro({ project }: { project?: Project }) {
             </a>
           </div>
         </div>
-        {image && project && (
-          <figure className="ve-quote-photo">
+        <figure className="ve-quote-photo">
+          <div className="ve-quote-frame">
             <img
-              src={image.url}
-              alt={image.alt}
-              width={image.width}
-              height={image.height}
+              src={image?.url ?? "/assets/oficina.webp"}
+              alt={image?.alt ?? "Oficina con amplios paneles de vidrio"}
+              width={image?.width ?? 1200}
+              height={image?.height ?? 1600}
               loading="lazy"
               decoding="async"
+              style={
+                image && {
+                  objectPosition: `${image.positionX}% ${image.positionY}%`,
+                }
+              }
             />
+          </div>
+          {image && project ? (
             <figcaption>
-              {project.title} · {project.location}
+              <a href={`/proyectos/${project.slug}/`}>
+                <span>
+                  <strong>{project.title}</strong>
+                  <span>{project.location}</span>
+                </span>
+                <Arrow />
+              </a>
             </figcaption>
-          </figure>
-        )}
+          ) : (
+            <figcaption>Imagen de referencia</figcaption>
+          )}
+        </figure>
       </div>
     </section>
   );
