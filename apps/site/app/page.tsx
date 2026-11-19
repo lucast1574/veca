@@ -4,7 +4,11 @@ import { withHomeCover } from "../lib/home-cover";
 import { api, projects } from "../lib/api";
 import { FeaturedProjects } from "../components/FeaturedProjects";
 import { VecaLanding } from "../components/VecaLanding";
-import { CompanyIntro, FeaturedCase } from "../components/landing/WorkFeature";
+import {
+  CompanyIntro,
+  FeaturedCase,
+  QuoteIntro,
+} from "../components/landing/WorkFeature";
 import "./landing.css";
 import "./landing-proof.css";
 export const dynamic = "force-dynamic";
@@ -48,6 +52,13 @@ export default async function Home() {
   return (
     <>
       <VecaLanding
+        intro={
+          <QuoteIntro
+            project={portfolio.find(
+              ({ slug }) => slug === "subaru-javier-prado-882c26",
+            )}
+          />
+        }
         caseStudy={caseStudy && <FeaturedCase project={caseStudy} />}
         company={<CompanyIntro office={office} />}
         featured={

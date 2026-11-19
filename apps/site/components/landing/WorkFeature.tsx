@@ -1,5 +1,5 @@
 import type { Project } from "@veca/content";
-import { Action } from "./Controls";
+import { Action, Arrow } from "./Controls";
 
 type ProjectImage = Project["images"][number];
 
@@ -110,6 +110,49 @@ export function CompanyIntro({ office }: { office?: Project | null }) {
             <figcaption>
               <a href={`/proyectos/${office.slug}/`}>{office.title}</a>
               <span>{office.location}</span>
+            </figcaption>
+          </figure>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export function QuoteIntro({ project }: { project?: Project }) {
+  const image = project?.images.find(
+    (entry) => entry.id === "6afe878a2b79ec6d83882c24",
+  );
+  return (
+    <section
+      className="ve-project-intro ve-section"
+      aria-labelledby="ve-project-intro-title"
+    >
+      <div className="ve-proof-inner ve-project-intro-inner">
+        <div className="ve-quote-copy">
+          <h2 id="ve-project-intro-title">Cotiza tu instalación de vidrio</h2>
+          <p>
+            Cuéntanos qué necesitas instalar y en qué distrito. Trabajamos
+            ventanas, mamparas y fachadas en Lima.
+          </p>
+          <div className="ve-project-intro-actions">
+            <Action href="#contacto">Solicitar cotización</Action>
+            <a className="ve-proof-link" href="#proyectos">
+              Ver obras realizadas <Arrow />
+            </a>
+          </div>
+        </div>
+        {image && project && (
+          <figure className="ve-quote-photo">
+            <img
+              src={image.url}
+              alt={image.alt}
+              width={image.width}
+              height={image.height}
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption>
+              {project.title} · {project.location}
             </figcaption>
           </figure>
         )}

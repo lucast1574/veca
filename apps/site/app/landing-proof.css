@@ -3,17 +3,16 @@
   margin-inline: auto;
 }
 
-.ve-project-intro {
-  background: var(--ve-night);
-  color: white;
+.ve-home .ve-project-intro {
+  padding-block: clamp(32px, 4vw, 64px);
+  background: #f1e9df;
 }
 
-.ve-project-intro-inner,
-.ve-company-layout {
+.ve-project-intro-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   align-items: center;
-  gap: 24px 48px;
+  gap: 24px clamp(24px, 6vw, 96px);
 }
 
 .ve-project-intro h2,
@@ -24,17 +23,18 @@
   letter-spacing: -0.055em;
 }
 
+.ve-project-intro h2 {
+  max-width: 19ch;
+  text-wrap: balance;
+}
+
 .ve-project-intro p,
 .ve-case-copy > p:not(.ve-case-location),
 .ve-company p {
   margin: 14px 0 0;
-  max-width: 52ch;
+  max-width: 50ch;
   font-size: 16px;
-  line-height: 1.65;
-}
-
-.ve-project-intro p {
-  color: #dfe1e8;
+  line-height: 1.6;
 }
 
 .ve-project-intro-actions {
@@ -42,21 +42,247 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 24px;
+  margin-top: 24px;
+}
+
+.ve-project-intro .ve-action,
+.ve-service-copy .ve-action {
+  background: #b43924;
+  color: #fff;
+}
+
+.ve-project-intro .ve-action:is(:hover, :focus-visible),
+.ve-service-copy .ve-action:is(:hover, :focus-visible) {
+  background: #822c1e;
+  color: #fff;
 }
 
 .ve-proof-link {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 44px;
-  color: #fff;
+  color: #262641;
+  font-size: 14px;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
 .ve-proof-link:is(:hover, :focus-visible) {
-  color: #ffb19a;
+  color: #9b301e;
   outline: none;
+}
+
+.ve-quote-photo {
+  margin: 0;
+}
+
+.ve-quote-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1.66;
+  object-fit: cover;
+}
+
+.ve-quote-photo figcaption {
+  padding-top: 7px;
+  color: #4b4e61;
+  font-size: 13px;
+}
+
+.ve-home .ve-solutions {
+  padding-block: clamp(40px, 6vw, 76px);
+  background: #e9eeec;
+}
+
+.ve-home .ve-solutions > .ve-solution-inner {
+  max-width: 1320px;
+}
+
+.ve-solutions h2 {
+  margin-bottom: clamp(22px, 3vw, 34px);
+  font-size: clamp(32px, 4vw, 55px);
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+}
+
+.ve-solution-layout,
+.ve-service-panel {
+  display: grid;
+  align-items: stretch;
+}
+
+.ve-solution-layout {
+  grid-template-columns: minmax(205px, 0.7fr) minmax(0, 2.4fr);
+  gap: clamp(16px, 2.3vw, 32px);
+}
+
+.ve-service-tabs {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.ve-service-tabs button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+  min-height: 68px;
+  padding: 12px 14px;
+  text-align: left;
+  border: 0;
+  cursor: pointer;
+  color: #262641;
+  background: #f8faf9;
+}
+
+.ve-service-tabs button:is(:hover, :focus-visible) {
+  background: #dce4e0;
+  outline: none;
+}
+
+.ve-service-tabs button[aria-selected="true"] {
+  color: #fff;
+  background: #262641;
+}
+
+.ve-service-tabs button[aria-selected="true"]:focus-visible {
+  background: #3d405e;
+}
+
+.ve-service-tabs svg {
+  flex: none;
+  width: 18px;
+  color: #a33a29;
+}
+
+.ve-service-tabs button[aria-selected="true"] svg {
+  color: #ffba9e;
+}
+
+.ve-service-tabs strong,
+.ve-service-caption strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.ve-service-tabs small,
+.ve-service-caption small {
+  display: block;
+  margin-top: 3px;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.84;
+}
+
+.ve-service-panel {
+  grid-template-columns: minmax(250px, 0.95fr) minmax(0, 1.15fr);
+  background: #fff;
+}
+
+.ve-service-copy {
+  align-self: center;
+  min-width: 0;
+  padding: clamp(20px, 2.7vw, 38px);
+}
+
+.ve-service-copy h3 {
+  font-size: clamp(24px, 2.6vw, 39px);
+  line-height: 1.1;
+  letter-spacing: -0.05em;
+}
+
+.ve-service-copy p {
+  margin-top: 12px;
+  color: #42455b;
+}
+
+.ve-service-copy ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 14px 0 22px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.ve-service-copy li {
+  text-decoration: underline;
+  text-decoration-color: #bd6758;
+  text-underline-offset: 4px;
+}
+
+.ve-service-example {
+  display: grid;
+  grid-template-rows: minmax(185px, 1fr) auto;
+  min-width: 0;
+  color: #fff;
+  background: #262641;
+  text-decoration: none;
+}
+
+.ve-service-example img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+}
+
+.ve-service-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.ve-service-caption svg {
+  flex: none;
+  color: #ffba9e;
+}
+
+.ve-service-example:is(:hover, :focus-visible) .ve-service-caption {
+  background: #3d405e;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 980px) {
+  .ve-solution-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ve-service-tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .ve-service-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ve-service-tabs button {
+    padding: 9px;
+  }
+
+  .ve-service-tabs svg {
+    width: 15px;
+  }
+
+  .ve-service-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .ve-service-example img {
+    aspect-ratio: 16 / 9;
+  }
 }
 
 .ve-case {
@@ -162,6 +388,8 @@
 }
 
 .ve-company-layout {
+  display: grid;
+  align-items: center;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   gap: clamp(24px, 5vw, 72px);
 }

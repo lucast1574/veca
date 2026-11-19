@@ -3,7 +3,7 @@ export const spaces = [
   {
     id: "viviendas",
     name: "Viviendas",
-    title: "Ventanas y mamparas para viviendas",
+    title: "Ventanas y mamparas",
     description:
       "Evaluamos el vano, el tipo de apertura y el uso del ambiente para definir las ventanas y mamparas.",
     image: "vivienda.webp",
@@ -14,7 +14,7 @@ export const spaces = [
   {
     id: "edificios",
     name: "Edificios",
-    title: "Fachadas de vidrio para edificios",
+    title: "Fachadas y muros cortina",
     description:
       "Revisamos planos, dimensiones y el tipo de apertura para plantear una solución de fachada.",
     image: "facade.webp",
@@ -25,12 +25,12 @@ export const spaces = [
   {
     id: "interiores",
     name: "Interiores",
-    title: "Divisiones y cerramientos de vidrio",
+    title: "Vidrio para interiores",
     description:
-      "Divisiones y cerramientos de vidrio para espacios de trabajo y ambientes que necesitan privacidad sin renunciar a la luz.",
+      "Instalamos divisiones, puertas de ducha y espejos para viviendas, oficinas y hoteles.",
     image: "mamparas.webp",
     alt: "Sala de reuniones con divisiones y puertas de vidrio",
-    details: ["Divisiones", "Oficinas", "Cerramientos"],
+    details: ["Divisiones", "Puertas de ducha", "Espejos"],
     href: "/vidrios-remodelaciones-lima/",
   },
   {

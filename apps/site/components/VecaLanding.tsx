@@ -10,12 +10,14 @@ import { LandingNavigation } from "./landing/LandingNavigation";
 import { LogoEntrance } from "./landing/LogoEntrance";
 import { ProjectContact } from "./landing/ProjectContact";
 export function VecaLanding({
+  intro,
   featured,
   company,
   caseStudy,
   consultationUrl,
   solutionProjects = [],
 }: {
+  intro: ReactNode;
   featured: ReactNode;
   company: ReactNode;
   caseStudy: ReactNode;
@@ -96,30 +98,7 @@ export function VecaLanding({
             </div>
           </div>
         </section>
-        <section
-          className="ve-project-intro ve-section"
-          aria-labelledby="ve-project-intro-title"
-        >
-          <div className="ve-proof-inner ve-project-intro-inner">
-            <div>
-              <h2 id="ve-project-intro-title">
-                Instalación de vidrio y aluminio en Lima
-              </h2>
-              <p>
-                Ventanas, mamparas y fachadas para viviendas, edificios y
-                comercios.
-              </p>
-            </div>
-            <div className="ve-project-intro-actions">
-              <Action href="#contacto" light>
-                Cotiza tu proyecto
-              </Action>
-              <a className="ve-proof-link" href="#proyectos">
-                Ver obras realizadas <Arrow />
-              </a>
-            </div>
-          </div>
-        </section>
+        {intro}
         {featured}
         <SolutionExplorer projects={solutionProjects} />
         {caseStudy}
