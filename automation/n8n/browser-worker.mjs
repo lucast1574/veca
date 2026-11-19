@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 
 const selenium = "http://browser:4444";
+const metaComposer =
+  "https://business.facebook.com/latest/composer/?asset_id=103191075272076";
 const platforms = [
   { name: "Instagram", url: "https://www.instagram.com/" },
   { name: "Facebook", url: "https://www.facebook.com/" },
@@ -8,16 +10,8 @@ const platforms = [
 ];
 const targets = {
   publications: [
-    [
-      "Instagram",
-      "https://business.facebook.com/latest/composer/?asset_id=103191075272076",
-      ["Crear publicación", "Create post"],
-    ],
-    [
-      "Facebook",
-      "https://www.facebook.com/profile.php?id=100067480520763",
-      ["Administrar página", "Manage Page"],
-    ],
+    ["Instagram", metaComposer, ["Crear publicación", "Create post"]],
+    ["Facebook", metaComposer, ["Crear publicación", "Create post"]],
     [
       "LinkedIn",
       "https://www.linkedin.com/company/146994344/admin/dashboard/",

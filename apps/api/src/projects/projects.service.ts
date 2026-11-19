@@ -2,7 +2,9 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Logger,
 } from "@nestjs/common";
+import { createHmac } from "node:crypto";
 import { ObjectId } from "mongodb";
 import {
   projectInputSchema,
@@ -20,6 +22,7 @@ import { config } from "../common/config";
 import { parse } from "../common/validation";
 @Injectable()
 export class ProjectsService {
+  private readonly logger = new Logger(ProjectsService.name);
   constructor(
     private readonly repo: ProjectsRepository,
     private readonly database: Database,
@@ -135,6 +138,7 @@ export class ProjectsService {
     if (issues.length) throw new BadRequestException(issues[0]);
     const now = new Date().toISOString();
     const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
+    const enqueueSocial = !firstPublishedAt && !d.socialShare;
     const published = {
       version: version + 1,
       ...value,
@@ -151,12 +155,13 @@ export class ProjectsService {
         published,
         publishedVersion: version + 1,
         firstPublishedAt: firstPublishedAt ?? now,
-        ...(!firstPublishedAt && !d.socialShare
+        ...(enqueueSocial
           ? { socialShare: { queuedAt: now, publishedVersion: version + 1 } }
           : {}),
         updatedAt: now,
       }),
     );
+    if (enqueueSocial) void this.wakeSocialWorkflow();
     await this.mail
       .queue(
         config.MAIL_NOTIFY_TO,
@@ -176,6 +181,28 @@ export class ProjectsService {
       )
       .catch(() => {});
     return saved;
+  }
+  private async wakeSocialWorkflow() {
+    const {
+      SOCIAL_PUBLICATION_WEBHOOK_URL: url,
+      SOCIAL_DELIVERY_TOKEN: secret,
+    } = config;
+    if (!url || !secret) return;
+    try {
+      const signature = createHmac("sha256", secret)
+        .update("veca:n8n:publication:v1")
+        .digest("hex");
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "X-Veca-Publication": signature },
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) return;
+    } catch {}
+    this.logger.warn(
+      "No se pudo iniciar el envío a redes. La obra sigue en cola.",
+    );
   }
   async unpublish(id: string, version: number) {
     const d = await this.repo.get(id);

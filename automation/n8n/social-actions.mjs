@@ -131,7 +131,7 @@ function metaPhotoPreview() {
   return null;
 }
 
-function metaDestination(stage) {
+function metaDestination(stage, account = "vecavidrios") {
   const visible = (element) =>
     element.getClientRects().length && !element.closest("[aria-hidden=true]");
   const label = (element) =>
@@ -139,9 +139,8 @@ function metaDestination(stage) {
       .replace(/[\u200B-\u200D\uFEFF]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-  const account = "vecavidrios";
   const page = "Vidrios VECA";
-  const expected = [account, page, page + " y " + account];
+  const expected = ["vecavidrios", page, page + " y vecavidrios"];
   const choices = [
     ...document.querySelectorAll('[role="combobox"][aria-expanded]'),
   ].filter((control) => visible(control) && expected.includes(label(control)));
@@ -170,6 +169,36 @@ function metaDestination(stage) {
     element: wanted[0],
     selected: wanted[0].getAttribute("aria-selected") === "true",
   };
+}
+
+function metaPublishedProject(platform, title, description, url) {
+  if (
+    location.origin !== "https://business.facebook.com" ||
+    !location.pathname.startsWith("/latest/posts/published_posts") ||
+    new URLSearchParams(location.search).get("asset_id") !== "103191075272076"
+  )
+    return false;
+  const social = platform === "instagram" ? "Instagram" : "Facebook";
+  const text = (value) =>
+    (value || "")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const caption = text([title, description].filter(Boolean).join(" "))
+    .slice(0, 100)
+    .trimEnd();
+  const rows = [...document.querySelectorAll('tr,[role="row"]')].filter(
+    (row) =>
+      row.getClientRects().length &&
+      row.querySelector(`img[alt="${social}"]`) &&
+      [...row.querySelectorAll('td,[role="cell"]')].some((cell) => {
+        const contents = text(cell.innerText);
+        return (
+          contents.includes(url) || (description && contents.includes(caption))
+        );
+      }),
+  );
+  return rows.length === 1;
 }
 
 async function withChrome(session, handle, action) {
@@ -577,7 +606,9 @@ export function createSocialActions({
     trace("media-select");
     await at("/element/" + input[elementId] + "/value", "POST", { text: path });
   }
-  async function chooseInstagram(root) {
+  async function chooseMetaDestination(root, platform) {
+    const chosen = platform === "instagram" ? "vecavidrios" : "Vidrios VECA";
+    const other = platform === "instagram" ? "Vidrios VECA" : "vecavidrios";
     const chooser = requireMatch(
       await waitFor(() => run(root, metaDestination, ["open"])),
       "session",
@@ -586,8 +617,8 @@ export function createSocialActions({
       at("/element/" + element[elementId] + "/click", "POST", {});
     await clickElement(chooser);
     for (const [name, selected] of [
-      ["vecavidrios", true],
-      ["Vidrios VECA", false],
+      [chosen, true],
+      [other, false],
     ]) {
       const option = requireMatch(
         await waitFor(() => run(root, metaDestination, [name])),
@@ -596,7 +627,7 @@ export function createSocialActions({
       if (option.selected !== selected) await clickElement(option.element);
     }
     requireMatch(
-      await waitFor(() => run(root, metaDestination, ["verified"])),
+      await waitFor(() => run(root, metaDestination, ["verified", chosen])),
       "session",
     );
     await at("/actions", "POST", {
@@ -612,9 +643,10 @@ export function createSocialActions({
       ],
     });
     requireMatch(
-      await waitFor(() => run(root, metaDestination, ["confirmed"])),
+      await waitFor(() => run(root, metaDestination, ["confirmed", chosen])),
       "session",
     );
+    return chosen;
   }
   async function checkInstagramAccount(root) {
     if (await run(root, metaDestination, ["linked"])) return true;
@@ -766,24 +798,25 @@ export function createSocialActions({
       .join("\n\n")
       .slice(0, 2000);
     const dialog = '[role="dialog"]';
+    const meta = platform === "instagram" || platform === "facebook";
     let photo;
+    let destination;
     const checkPhoto = async () => {
       trace("photo-preview");
-      const instagram = platform === "instagram";
       photo = requireMatch(
         await waitFor(
           () =>
-            instagram
+            meta
               ? run(root, metaPhotoPreview)
               : run(root, photoPreview, [dialog]),
-          instagram ? 15000 : 8500,
+          meta ? 15000 : 8500,
         ),
         "media",
       );
     };
-    if (platform === "instagram") {
-      trace("instagram-destination");
-      await chooseInstagram(root);
+    if (meta) {
+      trace("meta-destination");
+      destination = await chooseMetaDestination(root, platform);
       trace("upload");
       await uploadMeta(root, file);
       await checkPhoto();
@@ -799,35 +832,6 @@ export function createSocialActions({
         trace,
         true,
       );
-    } else if (platform === "facebook") {
-      trace("open-editor");
-      requireMatch(
-        await click(root, [
-          "¿Qué estás pensando?",
-          "What's on your mind?",
-          "Crear publicación",
-          "Create post",
-        ]),
-        "editor",
-      );
-      trace("caption");
-      await setText(
-        root,
-        ["¿Qué estás pensando?", "What's on your mind?"],
-        dialog,
-        caption.replace(/\s+/g, " "),
-        trace,
-        true,
-      );
-      trace("upload");
-      await upload(root, file, dialog, trace);
-      await checkPhoto();
-      trace("publication-options");
-      if (!(await control(root, submitLabels, dialog, "button", 2000)))
-        requireMatch(
-          await click(root, ["Siguiente", "Next"], dialog),
-          "editor",
-        );
     } else {
       await open(url.replace(/dashboard\/$/, "page-posts/published/"));
       trace("open-editor");
@@ -890,12 +894,13 @@ export function createSocialActions({
       submit: requireMatch(
         await control(
           root,
-          platform === "instagram" ? ["Publicar", "Publish"] : submitLabels,
-          platform === "instagram" ? "body" : dialog,
+          meta ? ["Publicar", "Publish"] : submitLabels,
+          meta ? "body" : dialog,
         ),
         "editor",
       ),
       photo,
+      destination,
     };
   }
 
@@ -918,21 +923,44 @@ export function createSocialActions({
       let reason = "confirmation";
       try {
         const confirmed = await scratch(async (root) => {
-          const { submit } = await prepare(root, channel, url, signals, job);
+          const { submit, destination } = await prepare(
+            root,
+            channel,
+            url,
+            signals,
+            job,
+          );
           const stillReady = await call(channel + "/" + job.id + "/check", {
             claim: job.claim,
           });
           requireMatch(stillReady.ready, "withdrawn");
-          if (channel === "instagram") {
+          if (destination) {
             requireMatch(
-              await run(root, metaDestination, ["confirmed"]),
+              await run(root, metaDestination, ["confirmed", destination]),
               "session",
             );
             requireMatch(await run(root, metaPhotoPreview), "media");
           }
           submitted = true;
           await at("/element/" + submit[elementId] + "/click", "POST", {});
-          return waitFor(() => run(root, publishedNotice, [channel]), 9000);
+          const notice = await waitFor(
+            () => run(root, publishedNotice, [channel]),
+            9000,
+          );
+          if (notice || !destination) return notice;
+          await open(
+            "https://business.facebook.com/latest/posts/published_posts/?asset_id=103191075272076",
+          );
+          return waitFor(
+            () =>
+              run(root, metaPublishedProject, [
+                channel,
+                job.title,
+                job.description,
+                job.url,
+              ]),
+            14000,
+          );
         });
         if (confirmed) {
           outcome = "published";
