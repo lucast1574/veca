@@ -4,17 +4,21 @@ import { CATEGORIES, type Project } from "@veca/content";
 import { Icon } from "@veca/ui/src/Icon";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-function scrollProject(list: HTMLUListElement, direction: -1 | 1) {
+const rotationInterval = 2600;
+const interactionCooldown = 3800;
+
+function scrollProjects(list: HTMLUListElement, direction: -1 | 1) {
   const cards = Array.from(list.children) as HTMLLIElement[];
-  const start = cards[0].offsetLeft;
-  const positions = cards.map((card) => card.offsetLeft - start);
-  const target =
-    direction > 0
-      ? positions.find((position) => position > list.scrollLeft + 1)
-      : [...positions]
-          .reverse()
-          .find((position) => position < list.scrollLeft - 1);
-  list.scrollTo({ left: target ?? 0 });
+  const [first, second] = cards;
+  if (!second) return;
+  const step = second.offsetLeft - first.offsetLeft;
+  if (step <= 0) return;
+
+  const visible = Math.max(1, Math.round(list.clientWidth / step));
+  const position = Math.round(list.scrollLeft / step);
+  const last = Math.max(0, cards.length - visible);
+  const next = Math.max(0, Math.min(last, position + direction * visible));
+  list.scrollTo({ left: cards[next].offsetLeft - first.offsetLeft });
 }
 
 export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
@@ -58,7 +62,7 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
     let direction: -1 | 1 = 1;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        visible = entry.isIntersecting;
+        visible = entry.intersectionRatio >= 0.45;
       },
       { threshold: 0.45 },
     );
@@ -70,7 +74,7 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
         document.hidden ||
         reducedMotion.matches ||
         frame.matches(":hover, :focus-within") ||
-        Date.now() - lastInteraction.current < 6000
+        Date.now() - lastInteraction.current < interactionCooldown
       )
         return;
 
@@ -78,8 +82,8 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
       if (maxScroll < 2) return;
       if (list.scrollLeft >= maxScroll - 1) direction = -1;
       if (list.scrollLeft <= 1) direction = 1;
-      scrollProject(list, direction);
-    }, 4500);
+      scrollProjects(list, direction);
+    }, rotationInterval);
 
     return () => {
       observer.disconnect();
@@ -92,7 +96,7 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
   }
 
   function move(direction: -1 | 1) {
-    if (track.current) scrollProject(track.current, direction);
+    if (track.current) scrollProjects(track.current, direction);
   }
 
   function navigate(event: KeyboardEvent<HTMLUListElement>) {
@@ -122,7 +126,9 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
       className="home-work-carousel"
       ref={carousel}
       onPointerDown={noteInteraction}
-      onWheel={noteInteraction}
+      onWheel={(event) => {
+        if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) noteInteraction();
+      }}
       role="group"
       aria-label="Obras destacadas"
     >

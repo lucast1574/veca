@@ -21,15 +21,21 @@ export function FeaturedProjects({ items }: { items: Project[] }) {
         </header>
         {!!items.length && <FeaturedProjectCarousel items={items} />}
         <div className="home-work-footer">
-          <ul aria-label="Categorías de proyectos">
-            {CATEGORIES.map((category) => (
-              <li key={category.id}>
-                <a href={`/proyectos/categoria/${category.id}/`}>
-                  {category.name}
-                </a>
-              </li>
-            ))}
-          </ul>
+          <nav
+            className="home-work-categories"
+            aria-label="Categorías de proyectos"
+          >
+            <p>Explora por categoría</p>
+            <ul>
+              {CATEGORIES.map((category) => (
+                <li key={category.id}>
+                  <a href={`/proyectos/categoria/${category.id}/`}>
+                    {category.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
           <a className="home-work-all" href="/proyectos/">
             {items.length ? "Ver todos los proyectos" : "Entra a la galería"}
             <Icon name="arrow-up-right" size={18} />
