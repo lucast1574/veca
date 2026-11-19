@@ -14,7 +14,6 @@ const schema = z.object({
   EMAIL_TEST_ENDPOINT: z.string().default(""),
   ADMIN_BOOTSTRAP_KEY: z.string().default(""),
   SOCIAL_DELIVERY_TOKEN: z.string().min(32).or(z.literal("")).default(""),
-  SOCIAL_PUBLICATION_WEBHOOK_URL: z.url({ protocol: /^https$/ }).optional(),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

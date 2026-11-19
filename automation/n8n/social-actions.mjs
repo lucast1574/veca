@@ -1,4 +1,5 @@
 import { crc32 } from "node:zlib";
+import { createHmac } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 const network = {
@@ -1151,11 +1152,83 @@ export function createSocialActions({
       })),
     });
   }
+  async function relayPublications(status) {
+    if (!secret) return;
+    const signature = createHmac("sha256", secret)
+      .update("veca:n8n:publication:v1")
+      .digest("hex");
+    for (;;) {
+      const controller = new AbortController();
+      let watchdog = setTimeout(() => controller.abort(), 35000);
+      try {
+        const connection = await fetch(
+          api + "/integrations/social/publication-events",
+          {
+            headers: {
+              Authorization: "Bearer " + secret,
+              Accept: "text/event-stream",
+            },
+            redirect: "error",
+            signal: controller.signal,
+          },
+        );
+        if (
+          !connection.ok ||
+          !connection.headers
+            .get("content-type")
+            ?.startsWith("text/event-stream")
+        )
+          throw Error("event_stream");
+        status.connected = true;
+        let buffer = "";
+        for await (const chunk of connection.body.pipeThrough(
+          new TextDecoderStream(),
+        )) {
+          clearTimeout(watchdog);
+          watchdog = setTimeout(() => controller.abort(), 35000);
+          buffer += chunk;
+          if (buffer.length > 65536) throw Error("event_buffer");
+          const frames = buffer.split(/\r?\n\r?\n/);
+          buffer = frames.pop();
+          if (
+            !frames.some((frame) =>
+              frame.split(/\r?\n/).includes("event: publication"),
+            )
+          )
+            continue;
+          status.receivedAt = new Date().toISOString();
+          const hook = await fetch(
+            "http://n8n:5678/webhook/veca-publicacion-obra",
+            {
+              method: "POST",
+              headers: {
+                "X-Veca-Publication": signature,
+                "Content-Type": "application/json",
+              },
+              body: "{}",
+              signal: AbortSignal.timeout(8000),
+              redirect: "error",
+            },
+          );
+          if (hook.ok) status.forwardedAt = new Date().toISOString();
+          await hook.body?.cancel();
+        }
+      } catch {
+        // The scheduled workflow still processes any queued work during a disconnect.
+      } finally {
+        clearTimeout(watchdog);
+        controller.abort();
+        status.connected = false;
+      }
+      await delay(3500);
+    }
+  }
   return {
     publish,
     inbox,
     verifyComposers,
     checkInstagramAccount,
     reportHealth,
+    relayPublications,
   };
 }

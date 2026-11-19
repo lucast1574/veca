@@ -8,6 +8,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Sse,
   UnauthorizedException,
 } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
@@ -88,9 +89,17 @@ export class SocialDeliveryController {
 
   @Post("dispatch")
   @HttpCode(200)
-  async dispatch(@Headers("authorization") authorization: string | undefined) {
+  dispatch(@Headers("authorization") authorization: string | undefined) {
     this.authorize(authorization);
-    return { started: await this.service.wakeSocialWorkflow() };
+    return { started: this.service.wakeSocialWorkflow() };
+  }
+
+  @Sse("publication-events")
+  publicationEvents(
+    @Headers("authorization") authorization: string | undefined,
+  ) {
+    this.authorize(authorization);
+    return this.service.publicationNotifications();
   }
 
   @Post("health")

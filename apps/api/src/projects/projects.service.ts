@@ -2,9 +2,9 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  Logger,
+  type MessageEvent,
 } from "@nestjs/common";
-import { createHmac } from "node:crypto";
+import { interval, map, merge, Subject } from "rxjs";
 import { ObjectId } from "mongodb";
 import {
   projectInputSchema,
@@ -22,7 +22,7 @@ import { config } from "../common/config";
 import { parse } from "../common/validation";
 @Injectable()
 export class ProjectsService {
-  private readonly logger = new Logger(ProjectsService.name);
+  private readonly publications = new Subject<MessageEvent>();
   constructor(
     private readonly repo: ProjectsRepository,
     private readonly database: Database,
@@ -161,7 +161,7 @@ export class ProjectsService {
         updatedAt: now,
       }),
     );
-    if (enqueueSocial) void this.wakeSocialWorkflow();
+    if (enqueueSocial) this.wakeSocialWorkflow();
     await this.mail
       .queue(
         config.MAIL_NOTIFY_TO,
@@ -182,33 +182,16 @@ export class ProjectsService {
       .catch(() => {});
     return saved;
   }
-  async wakeSocialWorkflow() {
-    const {
-      SOCIAL_PUBLICATION_WEBHOOK_URL: url,
-      SOCIAL_DELIVERY_TOKEN: secret,
-    } = config;
-    if (!url || !secret) return false;
-    try {
-      const signature = createHmac("sha256", secret)
-        .update("veca:n8n:publication:v1")
-        .digest("hex");
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "X-Veca-Publication": signature,
-          "Content-Type": "application/json",
-          "User-Agent": "VECA-Publicaciones/1.0",
-        },
-        body: "{}",
-        redirect: "error",
-        signal: AbortSignal.timeout(5000),
-      });
-      if (response.ok) return true;
-    } catch {}
-    this.logger.warn(
-      "No se pudo iniciar el envío a redes. La obra sigue en cola.",
+  wakeSocialWorkflow() {
+    const connected = this.publications.observed;
+    this.publications.next({ type: "publication", data: {} });
+    return connected;
+  }
+  publicationNotifications() {
+    return merge(
+      this.publications,
+      interval(15000).pipe(map(() => ({ type: "keepalive", data: {} }))),
     );
-    return false;
   }
   async unpublish(id: string, version: number) {
     const d = await this.repo.get(id);

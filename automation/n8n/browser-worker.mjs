@@ -40,6 +40,7 @@ let inspecting = false;
 let monitoring;
 const nextCheck = new Map();
 const reportedChecks = new Map();
+const publicationTrigger = { connected: false };
 const checkInterval = { publications: 15 * 60000, inboxes: 5 * 60000 };
 const actions = process.argv[2]
   ? (
@@ -284,6 +285,7 @@ createServer(async (req, res) => {
       ready,
       platforms: [...tabs.keys()],
       checks: Object.fromEntries(reportedChecks),
+      publicationTrigger,
     });
   }
   const group = /^\/verify\/(publications|inboxes)$/.exec(req.url)?.[1];
@@ -317,3 +319,4 @@ createServer(async (req, res) => {
 }).listen(8080, "0.0.0.0");
 
 void maintain();
+void actions?.relayPublications(publicationTrigger);
