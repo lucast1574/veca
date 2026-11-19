@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   emptyProject,
+  formatPeruLocation,
+  matchPeruLocation,
   projectInputSchema,
   seoFor,
   slugify,
@@ -34,6 +36,39 @@ test("SEO derives from the real title, summary and selected cover", () => {
   assert.equal(seoFor(p, slug).title, p.title + " | Vidrios VECA");
   assert.equal(seoFor(p, slug).image, p.images[0].url);
   assert.match(seoFor(p, slug).canonical, /\/proyectos\/mamparas-/);
+  assert.equal(
+    seoFor({ ...p, location: "San Luis, Lima" }, slug).title,
+    p.title + " | Vidrios VECA",
+  );
+  assert.equal(
+    seoFor(
+      { ...p, title: "Tribeca I", location: "Miraflores - Lima" },
+      "tribeca-i",
+    ).title,
+    "Tribeca I en Miraflores | Vidrios VECA",
+  );
+  const long =
+    "Se instalaron ventanas de aluminio y mamparas corredizas en el edificio. ".repeat(
+      4,
+    );
+  const description = seoFor({ ...p, excerpt: long }, slug).description;
+  assert.ok(description.length <= 160 && description.endsWith("…"));
+  assert.ok(long.startsWith(description.slice(0, -1) + " "));
+});
+test("the Peru selector recognizes existing locations and preserves distinct Lima zones", () => {
+  assert.deepEqual(matchPeruLocation("Miraflores - Lima"), {
+    region: "Lima Metropolitana",
+    locality: "Miraflores",
+  });
+  assert.deepEqual(matchPeruLocation("Chimbote, Ancash"), {
+    region: "Áncash",
+    locality: "Chimbote",
+  });
+  assert.deepEqual(matchPeruLocation(formatPeruLocation("Lima Provincias")), {
+    region: "Lima Provincias",
+    locality: "",
+  });
+  assert.equal(matchPeruLocation("Caserío sin opción"), null);
 });
 test("rejects executable URLs, arbitrary nodes, malformed documents and excessive nesting", () => {
   assert.equal(

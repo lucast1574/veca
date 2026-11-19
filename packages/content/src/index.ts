@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { locationKey, matchPeruLocation } from "./locations.js";
+export * from "./locations.js";
 
 export const CATEGORIES = [
   {
@@ -233,6 +235,8 @@ export function publicationIssues(project: ProjectInput): string[] {
   const issues: string[] = [];
   if (project.title.trim().length < 4)
     issues.push("Escribe un título de al menos 4 caracteres.");
+  if (!project.location?.trim())
+    issues.push("Selecciona la ubicación del proyecto.");
   if (
     !project.coverId ||
     !project.images.find((image) => image.id === project.coverId)?.alt.trim()
@@ -263,13 +267,44 @@ export function publicationIssues(project: ProjectInput): string[] {
 }
 
 export function seoFor(project: ProjectInput, slug: string) {
-  const text =
-    project.excerpt ||
-    projectText(project) ||
-    `${project.title}. Proyecto de Vidrios VECA en ${project.location || "Lima"}.`;
+  const name = project.title.trim() || "Proyecto";
+  const location = project.location?.trim() || "";
+  const place = matchPeruLocation(location);
+  const locality = place?.locality;
+  const nameKey = ` ${locationKey(name)} `;
+  const withLocation = locality ? `${name} en ${locality}` : name;
+  const title =
+    locality &&
+    !nameKey.includes(` ${locationKey(locality)} `) &&
+    withLocation.length + " | Vidrios VECA".length <= 72
+      ? withLocation
+      : name;
+  const sectionText =
+    project.pageLayout && project.pageLayout !== "legacy"
+      ? (project.sections || [])
+          .map(({ body }) => plainText(body).trim())
+          .filter(Boolean)
+          .join(" ")
+      : plainText(project.body);
+  const text = (
+    project.excerpt?.trim() ||
+    sectionText.trim() ||
+    (project.title.trim()
+      ? `${name}. Proyecto de Vidrios VECA${location ? ` en ${location}` : ""}.`
+      : "")
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+  const snippet =
+    text.length <= 160
+      ? text
+      : text
+          .slice(0, 159)
+          .replace(/\s+\S*$/, "")
+          .replace(/[\s,;:]+$/, "") + "…";
   return {
-    title: `${project.title} | Vidrios VECA`,
-    description: text.replace(/\s+/g, " ").trim().slice(0, 160),
+    title: `${title} | Vidrios VECA`,
+    description: snippet,
     canonical: `https://veca.com.pe/proyectos/${slug}/`,
     image: project.images.find((i) => i.id === project.coverId)?.url || null,
   };
