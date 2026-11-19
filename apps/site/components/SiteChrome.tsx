@@ -24,6 +24,18 @@ export function WhatsAppButton() {
     </a>
   );
 }
+const publicProfiles = [
+  { name: "Instagram", href: "https://www.instagram.com/vecavidrios/" },
+  {
+    name: "Facebook",
+    href: "https://www.facebook.com/people/Vidrios-VECA/100067480520763/",
+  },
+  {
+    name: "LinkedIn",
+    href: "https://www.linkedin.com/company/vidrios-veca-peru/",
+  },
+];
+
 export function SiteFooter() {
   return (
     <footer className="ve-footer">
@@ -48,6 +60,16 @@ export function SiteFooter() {
         <a href="/#contacto">Contacto</a>
         <a href="/privacidad/">Privacidad</a>
         <TeamAccess />
+      </nav>
+      <nav
+        className="ve-footer-social"
+        aria-label="Redes sociales de Vidrios VECA"
+      >
+        {publicProfiles.map(({ name, href }) => (
+          <a key={name} href={href} target="_blank" rel="noopener noreferrer">
+            {name} <Icon name="arrow-up-right" size={15} />
+          </a>
+        ))}
       </nav>
       <div className="ve-footer-bottom">
         <span>© {new Date().getFullYear()} Vidrios VECA</span>

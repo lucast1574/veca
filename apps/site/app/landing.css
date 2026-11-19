@@ -624,6 +624,39 @@ html:has(.ve-home) {
   font-size: 12px;
   margin: 35px 0 40px;
 }
+.ve-footer > nav:first-of-type {
+  margin-bottom: 18px;
+}
+
+.ve-footer > .ve-footer-social {
+  gap: 8px;
+  margin: 0 0 24px;
+}
+
+.ve-footer-social a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: white;
+  background: #30334d;
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.ve-footer-social a:is(:hover, :focus-visible) {
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: #424661;
+}
+
+.ve-footer-social svg {
+  flex: none;
+  color: #ff9b81;
+}
+
 .ve-footer-bottom {
   display: flex;
   justify-content: space-between;
