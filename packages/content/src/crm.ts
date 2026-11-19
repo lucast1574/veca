@@ -85,10 +85,16 @@ export const socialLeadSchema = z
     phone: contactFields.phone,
     email: contactFields.email,
     source: socialChannelSchema,
+    requestType: contactFields.requestType.optional(),
+    idea: contactFields.idea.optional(),
     submissionId: z.string().uuid(),
     website: text(200).optional().default(""),
   })
-  .strict();
+  .strict()
+  .refine(
+    ({ requestType, idea }) => Boolean(requestType) === Boolean(idea),
+    "Elige el tipo de trabajo y describe tu proyecto.",
+  );
 export const publicLeadSchema = z
   .object({
     ...contactFields,

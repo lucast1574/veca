@@ -1024,7 +1024,7 @@ export function createSocialActions({
                 };
               }
               const message =
-                "¡Hola! Gracias por escribir a Vidrios VECA. Déjanos tu nombre, teléfono y correo para conversar sobre tu proyecto: " +
+                "¡Hola! Gracias por escribir a Vidrios VECA. Déjanos tu nombre, teléfono y correo, y cuéntanos qué te gustaría instalar, reparar o renovar. Completa este formulario y te contactaremos: " +
                 form;
               for (const item of pending.slice(0, 3)) {
                 if (!remember.run(channel, item.id, "processing").changes)
