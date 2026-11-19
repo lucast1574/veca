@@ -1,10 +1,14 @@
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { CATEGORIES } from "@veca/content";
+import {
+  collectionHref,
+  type ProjectSearch,
+} from "../../../../lib/project-collection";
 import { ProjectCollection } from "../../../../components/ProjectCollection";
 export const dynamic = "force-dynamic";
 type Props = {
   params: Promise<{ category: string }>;
-  searchParams: Promise<{ q?: string; tag?: string; page?: string }>;
+  searchParams: Promise<ProjectSearch>;
 };
 export async function generateMetadata({ params, searchParams }: Props) {
   const { category } = await params;
@@ -15,9 +19,7 @@ export async function generateMetadata({ params, searchParams }: Props) {
     title: `Proyectos de ${c.name.toLowerCase()} en Lima`,
     description: `${c.description}. Descubre los proyectos de Vidrios VECA en Lima.`,
     alternates: {
-      canonical:
-        `https://veca.com.pe/proyectos/categoria/${category}/` +
-        (p.page && p.page !== "1" ? `?page=${p.page}` : ""),
+      canonical: `https://veca.com.pe/proyectos/categoria/${category}/`,
     },
     robots: p.q || p.tag ? { index: false, follow: true } : undefined,
   };
@@ -26,7 +28,8 @@ export default async function Category({ params, searchParams }: Props) {
   const { category } = await params;
   if (!CATEGORIES.some((c) => c.id === category)) notFound();
   const p = await searchParams;
-  return (
-    <ProjectCollection category={category} q={p.q} tag={p.tag} page={p.page} />
-  );
+  if (p.page !== undefined) {
+    permanentRedirect(collectionHref(`/proyectos/categoria/${category}/`, p));
+  }
+  return <ProjectCollection category={category} q={p.q} tag={p.tag} />;
 }

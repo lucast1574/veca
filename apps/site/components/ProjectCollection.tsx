@@ -2,33 +2,25 @@ import { Icon } from "@veca/ui/src/Icon";
 import { CATEGORIES, TAGS } from "@veca/content";
 import { projects } from "../lib/api";
 import { SiteHeader, SiteFooter } from "./SiteChrome";
-import { ProjectGrid } from "./ProjectGrid";
+import { ProjectCollectionResults } from "./ProjectCollectionResults";
+import { collectionHref } from "../lib/project-collection";
 export async function ProjectCollection({
   category = "",
   q = "",
   tag = "",
-  page = "1",
 }: {
   category?: string;
   q?: string;
   tag?: string;
-  page?: string;
 }) {
   q = typeof q === "string" ? q.slice(0, 120) : "";
   tag = TAGS.some((value) => value === tag) ? tag : "";
   const taxonomy = CATEGORIES.find((c) => c.id === category),
     base = category ? `/proyectos/categoria/${category}/` : "/proyectos/";
-  const href = (path: string, values: Record<string, string>) => {
-    const query = new URLSearchParams(
-      Object.entries(values).filter(([, value]) => !!value),
-    );
-    return path + (query.size ? "?" + query.toString() : "");
-  };
   const result = await projects({
     category,
     q,
     tag,
-    page: /^[1-9]\d{0,3}$/.test(page) ? page : "1",
   }).catch(() => null);
   return (
     <>
@@ -109,7 +101,7 @@ export async function ProjectCollection({
               aria-label="Categorías de proyectos"
             >
               <a
-                href={href("/proyectos/", { q, tag })}
+                href={collectionHref("/proyectos/", { q, tag })}
                 aria-current={!category ? "page" : undefined}
               >
                 Todos los proyectos
@@ -117,7 +109,10 @@ export async function ProjectCollection({
               {CATEGORIES.map((c) => (
                 <a
                   key={c.id}
-                  href={href(`/proyectos/categoria/${c.id}/`, { q, tag })}
+                  href={collectionHref(`/proyectos/categoria/${c.id}/`, {
+                    q,
+                    tag,
+                  })}
                   aria-current={category === c.id ? "page" : undefined}
                 >
                   {c.name}
@@ -130,7 +125,7 @@ export async function ProjectCollection({
             >
               <span>Por material o solución</span>
               <a
-                href={href(base, { q })}
+                href={collectionHref(base, { q })}
                 aria-current={!tag ? "page" : undefined}
               >
                 Todas
@@ -138,7 +133,7 @@ export async function ProjectCollection({
               {TAGS.map((value) => (
                 <a
                   key={value}
-                  href={href(base, { q, tag: value })}
+                  href={collectionHref(base, { q, tag: value })}
                   aria-current={tag === value ? "page" : undefined}
                 >
                   {value}
@@ -161,25 +156,11 @@ export async function ProjectCollection({
             )}
           </div>
           {result?.items.length ? (
-            <>
-              <ProjectGrid items={result.items} />
-              <nav className="pagination" aria-label="Páginas de proyectos">
-                {result.page > 1 && (
-                  <a
-                    href={href(base, { q, tag, page: String(result.page - 1) })}
-                  >
-                    ← Anterior
-                  </a>
-                )}
-                {result.page * result.pageSize < result.total && (
-                  <a
-                    href={href(base, { q, tag, page: String(result.page + 1) })}
-                  >
-                    Más proyectos →
-                  </a>
-                )}
-              </nav>
-            </>
+            <ProjectCollectionResults
+              key={JSON.stringify([category, q, tag])}
+              initial={result}
+              filters={{ category, q, tag }}
+            />
           ) : (
             <div className="collection-empty">
               <p className="eyebrow">UNA NUEVA PERSPECTIVA</p>

@@ -10,6 +10,9 @@ const landscapeImages = new Map([
   ["6afe87922b79ec6d83882c27", "6afe87922b79ec6d83882c28"], // Sarcletti
   ["6afe88102b79ec6d83882c5c", "6afe88112b79ec6d83882c5e"], // Procabell
   ["6afe84dc2b79ec6d83882bcb", "6afe84dc2b79ec6d83882bcc"], // Greenleaf
+  ["6afe87892b79ec6d83882c21", "6afe878a2b79ec6d83882c24"], // Subaru
+  ["6afe86f52b79ec6d83882c1b", "6afe86f62b79ec6d83882c1f"], // Top 818
+  ["6afe85472b79ec6d83882bdc", "6afe85482b79ec6d83882bde"], // Diners Club
 ]);
 
 export function withHomeCover(project: Project): Project {

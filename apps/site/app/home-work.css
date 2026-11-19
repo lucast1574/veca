@@ -1,11 +1,11 @@
 .home-work {
   background: #f8f7f3;
   color: var(--ve-text);
-  padding: clamp(42px, 6vw, 80px) clamp(20px, 5vw, 80px);
+  padding: clamp(42px, 6vw, 80px) clamp(20px, 3vw, 64px);
 }
 
 .home-work-inner {
-  max-width: 1200px;
+  max-width: 1760px;
   margin-inline: auto;
 }
 
@@ -82,7 +82,7 @@
   position: relative;
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: calc((100% - 2 * var(--work-gap)) / 2.18);
+  grid-auto-columns: calc((100% - 2 * var(--work-gap)) / 3);
   gap: var(--work-gap);
   overflow-x: auto;
   scrollbar-width: none;
@@ -305,15 +305,15 @@
   line-height: 1.65;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1060px) {
   .home-work-track:not(.home-work-single) {
-    grid-auto-columns: calc((100% - var(--work-gap)) / 1.67);
+    grid-auto-columns: calc((100% - var(--work-gap)) / 2);
   }
 }
 
 @media (max-width: 680px) {
   .home-work-track:not(.home-work-single) {
-    grid-auto-columns: calc(100% - 32px);
+    grid-auto-columns: 100%;
   }
 
   .home-work-heading {
