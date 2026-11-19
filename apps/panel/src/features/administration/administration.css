@@ -1,0 +1,166 @@
+.administration {
+  display: grid;
+  gap: 28px;
+  align-content: start;
+}
+
+.administration-heading,
+.administration-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.administration h1,
+.administration h2,
+.administration h3,
+.administration p,
+.administration dl,
+.administration dd {
+  margin: 0;
+}
+
+.administration-heading p,
+.administration-section-heading p {
+  margin-top: 6px;
+  color: var(--panel-secondary);
+}
+
+.administration-section-heading {
+  display: block;
+}
+
+.administration-section {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.administration-networks,
+.administration-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 218px), 1fr));
+  gap: 16px;
+}
+
+.administration-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+}
+
+.administration-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel-surface);
+  color: var(--panel-ink);
+}
+
+.administration-card h3 {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.administration .administration-checks {
+  display: grid;
+  gap: 12px;
+  padding: 14px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+
+.administration-checks > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.administration-checks dt,
+.administration-card-detail,
+.administration-team p,
+.administration-team dt,
+.administration-metrics dt {
+  color: var(--panel-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.administration-checks dd {
+  display: grid;
+  gap: 3px;
+  font-size: 0.75rem;
+  min-width: 0;
+}
+
+.administration-checks time {
+  color: var(--panel-secondary);
+}
+
+.administration-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-weight: 700;
+}
+
+.administration-check svg {
+  flex-shrink: 0;
+}
+
+.administration-check[data-tone="ok"] {
+  color: #246647;
+}
+
+html[data-theme="dark"] .administration-check[data-tone="ok"] {
+  color: #8ad9ad;
+}
+
+.administration-check[data-tone="review"] {
+  color: var(--panel-accent);
+}
+
+.administration-card-detail + .administration-card-detail,
+.administration-team h3 + p {
+  margin-top: 5px;
+}
+
+.administration-metrics dd {
+  margin-top: 8px;
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.administration-team {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.administration-team > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(235px, 1fr) minmax(0, 0.8fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.administration-team dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.administration-team dd {
+  font-weight: 700;
+}
+
+@media (max-width: 950px) {
+  .administration-team > li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

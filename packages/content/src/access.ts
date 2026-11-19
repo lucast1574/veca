@@ -51,3 +51,12 @@ export type UserSummary = SessionUser & {
   provider: "google" | "password";
 };
 export type AuthSession = { user: SessionUser; csrf: string };
+
+export function canViewAdministration(user: SessionUser) {
+  return (
+    user.status === "active" &&
+    user.emailVerified &&
+    user.role === "admin" &&
+    user.permissions.includes("users")
+  );
+}

@@ -28,6 +28,7 @@ import { RichEditor } from "./RichEditor";
 import { ImageLibrary } from "./ImageLibrary";
 import { StorySections } from "./StorySections";
 import { ProjectDesign } from "./ProjectDesign";
+import { ProjectLocation } from "./ProjectLocation";
 import { PublishReview, PublishSuccess } from "./PublishReview";
 import { legacySections, newSection, pruneSections } from "./sections";
 import "./editor-workflow.css";
@@ -87,12 +88,16 @@ export function ProjectEditor({
   const [draft, setDraft] = useState<ProjectInput>(() =>
     initial
       ? toInput(initial)
-      : { ...emptyProject(), pageLayout: "stacked", sections: [newSection()] },
+      : {
+          ...emptyProject(),
+          location: "",
+          pageLayout: "stacked",
+          sections: [newSection()],
+        },
   );
   const [saved, setSaved] = useState<Project | null>(initial);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [shareOnSocial, setShareOnSocial] = useState(true);
   const [uploading, setUploading] = useState(false);
   const busy = saving || uploading;
   const [error, setError] = useState("");
@@ -162,10 +167,7 @@ export function ProjectEditor({
     accept(result);
     return result;
   }
-  async function action(
-    kind: "save" | "publish" | "unpublish",
-    shareOnSocial = false,
-  ) {
+  async function action(kind: "save" | "publish" | "unpublish") {
     if (
       kind === "unpublish" &&
       !confirm(
@@ -188,7 +190,8 @@ export function ProjectEditor({
         if (kind === "publish") {
           result = await post<Project>(`/admin/projects/${result.id}/publish`, {
             version: result.version,
-            shareOnSocial,
+            // Keep sharing enabled if the panel deploys before the API.
+            shareOnSocial: true,
           });
           accept(result);
           setPublishedResult(result);
@@ -314,9 +317,7 @@ export function ProjectEditor({
               saved?.hasBeenPublished || saved?.status === "published",
             )}
             socialShareQueued={Boolean(saved?.socialShareQueuedAt)}
-            shareOnSocial={shareOnSocial}
-            onShareOnSocialChange={setShareOnSocial}
-            onPublish={(shareOnSocial) => void action("publish", shareOnSocial)}
+            onPublish={() => void action("publish")}
           />
         ) : (
           <div className="editor-columns">
@@ -452,14 +453,10 @@ export function ProjectEditor({
                     onChange={(value) => patch("category", value)}
                   />
                 </Field>
-                <Field label="Ubicación del proyecto" htmlFor="location">
-                  <input
-                    id="location"
-                    value={draft.location}
-                    maxLength={100}
-                    onChange={(e) => patch("location", e.target.value)}
-                  />
-                </Field>
+                <ProjectLocation
+                  value={draft.location}
+                  onChange={(location) => patch("location", location)}
+                />
                 <Field
                   label="Etiquetas"
                   hint="Elige hasta 8 etiquetas de la lista."
@@ -559,9 +556,14 @@ export function ProjectEditor({
                 </p>
                 <p className="seo-title">{seo.title}</p>
                 <p className="seo-description">{seo.description}</p>
+                {!saved && (
+                  <p className="hint">
+                    La dirección definitiva se asigna al guardar.
+                  </p>
+                )}
                 <p className="hint">
-                  Título, descripción, enlace y datos estructurados se generan
-                  automáticamente al publicar. La indexación depende de Google.
+                  El título, la descripción y la portada se actualizan con el
+                  contenido de la obra. Google elige cómo mostrarlos.
                 </p>
               </section>
               {saved?.status === "published" && (

@@ -49,6 +49,18 @@
 .veca-select-placeholder {
   color: var(--select-muted);
 }
+.veca-select .veca-select-search {
+  cursor: text;
+}
+.veca-select .veca-select-search::placeholder,
+.veca-select-empty {
+  color: var(--select-muted);
+}
+.veca-select-empty {
+  margin: 0;
+  padding: 13px 12px;
+  font-size: 13px;
+}
 .veca-select-menu {
   position: absolute;
   left: 0;

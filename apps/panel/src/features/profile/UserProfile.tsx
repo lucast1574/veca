@@ -12,6 +12,7 @@ import { Button, Notice } from "../../components/ui";
 import { PhotoSettings } from "./PhotoSettings";
 import { AppearanceSettings } from "./AppearanceSettings";
 import {
+  canOpenWorkspace,
   WORKSPACE_ITEMS,
   type WorkspaceView,
 } from "../../components/workspace/navigation";
@@ -50,7 +51,7 @@ export function UserProfile({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const available = WORKSPACE_ITEMS.filter((item) =>
-    user.permissions.includes(item.id),
+    canOpenWorkspace(item.id, user),
   );
   async function logout() {
     setBusy(true);

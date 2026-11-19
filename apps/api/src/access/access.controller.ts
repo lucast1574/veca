@@ -22,6 +22,7 @@ import type { AuthenticatedRequest, UserDocument } from "../auth/auth.types";
 import { parse } from "../common/validation";
 import { MailService } from "../mail/mail.service";
 import { panelAction } from "../mail/templates";
+import { AdministrationController } from "./administration.controller";
 @RequirePermission("users")
 @Controller("admin/users")
 class UsersController {
@@ -277,6 +278,6 @@ class DashboardController {
 }
 @Module({
   imports: [AuthModule],
-  controllers: [UsersController, DashboardController],
+  controllers: [UsersController, DashboardController, AdministrationController],
 })
 export class AccessModule {}

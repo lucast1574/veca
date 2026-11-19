@@ -8,7 +8,8 @@ const versionSchema = z
   .object({ version: z.number().int().positive() })
   .strict();
 const publishSchema = versionSchema.extend({
-  shareOnSocial: z.boolean().default(false),
+  // Accept requests from panels opened before automatic sharing was enabled.
+  shareOnSocial: z.boolean().optional(),
 });
 @Controller("admin/projects")
 @RequirePermission("projects")
@@ -30,8 +31,7 @@ export class ProjectsController {
     @Param("id") id: string,
     @Body() input: unknown,
   ) {
-    const { version, shareOnSocial } = parse(publishSchema, input);
-    return this.projects.publish(id, version, shareOnSocial);
+    return this.projects.publish(id, parse(publishSchema, input).version);
   }
   @Post(":id/unpublish") unpublish(
     @Param("id") id: string,

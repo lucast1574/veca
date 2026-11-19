@@ -2,7 +2,9 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  type MessageEvent,
 } from "@nestjs/common";
+import { interval, map, merge, Subject } from "rxjs";
 import { ObjectId } from "mongodb";
 import {
   projectInputSchema,
@@ -20,6 +22,7 @@ import { config } from "../common/config";
 import { parse } from "../common/validation";
 @Injectable()
 export class ProjectsService {
+  private readonly publications = new Subject<MessageEvent>();
   constructor(
     private readonly repo: ProjectsRepository,
     private readonly database: Database,
@@ -128,12 +131,14 @@ export class ProjectsService {
       }),
     );
   }
-  async publish(id: string, version: number, shareOnSocial = false) {
+  async publish(id: string, version: number) {
     const d = await this.repo.get(id);
     const value = await this.validated(d.draft);
     const issues = publicationIssues(value);
     if (issues.length) throw new BadRequestException(issues[0]);
     const now = new Date().toISOString();
+    const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
+    const enqueueSocial = !firstPublishedAt && !d.socialShare;
     const published = {
       version: version + 1,
       ...value,
@@ -143,20 +148,20 @@ export class ProjectsService {
       seo: seoFor(value, d.slug),
       createdAt: d.createdAt,
       updatedAt: now,
-      publishedAt: d.published?.publishedAt || now,
+      publishedAt: firstPublishedAt ?? now,
     };
-    const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
     const saved = this.admin(
       await this.repo.update(id, version, {
         published,
         publishedVersion: version + 1,
         firstPublishedAt: firstPublishedAt ?? now,
-        ...(!firstPublishedAt && shareOnSocial && !d.socialShare
+        ...(enqueueSocial
           ? { socialShare: { queuedAt: now, publishedVersion: version + 1 } }
           : {}),
         updatedAt: now,
       }),
     );
+    if (enqueueSocial) this.wakeSocialWorkflow();
     await this.mail
       .queue(
         config.MAIL_NOTIFY_TO,
@@ -176,6 +181,17 @@ export class ProjectsService {
       )
       .catch(() => {});
     return saved;
+  }
+  wakeSocialWorkflow() {
+    const connected = this.publications.observed;
+    this.publications.next({ type: "publication", data: {} });
+    return connected;
+  }
+  publicationNotifications() {
+    return merge(
+      this.publications,
+      interval(15000).pipe(map(() => ({ type: "keepalive", data: {} }))),
+    );
   }
   async unpublish(id: string, version: number) {
     const d = await this.repo.get(id);
@@ -246,6 +262,7 @@ export class ProjectsService {
               slug: 1,
               "published.updatedAt": 1,
               "published.category": 1,
+              "published.seo.image": 1,
             },
           },
         )
@@ -254,6 +271,7 @@ export class ProjectsService {
       slug: d.slug,
       updatedAt: d.published!.updatedAt,
       category: d.published!.category,
+      image: d.published!.seo?.image ?? null,
     }));
   }
 }

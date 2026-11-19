@@ -138,7 +138,7 @@ assert.equal(
 );
 r = await request(`/admin/projects/${project.id}/publish`, {
   method: "POST",
-  data: { version: project.version, shareOnSocial: true },
+  data: { version: project.version },
 });
 assert.equal(r.res.status, 201, JSON.stringify(r.body));
 project = r.body;
