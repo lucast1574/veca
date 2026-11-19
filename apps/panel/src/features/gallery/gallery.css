@@ -2,10 +2,6 @@
   color: var(--panel-ink);
 }
 .gallery-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 28px;
   margin-bottom: 28px;
 }
 .gallery-heading h1 {
@@ -16,31 +12,11 @@
 .gallery-heading h1 > span {
   color: var(--panel-brand);
 }
-.gallery-heading > div > p:last-child {
+.gallery-heading > p {
   max-width: 620px;
   color: var(--panel-secondary);
   line-height: 1.8;
   font-size: 13px;
-}
-.gallery-private-note {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 18px;
-  border: 1px solid var(--panel-edge);
-  border-radius: 12px;
-  font-size: 12px;
-  flex-shrink: 0;
-  background: var(--panel-surface);
-}
-.gallery-private-note > svg {
-  color: var(--panel-accent);
-}
-.gallery-private-note small {
-  display: block;
-  font-size: 10px;
-  color: var(--panel-secondary);
-  margin-top: 4px;
 }
 .gallery-tools {
   background: var(--panel-surface);
@@ -81,6 +57,24 @@
   gap: 18px;
   margin-top: 18px;
   flex-wrap: wrap;
+}
+.gallery-sort {
+  width: min(100%, 190px);
+}
+.gallery-source-filters {
+  border-top: 1px solid var(--panel-edge);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.gallery-source-filters > .gallery-filter-line {
+  margin-top: 0;
+}
+.gallery-source-filters > .gallery-tag-filter {
+  border-top: 0;
+  padding-top: 0;
+}
+.gallery-advanced[hidden] {
+  display: none;
 }
 .gallery-usage-tabs,
 .gallery-tag-filter,
@@ -255,6 +249,12 @@
   color: var(--panel-secondary);
   line-height: 1.9;
 }
+.gallery-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
 .gallery-skeleton {
   aspect-ratio: 1.1;
   border-radius: 14px;
@@ -363,10 +363,6 @@
   }
 }
 @media (max-width: 1100px) {
-  .gallery-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
   .gallery-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -403,6 +399,7 @@
 }
 .gallery-result-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 16px;
 }
@@ -424,9 +421,6 @@
 .gallery-result-actions > button:disabled {
   opacity: 0.5;
   cursor: wait;
-}
-.gallery-heading .overline {
-  color: var(--panel-accent);
 }
 .ve-modal-wide h2 {
   color: var(--panel-ink);

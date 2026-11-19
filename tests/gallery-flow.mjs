@@ -83,8 +83,9 @@ assert.deepEqual(pdf.tags, []);
 assert.equal((await upload({ tags: ["Etiqueta inventada"] })).status, 400);
 assert.equal((await upload({ sharing: "public" })).status, 400);
 const gallery = "/admin/gallery/photos";
+const leadGallery = gallery + "?source=lead";
 assert.equal((await req(gallery, "GET", null, false)).status, 401);
-r = await req(gallery);
+r = await req(leadGallery);
 assert.equal(r.status, 200);
 assert.match(r.headers.get("cache-control"), /no-store/);
 assert.equal(r.body.total, 2);
@@ -209,14 +210,94 @@ try {
       caption: "Paginación local " + i,
     })),
   );
-  const first = (await req(gallery)).body,
-    second = (await req(gallery + "?page=2")).body;
+  const first = (await req(leadGallery)).body,
+    second = (await req(leadGallery + "&page=2")).body;
   assert.equal(first.total, 39);
   assert.equal(first.items.length, 36);
   assert.equal(second.items.length, 3);
   assert.equal(first.pages, 2);
   assert.ok(!second.items.some((p) => first.items.some((x) => x.id === p.id)));
   await files.deleteMany({ _id: { $in: ids } });
+  const previousTotal = (await req(gallery)).body.total;
+
+  const images = [];
+  for (const name of [
+    "Mampara lateral",
+    "Portada de mampara",
+    "Detalle sin publicar",
+  ]) {
+    const form = new FormData();
+    const photo = await sharp("assets/mamparas.webp")
+      .resize(500)
+      .webp()
+      .toBuffer();
+    form.append(
+      "file",
+      new Blob([photo], { type: "image/webp" }),
+      "mampara.webp",
+    );
+    const uploaded = await req("/media", "POST", form);
+    assert.equal(uploaded.status, 201, JSON.stringify(uploaded.body));
+    images.push({ ...uploaded.body, alt: name });
+  }
+  const projectInput = {
+    title: "Mampara de galería en San Luis",
+    category: "interiores",
+    location: "San Luis",
+    tags: ["Mamparas"],
+    body: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "Una mampara instalada en San Luis con perfilería de aluminio y vidrio templado.",
+            },
+          ],
+        },
+      ],
+    },
+    images: images.slice(0, 2),
+    coverId: images[1].id,
+  };
+  r = await req("/admin/projects", "POST", projectInput);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const projectId = r.body.id;
+  r = await req(`/admin/projects/${projectId}/publish`, "POST", {
+    version: r.body.version,
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  r = await req(`/admin/projects/${projectId}`, "PUT", {
+    ...projectInput,
+    images,
+    version: r.body.version,
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const projectGallery =
+    gallery +
+    "?source=publication&search=" +
+    encodeURIComponent(projectInput.title);
+  r = await req(projectGallery + "&category=interiores");
+  assert.equal(r.body.total, 3);
+  assert.equal(
+    r.body.items.filter((photo) => photo.publication.status === "draft").length,
+    1,
+  );
+  r = await req(projectGallery + "&status=published");
+  assert.deepEqual(
+    r.body.items.map((photo) => photo.alt),
+    ["Portada de mampara", "Mampara lateral"],
+  );
+  r = await req(leadGallery);
+  assert.equal(r.body.total, 2);
+  assert.ok(r.body.items.every((photo) => photo.source === "lead"));
+  assert.equal((await req(gallery)).body.total, previousTotal + 3);
+  r = await req(leadGallery + "&sort=oldest");
+  assert.equal(r.body.items[0].id, internal.id);
+  assert.equal((await req(new URL(images[2].url).pathname)).status, 200);
+
   await db.collection("roles").insertOne({
     id: "gallery-test-only",
     name: "Galería de prueba",
@@ -235,6 +316,9 @@ try {
   });
   await login("gallery-local-test");
   assert.equal((await req(gallery)).status, 200);
+  assert.equal((await req(projectGallery)).body.total, 2);
+  assert.equal((await req(projectGallery + "&status=draft")).body.total, 0);
+  assert.equal((await req(new URL(images[2].url).pathname)).status, 403);
   assert.equal((await req(`${gallery}/${approved.id}`)).status, 200);
   assert.equal((await req(approved.url)).status, 403);
   assert.equal((await req(pdf.url)).status, 403);
@@ -252,5 +336,5 @@ try {
   await mongo.close();
 }
 console.log(
-  "PASS: private lead photo gallery, legacy defaults, tags/search/pagination, permission revocation, contract isolation, CSRF and concurrent edits.",
+  "PASS: lead and publication gallery, draft permissions, ordering, filters, pagination, legacy defaults, contract isolation, CSRF and concurrent edits.",
 );

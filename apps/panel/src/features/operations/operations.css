@@ -310,6 +310,32 @@
 .ops-form-grid .field {
   margin-top: 18px;
 }
+.ops-create-lead .ops-form-grid {
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 4px;
+  border: 0;
+  gap: 16px 20px;
+}
+.ops-create-lead .ops-form-grid .field {
+  min-width: 0;
+  margin: 0;
+}
+.ops-create-lead .notice {
+  margin: 16px 0 0;
+}
+.ops-create-lead .veca-select-menu {
+  position: static;
+  margin-top: 8px;
+}
+@media (max-width: 400px) {
+  .ops-create-lead .ve-modal-actions {
+    flex-direction: row;
+  }
+  .ops-create-lead .ve-modal-actions > .btn {
+    width: auto;
+  }
+}
 .ops-card .btn {
   margin-top: 15px;
 }

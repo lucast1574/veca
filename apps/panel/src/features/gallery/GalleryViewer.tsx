@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from "react";
-import type { GalleryPhoto, PhotoMetadata } from "@veca/content";
+import type {
+  GalleryLeadPhoto,
+  GalleryPhoto,
+  PhotoMetadata,
+} from "@veca/content";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,18 +15,21 @@ import {
 } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { Button, Notice } from "../../components/ui";
-import { API_BASE, api } from "../../lib/api";
+import { api } from "../../lib/api";
+import { galleryPhotoUrl } from "./GalleryPhotoCard";
 import { PhotoMetadataFields } from "./PhotoMetadataFields";
 export function GalleryViewer({
   initial,
   photos,
   canOpenLead,
+  canOpenProjects,
   onClose,
   onSaved,
 }: {
   initial: GalleryPhoto;
   photos: GalleryPhoto[];
   canOpenLead: boolean;
+  canOpenProjects: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -34,13 +41,14 @@ export function GalleryViewer({
     [error, setError] = useState("");
   const [draft, setDraft] = useState<PhotoMetadata>({
     caption: initial.caption,
-    tags: initial.tags,
-    sharing: initial.sharing,
+    tags: initial.source === "lead" ? initial.tags : [],
+    sharing: initial.source === "lead" ? initial.sharing : "internal",
   });
   const latest = useRef({ dirty: false, busy: false });
   latest.current = {
     dirty:
       editing &&
+      photo.source === "lead" &&
       JSON.stringify(draft) !==
         JSON.stringify({
           caption: photo.caption,
@@ -58,7 +66,7 @@ export function GalleryViewer({
       onClose();
   }, [onClose]);
   const candidates = presenting
-    ? selection.filter((p) => p.sharing === "clients")
+    ? selection.filter((p) => p.source === "lead" && p.sharing === "clients")
     : selection;
   const index = candidates.findIndex((p) => p.id === photo.id);
   function move(delta: number) {
@@ -69,10 +77,11 @@ export function GalleryViewer({
     }
   }
   async function save() {
+    if (photo.source !== "lead") return;
     setBusy(true);
     setError("");
     try {
-      const result = await api<GalleryPhoto>(
+      const result = await api<GalleryLeadPhoto>(
         `/admin/gallery/photos/${photo.id}`,
         {
           method: "PUT",
@@ -92,18 +101,24 @@ export function GalleryViewer({
       setBusy(false);
     }
   }
+  const publication = photo.source === "publication" ? photo.publication : null;
+  const title =
+    photo.caption ||
+    (photo.source === "publication"
+      ? photo.alt || photo.publication.title
+      : "Fotografía de obra");
   return (
     <Modal
       size="wide"
-      title={
-        presenting
-          ? "Una nueva perspectiva para tu espacio"
-          : photo.caption || "Fotografía de obra"
-      }
+      title={presenting ? "Una nueva perspectiva para tu espacio" : title}
       description={
         presenting
           ? "Vidrios VECA"
-          : "Galería privada · Esta imagen no está publicada en la web"
+          : publication
+            ? publication.status === "published"
+              ? "Publicación web"
+              : "Borrador de publicación"
+            : "Fotografía del lead · Galería del equipo"
       }
       onClose={close}
       busy={busy}
@@ -126,8 +141,8 @@ export function GalleryViewer({
       >
         <div className="gallery-viewer-photo">
           <img
-            src={API_BASE + photo.url}
-            alt={photo.caption || "Fotografía de obra VECA"}
+            src={galleryPhotoUrl(photo.url)}
+            alt={photo.source === "publication" ? photo.alt || title : title}
           />
         </div>
         {!editing && (
@@ -160,6 +175,30 @@ export function GalleryViewer({
               Volver a la galería privada
             </Button>
           </div>
+        ) : publication ? (
+          <>
+            <div className="gallery-detail-summary">
+              <strong>{publication.title}</strong>
+              <span>
+                {[publication.location, publication.cover ? "Portada" : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </div>
+            {(publication.href || canOpenProjects) && (
+              <div className="gallery-viewer-actions">
+                {publication.href ? (
+                  <a href={publication.href} target="_blank" rel="noreferrer">
+                    <ExternalLink size={15} /> Ver publicación en la web
+                  </a>
+                ) : (
+                  <a href="#projects" onClick={close}>
+                    <ExternalLink size={15} /> Ir a Publicaciones
+                  </a>
+                )}
+              </div>
+            )}
+          </>
         ) : editing ? (
           <form
             onSubmit={(e) => {
@@ -186,53 +225,55 @@ export function GalleryViewer({
             </div>
           </form>
         ) : (
-          <>
-            <div className="gallery-detail-summary">
-              <span className={`photo-use photo-use-${photo.sharing}`}>
-                {photo.sharing === "clients" ? (
-                  <ShieldCheck size={15} />
-                ) : (
-                  <LockKeyhole size={15} />
-                )}{" "}
-                {photo.sharing === "clients"
-                  ? "Autorizada para mostrar a clientes"
-                  : "Solo uso interno"}
-              </span>
-              <span>
-                {photo.lead.name} · {photo.lead.district}
-              </span>
-            </div>
-            <div className="gallery-photo-tags">
-              {photo.tags.map((tag) => (
-                <span key={tag}>{tag}</span>
-              ))}
-            </div>
-            <div className="gallery-viewer-actions">
-              {canOpenLead && (
-                <a href={`#leads/${photo.leadId}`} onClick={close}>
-                  <ExternalLink size={15} /> Abrir ficha de origen
-                </a>
-              )}
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setDraft({
-                    caption: photo.caption,
-                    tags: photo.tags,
-                    sharing: photo.sharing,
-                  });
-                  setEditing(true);
-                }}
-              >
-                <Pencil size={15} /> Editar etiquetas y uso
-              </Button>
-              {photo.sharing === "clients" && (
-                <Button onClick={() => setPresenting(true)}>
-                  <Presentation size={16} /> Mostrar al cliente
+          photo.source === "lead" && (
+            <>
+              <div className="gallery-detail-summary">
+                <span className={`photo-use photo-use-${photo.sharing}`}>
+                  {photo.sharing === "clients" ? (
+                    <ShieldCheck size={15} />
+                  ) : (
+                    <LockKeyhole size={15} />
+                  )}{" "}
+                  {photo.sharing === "clients"
+                    ? "Autorizada para mostrar a clientes"
+                    : "Solo uso interno"}
+                </span>
+                <span>
+                  {photo.lead.name} · {photo.lead.district}
+                </span>
+              </div>
+              <div className="gallery-photo-tags">
+                {photo.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+              <div className="gallery-viewer-actions">
+                {canOpenLead && (
+                  <a href={`#leads/${photo.leadId}`} onClick={close}>
+                    <ExternalLink size={15} /> Abrir ficha de origen
+                  </a>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setDraft({
+                      caption: photo.caption,
+                      tags: photo.tags,
+                      sharing: photo.sharing,
+                    });
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil size={15} /> Editar etiquetas y uso
                 </Button>
-              )}
-            </div>
-          </>
+                {photo.sharing === "clients" && (
+                  <Button onClick={() => setPresenting(true)}>
+                    <Presentation size={16} /> Mostrar al cliente
+                  </Button>
+                )}
+              </div>
+            </>
+          )
         )}
       </div>
     </Modal>

@@ -177,7 +177,7 @@ export default function App() {
       ) : view === "users" ? (
         <Team currentId={session.user.id} />
       ) : view === "gallery" ? (
-        <PrivateGallery canOpenLead={can("leads")} />
+        <PrivateGallery canOpenLead={can("leads")} canOpenProjects={can("projects")} />
       ) : view !== "projects" ? (
         <Operations view={view} inventoryAccess={can("inventory")} />
       ) : editing !== undefined ? (

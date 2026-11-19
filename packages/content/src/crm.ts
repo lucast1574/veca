@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProjectInput } from "./index.js";
 export const LEAD_STAGES = [
   { id: "prelead", name: "Prelead" },
   { id: "contacted", name: "Lead contactado" },
@@ -235,12 +236,30 @@ export const photoMetadataSchema = z
   })
   .strict();
 export type PhotoMetadata = z.infer<typeof photoMetadataSchema>;
-export type GalleryPhoto = LeadAttachment & {
+export type GalleryLeadPhoto = LeadAttachment & {
+  source: "lead";
   lead: Pick<
     Lead,
     "id" | "name" | "district" | "requestType" | "segment" | "stage"
   >;
 };
+export type GalleryPublicationPhoto = {
+  source: "publication";
+  id: string;
+  caption: string;
+  alt: string;
+  url: string;
+  createdAt: string;
+  publication: {
+    title: string;
+    location: string;
+    category: ProjectInput["category"];
+    status: "published" | "draft";
+    cover: boolean;
+    href?: string;
+  };
+};
+export type GalleryPhoto = GalleryLeadPhoto | GalleryPublicationPhoto;
 export type GalleryPage = {
   items: GalleryPhoto[];
   total: number;

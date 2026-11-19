@@ -8,6 +8,10 @@ export type GalleryFilters = {
   stage: string;
   segment: string;
   requestType: string;
+  source: string;
+  status: string;
+  category: string;
+  sort: string;
 };
 export const emptyGalleryFilters: GalleryFilters = {
   search: "",
@@ -16,6 +20,10 @@ export const emptyGalleryFilters: GalleryFilters = {
   stage: "",
   segment: "",
   requestType: "",
+  source: "",
+  status: "",
+  category: "",
+  sort: "newest",
 };
 export function useGallery(filters: GalleryFilters, page: number) {
   const [data, setData] = useState<GalleryPage | null>(null),

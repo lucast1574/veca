@@ -16,9 +16,10 @@ import {
   GripVertical,
   RefreshCw,
 } from "lucide-react";
-import { api, post } from "../../lib/api";
-import { Button, Field, Notice } from "../../components/ui";
-import { date, segmentName, useLiveRefresh, useMessage } from "./shared";
+import { api } from "../../lib/api";
+import { Button, Notice } from "../../components/ui";
+import { CreateLeadModal } from "./CreateLeadModal";
+import { segmentName, useLiveRefresh, useMessage } from "./shared";
 type List = {
   items: Lead[];
   total: number;
@@ -35,11 +36,8 @@ export function LeadBoard({
     [search, setSearch] = useState(""),
     [query, setQuery] = useState(""),
     [segment, setSegment] = useState("all"),
-    [create, setCreate] = useState(false),
-    [busy, setBusy] = useState(false),
-    [requestType, setRequestType] = useState("repair");
+    [create, setCreate] = useState(false);
   const { error, setError, fail } = useMessage();
-  const submissionId = useRef(crypto.randomUUID());
   const pages = useRef(1);
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search), 300);
@@ -79,27 +77,6 @@ export function LeadBoard({
       fail(e);
     }
   }
-  async function add(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const fields = Object.fromEntries(new FormData(event.currentTarget));
-    setBusy(true);
-    setError("");
-    try {
-      const r = await post<{ reference: string }>("/admin/crm/leads", {
-        ...fields,
-        requestType,
-        submissionId: submissionId.current,
-        website: "",
-      });
-      submissionId.current = crypto.randomUUID();
-      setCreate(false);
-      open(r.reference);
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false);
-    }
-  }
   const items = (data?.items || []).filter(
     (l) => segment === "all" || l.segment === segment,
   );
@@ -116,9 +93,9 @@ export function LeadBoard({
             Contactos, coordinación y avance de cada lead en un solo lugar.
           </span>
         </div>
-        <Button onClick={() => setCreate(!create)}>
+        <Button onClick={() => setCreate(true)} aria-haspopup="dialog">
           <Plus size={17} />
-          {create ? "Cerrar formulario" : "Registrar lead"}
+          Registrar lead
         </Button>
       </div>
       <div className="ops-summary">
@@ -136,44 +113,13 @@ export function LeadBoard({
         </Notice>
       )}
       {create && (
-        <form className="ops-card ops-create-form" onSubmit={add}>
-          <h2>Registrar una lead</h2>
-          <div className="ops-form-grid">
-            {[
-              ["name", "Nombre y apellido", "text"],
-              ["phone", "Teléfono", "tel"],
-              ["email", "Correo", "email"],
-              ["district", "Distrito", "text"],
-            ].map(([name, label, type]) => (
-              <Field key={name} label={label}>
-                <input name={name} type={type} required maxLength={180} />
-              </Field>
-            ))}
-            <Field label="Tipo de trabajo">
-              <Select
-                label="Tipo de trabajo"
-                value={requestType}
-                options={REQUEST_TYPES.map((t) => ({
-                  value: t.id,
-                  label: t.name,
-                }))}
-                onChange={setRequestType}
-              />
-            </Field>
-            <Field label="Idea o necesidad">
-              <textarea
-                name="idea"
-                required
-                minLength={10}
-                maxLength={4000}
-                rows={3}
-              />
-            </Field>
-          </div>
-          <Button disabled={busy}>
-            {busy ? "Guardando…" : "Crear prelead"}
-          </Button>
-        </form>
+        <CreateLeadModal
+          onClose={() => setCreate(false)}
+          onCreated={(id) => {
+            setCreate(false);
+            open(id);
+          }}
+        />
       )}
       <div className="ops-toolbar">
         <label className="search-input">

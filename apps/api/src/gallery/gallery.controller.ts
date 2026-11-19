@@ -19,10 +19,14 @@ export class GalleryController {
   constructor(private readonly gallery: GalleryService) {}
   @Get("photos") list(
     @Query() query: unknown,
+    @Req() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res: Response,
   ) {
     res.set("Cache-Control", "private, no-store");
-    return this.gallery.list(query);
+    return this.gallery.list(
+      query,
+      req.session.user.permissions.includes("projects"),
+    );
   }
   @Put("photos/:id") update(
     @Param("id") id: string,
