@@ -14,12 +14,15 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
 
   return (
     <section
-      className="ve-solutions ve-section"
+      className="ve-solutions ve-section ve-observe"
       id="soluciones"
       aria-labelledby="ve-solutions-title"
     >
       <div className="ve-proof-inner ve-solution-inner">
-        <h2 id="ve-solutions-title">¿Qué quieres instalar?</h2>
+        <div className="ve-service-heading">
+          <h2 id="ve-solutions-title">¿Qué quieres instalar?</h2>
+          <p>Elige una solución y mira cómo se aplica en obra.</p>
+        </div>
         <div className="ve-solution-layout">
           <div
             className="ve-service-tabs"
@@ -73,7 +76,43 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
             role="tabpanel"
             aria-labelledby={`ve-tab-${active}`}
           >
-            <div className="ve-service-copy">
+            <a
+              className="ve-service-example"
+              href={
+                cover && project ? `/proyectos/${project.slug}/` : item.href
+              }
+              key={item.id}
+            >
+              <div className="ve-service-frame">
+                <img
+                  src={cover?.url ?? `/assets/${item.image}`}
+                  alt={cover?.alt ?? item.alt}
+                  width={cover?.width ?? 1600}
+                  height={cover?.height ?? 1067}
+                  loading="lazy"
+                  decoding="async"
+                  style={
+                    cover && {
+                      objectPosition: `${cover.positionX}% ${cover.positionY}%`,
+                    }
+                  }
+                />
+              </div>
+              <span className="ve-service-caption">
+                <span>
+                  <strong>
+                    {cover && project ? project.title : "Conoce el servicio"}
+                  </strong>
+                  <small>
+                    {cover && project
+                      ? project.location
+                      : "Imagen de referencia"}
+                  </small>
+                </span>
+                <Arrow />
+              </span>
+            </a>
+            <div className="ve-service-copy" key={`copy-${item.id}`}>
               <h3>{item.title}</h3>
               <p>{item.description}</p>
               <ul>
@@ -83,49 +122,6 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
               </ul>
               <Action href="#contacto">Cotizar esta solución</Action>
             </div>
-            {cover && project ? (
-              <a
-                className="ve-service-example"
-                href={`/proyectos/${project.slug}/`}
-              >
-                <img
-                  src={cover.url}
-                  alt={cover.alt}
-                  width={cover.width}
-                  height={cover.height}
-                  loading="lazy"
-                  decoding="async"
-                  style={{
-                    objectPosition: `${cover.positionX}% ${cover.positionY}%`,
-                  }}
-                />
-                <span className="ve-service-caption">
-                  <span>
-                    <strong>{project.title}</strong>
-                    <small>{project.location}</small>
-                  </span>
-                  <Arrow />
-                </span>
-              </a>
-            ) : (
-              <a className="ve-service-example" href={item.href}>
-                <img
-                  src={`/assets/${item.image}`}
-                  alt={item.alt}
-                  width={1600}
-                  height={1067}
-                  loading="lazy"
-                  decoding="async"
-                />
-                <span className="ve-service-caption">
-                  <span>
-                    <strong>Conoce el servicio</strong>
-                    <small>Imagen de referencia</small>
-                  </span>
-                  <Arrow />
-                </span>
-              </a>
-            )}
           </div>
         </div>
       </div>

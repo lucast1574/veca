@@ -123,7 +123,7 @@ export function SiteFooter() {
       </div>
       <div className="ve-footer-bottom">
         <span>© {new Date().getFullYear()} Vidrios VECA</span>
-        <span>San Luis, Lima · Atención en toda Lima</span>
+        <span>Sede en San Luis · Proyectos en Lima y provincias</span>
         <a href="https://wa.me/51908917621">
           WhatsApp · +51 908 917 621 <Icon name="arrow-up-right" />
         </a>

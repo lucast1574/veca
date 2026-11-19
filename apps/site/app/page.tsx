@@ -16,6 +16,7 @@ export const metadata = { alternates: { canonical: "https://veca.com.pe/" } };
 const showcaseProjects = [
   "edificio-multifamiliar-madre-selva-882bc0",
   "oficinas-onu-882c3e",
+  "terrapuerto-selva-central-882c59",
   "edificio-multifamiliar-home-life-882be6",
   "subaru-javier-prado-882c26",
   "sarcletti-jorge-chavez-882c29",
@@ -24,15 +25,17 @@ const showcaseProjects = [
   "edificio-multifamiliar-greenleaf-882bcf",
   "diners-club-882be1",
 ];
+const quoteProject = "jw-marriott-el-convento-882bdb";
 
 export default async function Home() {
-  const [result, showcases, ...solutions] = await Promise.all([
+  const [result, showcases, regionalWork, ...solutions] = await Promise.all([
     projects({ featured: "true" }).catch(() => null),
     Promise.all(
       showcaseProjects.map((slug) =>
         api<Project>("/public/projects/" + slug).catch(() => null),
       ),
     ),
+    api<Project>("/public/projects/" + quoteProject).catch(() => null),
     ...SOLUTION_SLOTS.map((slot) =>
       projects({ solutionSlot: slot.id }).catch(() => null),
     ),
@@ -52,13 +55,7 @@ export default async function Home() {
   return (
     <>
       <VecaLanding
-        intro={
-          <QuoteIntro
-            project={portfolio.find(
-              ({ slug }) => slug === "subaru-javier-prado-882c26",
-            )}
-          />
-        }
+        intro={<QuoteIntro project={regionalWork ?? undefined} />}
         caseStudy={caseStudy && <FeaturedCase project={caseStudy} />}
         company={<CompanyIntro office={office} />}
         featured={

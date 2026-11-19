@@ -99,7 +99,7 @@ export function ProjectContact({
           <div className="ve-inquiry-heading">
             <h2 id="ve-contact-title">Cotiza tu proyecto</h2>
             <span>
-              Ten a mano el distrito, fotos del espacio y medidas aproximadas.
+              Ten a mano la ubicación, fotos del espacio y medidas aproximadas.
             </span>
           </div>
         )}
@@ -109,7 +109,7 @@ export function ProjectContact({
             <a href={WHATSAPP} target="_blank" rel="noopener noreferrer">
               +51 908 917 621 <Arrow />
             </a>
-            <small>WhatsApp Business · Atención en toda Lima</small>
+            <small>WhatsApp Business · Lima y provincias</small>
           </div>
         )}
       </div>
@@ -166,7 +166,7 @@ export function ProjectContact({
               <p>
                 {source
                   ? "Déjanos tus datos y cuéntanos qué quieres hacer. Te contactaremos para ayudarte con tu proyecto."
-                  : "Indica el distrito y describe el trabajo. Puedes incluir medidas aproximadas."}
+                  : "Indica la ciudad o el distrito y describe el trabajo. Puedes incluir medidas aproximadas."}
               </p>
             </div>
             <div className="ve-inquiry-type">
@@ -222,12 +222,12 @@ export function ProjectContact({
               </label>
               {!source && (
                 <label>
-                  Distrito del proyecto
+                  Ciudad o distrito de la obra
                   <input
                     name="district"
-                    autoComplete="address-level2"
-                    placeholder="¿En qué distrito está?"
+                    placeholder="Ej. Huancayo, Junín"
                     required
+                    minLength={2}
                     maxLength={120}
                   />
                 </label>

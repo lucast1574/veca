@@ -12,8 +12,8 @@ export const homeSchema = {
         url: "https://veca.com.pe/assets/logo.svg",
       },
       description:
-        "Vidrios y ventanas para edificios, casas, departamentos y remodelaciones. Atención de proyectos en toda Lima.",
-      areaServed: { "@type": "AdministrativeArea", name: "Lima, Perú" },
+        "Instalación de ventanas, mamparas y fachadas de vidrio en Lima y provincias.",
+      areaServed: "Lima y provincias del Perú",
       telephone: "+51908917621",
       contactPoint: {
         "@type": "ContactPoint",
@@ -21,7 +21,7 @@ export const homeSchema = {
         contactType: "customer service",
         availableLanguage: "Spanish",
         url: "https://wa.me/51908917621",
-        areaServed: "Lima, Perú",
+        areaServed: "Lima y provincias del Perú",
       },
     },
     {
@@ -37,7 +37,7 @@ export const homeSchema = {
       "@type": "WebPage",
       "@id": "https://veca.com.pe/#webpage",
       url: "https://veca.com.pe/",
-      name: "Vidrios VECA | Vidrios y ventanas en Lima",
+      name: "Vidrios VECA | Instalaciones en Lima y provincias",
       isPartOf: { "@id": "https://veca.com.pe/#website" },
       about: { "@id": "https://veca.com.pe/#organization" },
       inLanguage: "es-PE",

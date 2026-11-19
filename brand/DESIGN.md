@@ -4,7 +4,7 @@ Actualizado: 2026-10-18. Leer junto con `VOICE.md` antes de modificar interfaces
 
 ## Identidad y fuentes
 
-Vidrios VECA: empresa de vidrio y construcción, sede en San Luis y atención en Lima. El panel debe sentirse claro, profesional y útil para el trabajo diario. No modificar el símbolo ni inventar antigüedad, certificaciones o proyectos.
+Vidrios VECA: empresa de vidrio y construcción, sede en San Luis y atención en Lima y provincias. El panel debe sentirse claro, profesional y útil para el trabajo diario. No modificar el símbolo ni inventar antigüedad, certificaciones o proyectos.
 
 - Naranja original: **#e74927**, extraído de `apps/panel/public/assets/logo.svg`.
 - Azul de la marca: **#242641**, presente en el favicon y las tarjetas del perfil.

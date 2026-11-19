@@ -16,7 +16,8 @@ export function FeaturedProjects({ items }: { items: Project[] }) {
             <h2 id="home-work-title">Cada proyecto, otra perspectiva.</h2>
           </div>
           <p>
-            Ventanas, mamparas y fachadas de vidrio en obras realizadas en Lima.
+            Ventanas, mamparas y fachadas de vidrio en obras realizadas en Lima
+            y provincias.
           </p>
         </header>
         {!!items.length && <FeaturedProjectCarousel items={items} />}
