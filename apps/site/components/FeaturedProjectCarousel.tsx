@@ -2,64 +2,126 @@
 
 import { CATEGORIES, type Project } from "@veca/content";
 import { Icon } from "@veca/ui/src/Icon";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 const rotationInterval = 2600;
 const interactionCooldown = 3800;
+const maxVisibleCards = 3;
+const scrollSettleDelay = 120;
 
-function scrollProjects(list: HTMLUListElement, direction: -1 | 1) {
+function measureTrack(list: HTMLUListElement, firstOriginal: number) {
   const cards = Array.from(list.children) as HTMLLIElement[];
   const [first, second] = cards;
-  if (!second) return;
-  const step = second.offsetLeft - first.offsetLeft;
-  if (step <= 0) return;
+  if (!second) return null;
 
-  const visible = Math.max(1, Math.round(list.clientWidth / step));
-  const position = Math.round(list.scrollLeft / step);
-  const last = Math.max(0, cards.length - visible);
-  const next = Math.max(0, Math.min(last, position + direction * visible));
-  list.scrollTo({ left: cards[next].offsetLeft - first.offsetLeft });
+  const step = second.offsetLeft - first.offsetLeft;
+  if (step <= 0) return null;
+
+  return {
+    visible: Math.max(1, Math.round(list.clientWidth / step)),
+    index: Math.round(
+      (list.scrollLeft - cards[firstOriginal].offsetLeft + first.offsetLeft) /
+        step,
+    ),
+    offset: (index: number) =>
+      cards[firstOriginal + index].offsetLeft - first.offsetLeft,
+  };
+}
+
+function scrollGroup(
+  list: HTMLUListElement,
+  cloneCount: number,
+  count: number,
+  direction: -1 | 1,
+) {
+  const layout = measureTrack(list, cloneCount);
+  if (!layout) return;
+  const next = Math.max(
+    -layout.visible,
+    Math.min(count, layout.index + direction * layout.visible),
+  );
+  list.scrollTo({ left: layout.offset(next) });
 }
 
 export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
   const track = useRef<HTMLUListElement>(null);
   const carousel = useRef<HTMLDivElement>(null);
   const lastInteraction = useRef(0);
-  const [edges, setEdges] = useState({ start: true, end: false });
+  const currentIndex = useRef(0);
+  const [cloneCount, setCloneCount] = useState(0);
+  const count = items.length;
+  const loop = cloneCount > 0;
+
+  useLayoutEffect(() => {
+    const list = track.current;
+    if (!list || count < 2) return;
+
+    function align() {
+      if (!list || !list.clientWidth) return;
+      const layout = measureTrack(list, cloneCount);
+      if (!layout) return;
+
+      const needed =
+        count > layout.visible ? Math.min(count, maxVisibleCards) : 0;
+      if (needed !== cloneCount) {
+        setCloneCount(needed);
+      } else if (loop) {
+        list.scrollTo({
+          left: layout.offset(currentIndex.current),
+          behavior: "instant",
+        });
+      }
+    }
+
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [cloneCount, count, loop]);
 
   useEffect(() => {
     const list = track.current;
-    if (!list) return;
+    if (!list || !loop) return;
 
-    function updateEdges() {
+    let settleTimer: number;
+    function settle() {
       if (!list) return;
-      const start = list.scrollLeft <= 1;
-      const end = list.scrollLeft + list.clientWidth >= list.scrollWidth - 1;
-      setEdges((previous) =>
-        previous.start === start && previous.end === end
-          ? previous
-          : { start, end },
-      );
+      const layout = measureTrack(list, cloneCount);
+      if (!layout) return;
+
+      const index = ((layout.index % count) + count) % count;
+      currentIndex.current = index;
+      if (index !== layout.index) {
+        // The copied slides are visually identical when we return to the originals.
+        list.scrollTo({ left: layout.offset(index), behavior: "instant" });
+      }
     }
 
-    const observer = new ResizeObserver(updateEdges);
-    observer.observe(list);
-    list.addEventListener("scroll", updateEdges, { passive: true });
-    updateEdges();
+    function onScroll() {
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(settle, scrollSettleDelay);
+    }
+
+    list.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      observer.disconnect();
-      list.removeEventListener("scroll", updateEdges);
+      list.removeEventListener("scroll", onScroll);
+      window.clearTimeout(settleTimer);
     };
-  }, [items.length]);
+  }, [cloneCount, count, loop]);
 
   useEffect(() => {
     const list = track.current;
     const frame = carousel.current;
-    if (!list || !frame || items.length < 2) return;
+    if (!list || !frame || !loop) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let visible = false;
-    let direction: -1 | 1 = 1;
     const observer = new IntersectionObserver(
       ([entry]) => {
         visible = entry.intersectionRatio >= 0.45;
@@ -78,29 +140,29 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
       )
         return;
 
-      const maxScroll = list.scrollWidth - list.clientWidth;
-      if (maxScroll < 2) return;
-      if (list.scrollLeft >= maxScroll - 1) direction = -1;
-      if (list.scrollLeft <= 1) direction = 1;
-      scrollProjects(list, direction);
+      scrollGroup(list, cloneCount, count, 1);
     }, rotationInterval);
 
     return () => {
       observer.disconnect();
       window.clearInterval(timer);
     };
-  }, [items.length]);
+  }, [cloneCount, count, loop]);
 
   function noteInteraction() {
     lastInteraction.current = Date.now();
   }
 
   function move(direction: -1 | 1) {
-    if (track.current) scrollProjects(track.current, direction);
+    if (track.current && loop)
+      scrollGroup(track.current, cloneCount, count, direction);
   }
 
   function navigate(event: KeyboardEvent<HTMLUListElement>) {
-    if (event.target !== event.currentTarget) return;
+    if (event.target !== event.currentTarget || !loop) return;
+    const list = event.currentTarget;
+    const layout = measureTrack(list, cloneCount);
+    if (!layout) return;
     switch (event.key) {
       case "ArrowLeft":
         move(-1);
@@ -109,10 +171,10 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
         move(1);
         break;
       case "Home":
-        event.currentTarget.scrollTo({ left: 0 });
+        list.scrollTo({ left: layout.offset(0) });
         break;
       case "End":
-        event.currentTarget.scrollTo({ left: event.currentTarget.scrollWidth });
+        list.scrollTo({ left: layout.offset(count - layout.visible) });
         break;
       default:
         return;
@@ -120,7 +182,16 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
     event.preventDefault();
   }
 
-  const hasSeveral = items.length > 1;
+  const hasSeveral = count > 1;
+  const slides = [
+    ...items
+      .slice(count - cloneCount)
+      .map((project) => ({ project, copy: "before" })),
+    ...items.map((project) => ({ project, copy: "" })),
+    ...items
+      .slice(0, cloneCount)
+      .map((project) => ({ project, copy: "after" })),
+  ];
   return (
     <div
       className="home-work-carousel"
@@ -138,10 +209,8 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
             type="button"
             aria-controls="home-work-track"
             aria-label="Proyecto anterior"
-            aria-disabled={edges.start}
-            onClick={() => {
-              if (!edges.start) move(-1);
-            }}
+            aria-disabled={!loop}
+            onClick={() => move(-1)}
           >
             <Icon name="arrow-right" className="home-work-back" size={20} />
           </button>
@@ -149,10 +218,8 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
             type="button"
             aria-controls="home-work-track"
             aria-label="Proyecto siguiente"
-            aria-disabled={edges.end}
-            onClick={() => {
-              if (!edges.end) move(1);
-            }}
+            aria-disabled={!loop}
+            onClick={() => move(1)}
           >
             <Icon name="arrow-right" size={20} />
           </button>
@@ -168,7 +235,7 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
         onKeyDown={navigate}
         aria-label="Proyectos en portada"
       >
-        {items.map((project) => {
+        {slides.map(({ project, copy }) => {
           const cover = project.images.find(
             (image) => image.id === project.coverId,
           );
@@ -176,7 +243,11 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
             (entry) => entry.id === project.category,
           );
           return (
-            <li key={project.id}>
+            <li
+              key={copy ? `${project.id}-${copy}` : project.id}
+              aria-hidden={copy ? true : undefined}
+              inert={copy ? true : undefined}
+            >
               <article>
                 <a
                   className="home-work-card"
