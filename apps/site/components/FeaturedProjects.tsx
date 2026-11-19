@@ -19,9 +19,7 @@ export function FeaturedProjects({ items }: { items: Project[] }) {
             Ventanas, mamparas y fachadas de vidrio en obras realizadas en Lima.
           </p>
         </header>
-        {!!items.length && (
-          <FeaturedProjectCarousel items={items.slice(0, 3)} />
-        )}
+        {!!items.length && <FeaturedProjectCarousel items={items} />}
         <div className="home-work-footer">
           <ul aria-label="Categorías de proyectos">
             {CATEGORIES.map((category) => (

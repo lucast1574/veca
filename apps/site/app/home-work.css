@@ -85,8 +85,7 @@
   grid-auto-columns: calc((100% - 2 * var(--work-gap)) / 2.18);
   gap: var(--work-gap);
   overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #a39e99 transparent;
+  scrollbar-width: none;
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   margin: 0;

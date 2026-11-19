@@ -4,8 +4,23 @@ import { CATEGORIES, type Project } from "@veca/content";
 import { Icon } from "@veca/ui/src/Icon";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+function scrollProject(list: HTMLUListElement, direction: -1 | 1) {
+  const cards = Array.from(list.children) as HTMLLIElement[];
+  const start = cards[0].offsetLeft;
+  const positions = cards.map((card) => card.offsetLeft - start);
+  const target =
+    direction > 0
+      ? positions.find((position) => position > list.scrollLeft + 1)
+      : [...positions]
+          .reverse()
+          .find((position) => position < list.scrollLeft - 1);
+  list.scrollTo({ left: target ?? 0 });
+}
+
 export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
   const track = useRef<HTMLUListElement>(null);
+  const carousel = useRef<HTMLDivElement>(null);
+  const lastInteraction = useRef(0);
   const [edges, setEdges] = useState({ start: true, end: false });
 
   useEffect(() => {
@@ -33,19 +48,51 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
     };
   }, [items.length]);
 
-  function move(direction: -1 | 1) {
+  useEffect(() => {
     const list = track.current;
-    if (!list) return;
-    const cards = Array.from(list.children) as HTMLLIElement[];
-    const start = cards[0].offsetLeft;
-    const positions = cards.map((card) => card.offsetLeft - start);
-    const target =
-      direction > 0
-        ? positions.find((position) => position > list.scrollLeft + 1)
-        : [...positions]
-            .reverse()
-            .find((position) => position < list.scrollLeft - 1);
-    list.scrollTo({ left: target ?? 0 });
+    const frame = carousel.current;
+    if (!list || !frame || items.length < 2) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let visible = false;
+    let direction: -1 | 1 = 1;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+      },
+      { threshold: 0.45 },
+    );
+    observer.observe(list);
+
+    const timer = window.setInterval(() => {
+      if (
+        !visible ||
+        document.hidden ||
+        reducedMotion.matches ||
+        frame.matches(":hover, :focus-within") ||
+        Date.now() - lastInteraction.current < 6000
+      )
+        return;
+
+      const maxScroll = list.scrollWidth - list.clientWidth;
+      if (maxScroll < 2) return;
+      if (list.scrollLeft >= maxScroll - 1) direction = -1;
+      if (list.scrollLeft <= 1) direction = 1;
+      scrollProject(list, direction);
+    }, 4500);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+    };
+  }, [items.length]);
+
+  function noteInteraction() {
+    lastInteraction.current = Date.now();
+  }
+
+  function move(direction: -1 | 1) {
+    if (track.current) scrollProject(track.current, direction);
   }
 
   function navigate(event: KeyboardEvent<HTMLUListElement>) {
@@ -73,6 +120,9 @@ export function FeaturedProjectCarousel({ items }: { items: Project[] }) {
   return (
     <div
       className="home-work-carousel"
+      ref={carousel}
+      onPointerDown={noteInteraction}
+      onWheel={noteInteraction}
       role="group"
       aria-label="Obras destacadas"
     >
