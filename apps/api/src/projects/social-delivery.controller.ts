@@ -23,6 +23,7 @@ import { PublicEndpoint } from "../auth/route-access";
 import { config } from "../common/config";
 import { parse } from "../common/validation";
 import { ProjectsRepository } from "./projects.repository";
+import { ProjectsService } from "./projects.service";
 import { Database } from "../database/database.module";
 
 const checkSchema = z
@@ -73,6 +74,7 @@ export class SocialDeliveryController {
   constructor(
     private readonly projects: ProjectsRepository,
     private readonly database: Database,
+    private readonly service: ProjectsService,
   ) {}
 
   private authorize(authorization: string | undefined) {
@@ -82,6 +84,13 @@ export class SocialDeliveryController {
     ) {
       throw new UnauthorizedException();
     }
+  }
+
+  @Post("dispatch")
+  @HttpCode(200)
+  async dispatch(@Headers("authorization") authorization: string | undefined) {
+    this.authorize(authorization);
+    return { started: await this.service.wakeSocialWorkflow() };
   }
 
   @Post("health")
