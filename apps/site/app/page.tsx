@@ -1,5 +1,6 @@
 import { SOLUTION_SLOTS } from "@veca/content";
 import { homeSchema } from "../lib/home-schema";
+import { withHomeCover } from "../lib/home-cover";
 import { projects } from "../lib/api";
 import { FeaturedProjects } from "../components/FeaturedProjects";
 import { VecaLanding } from "../components/VecaLanding";
@@ -16,9 +17,11 @@ export default async function Home() {
   return (
     <>
       <VecaLanding
-        featured={<FeaturedProjects items={result?.items || []} />}
+        featured={
+          <FeaturedProjects items={(result?.items ?? []).map(withHomeCover)} />
+        }
         solutionProjects={solutions.flatMap(
-          (result) => result?.items.slice(0, 1) || [],
+          (result) => result?.items.slice(0, 1).map(withHomeCover) ?? [],
         )}
         consultationUrl={`${process.env.PUBLIC_API_URL || "https://api.veca.com.pe"}/public/consultations`}
       />

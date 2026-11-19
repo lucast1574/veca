@@ -1,0 +1,338 @@
+.home-work {
+  background: #f8f7f3;
+  color: var(--ve-text);
+  padding: clamp(42px, 6vw, 80px) clamp(20px, 5vw, 80px);
+}
+
+.home-work-inner {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.home-work-heading,
+.home-work-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+}
+
+.home-work-heading h2 {
+  margin-top: 8px;
+  font-size: clamp(30px, 4vw, 52px);
+}
+
+.home-work-heading > p {
+  max-width: 30ch;
+  padding-bottom: 4px;
+  font-size: 15px;
+  color: var(--ve-muted);
+}
+
+.home-work-carousel {
+  position: relative;
+  margin-top: 20px;
+}
+
+.home-work-controls {
+  display: flex;
+  justify-content: end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.home-work-controls button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #ece8e2;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.home-work-controls button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.home-work-controls
+  button:not([aria-disabled="true"]):is(:hover, :focus-visible) {
+  background: var(--ve-text);
+  color: white;
+}
+
+.home-work-controls button[aria-disabled="true"]:focus-visible {
+  background: #e3e0dc;
+  opacity: 1;
+}
+
+.home-work-back {
+  transform: rotate(180deg);
+}
+
+.home-work-track {
+  --work-gap: clamp(12px, 2vw, 24px);
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - 2 * var(--work-gap)) / 2.18);
+  gap: var(--work-gap);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #a39e99 transparent;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  margin: 0;
+  padding: 0 0 10px;
+  list-style: none;
+}
+
+.home-work-track:focus-visible {
+  outline: none;
+  background: #eee5dc;
+}
+
+.home-work-single {
+  grid-auto-columns: min(100%, 660px);
+  overflow-x: visible;
+}
+
+.home-work-track > li {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.home-work-card {
+  display: block;
+  color: inherit;
+  background: white;
+  text-decoration: none;
+}
+
+.home-work-photo {
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #e6e2dc;
+}
+
+.home-work-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 320ms ease-out;
+}
+
+.home-work-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 94px;
+  padding: 14px clamp(12px, 1.7vw, 22px);
+}
+
+.home-work-caption svg {
+  flex: none;
+  color: #b33720;
+}
+
+.home-work-caption p {
+  margin: 0 0 4px;
+  color: var(--ve-muted);
+  font-size: 12px;
+}
+
+.home-work-caption h3 {
+  font-size: clamp(17px, 2vw, 25px);
+  line-height: 1.17;
+  overflow-wrap: anywhere;
+}
+
+.home-work-card:hover img {
+  transform: scale(1.025);
+}
+
+.home-work-card:is(:hover, :focus-visible) h3,
+.home-work-footer a:is(:hover, :focus-visible) {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.home-work-card:focus-visible {
+  background: #f2e8e0;
+}
+
+.home-work-footer {
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 14px;
+}
+
+.home-work-footer ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.home-work-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.home-work-footer .home-work-all {
+  min-height: 44px;
+  color: #a72e18;
+  gap: 8px;
+  font-weight: 800;
+}
+
+.ve-home .ve-solutions {
+  --solution-width: 1200px;
+  padding-top: clamp(42px, 6vw, 80px);
+  padding-bottom: clamp(42px, 6vw, 80px);
+}
+
+.ve-home .ve-solutions > * {
+  max-width: var(--solution-width);
+  margin-inline: auto;
+}
+
+.ve-home .ve-solutions .ve-section-head {
+  margin-bottom: 28px;
+}
+
+.ve-home .ve-solutions .ve-tabs {
+  margin-bottom: 16px;
+}
+
+.ve-home .ve-solutions .ve-tabs button {
+  min-height: 48px;
+  padding: 13px clamp(10px, 1.4vw, 18px);
+}
+
+.ve-home .ve-solutions .ve-tabs button:focus-visible,
+.ve-home .ve-solutions .ve-explorer:focus-visible {
+  outline: none;
+}
+
+.ve-home .ve-solutions .ve-tabs button:focus-visible {
+  color: var(--ve-text);
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+.ve-home .ve-solutions .ve-explorer:focus-visible h3 {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.ve-home .ve-solutions .ve-explorer:not(.ve-project-explorer),
+.ve-home .ve-solutions .veca-solution-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.ve-home .ve-solutions .ve-explorer {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ve-home .ve-solutions :is(.ve-explorer-photo, .solution-card-photo) {
+  position: relative;
+  min-height: clamp(290px, 31vw, 370px);
+}
+
+.ve-home .ve-solutions :is(.ve-explorer-photo, .solution-card-photo) img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ve-home .ve-solutions :is(.ve-explorer-copy, .solution-card-copy) {
+  justify-content: center;
+  padding: clamp(20px, 3vw, 36px);
+}
+
+.ve-home .ve-solutions .ve-explorer h3 {
+  margin: 10px 0 12px;
+  font-size: clamp(25px, 3vw, 39px);
+}
+
+.ve-home .ve-solutions .ve-explorer ul {
+  margin: 14px 0 20px;
+}
+
+.ve-home .ve-solutions .ve-explorer :is(.ve-action, .solution-card-copy > a) {
+  margin-top: 0;
+  border-radius: 4px;
+}
+
+.ve-home .ve-solutions .ve-explorer .ve-small-label {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .home-work-track:not(.home-work-single) {
+    grid-auto-columns: calc((100% - var(--work-gap)) / 1.67);
+  }
+}
+
+@media (max-width: 680px) {
+  .home-work-track:not(.home-work-single) {
+    grid-auto-columns: calc(100% - 32px);
+  }
+
+  .home-work-heading {
+    gap: 10px;
+  }
+
+  .home-work-caption {
+    min-height: 83px;
+  }
+
+  .ve-home .ve-solutions .ve-explorer:not(.ve-project-explorer),
+  .ve-home .ve-solutions .veca-solution-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ve-home .ve-solutions :is(.ve-explorer-photo, .solution-card-photo) {
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-work-track {
+    scroll-behavior: auto;
+  }
+
+  .home-work-photo img,
+  .home-work-controls button {
+    transition: none;
+  }
+
+  .home-work-card:hover img {
+    transform: none;
+  }
+
+  .ve-home .ve-solutions :is(.ve-explorer-photo img, .ve-explorer-copy) {
+    animation: none;
+  }
+}

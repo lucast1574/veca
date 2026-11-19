@@ -1,42 +1,42 @@
 import { Icon } from "@veca/ui/src/Icon";
-import type { Project } from "@veca/content";
-import { CATEGORIES } from "@veca/content";
-import { ProjectGrid } from "./ProjectGrid";
+import { CATEGORIES, type Project } from "@veca/content";
+import { FeaturedProjectCarousel } from "./FeaturedProjectCarousel";
+import "../app/home-work.css";
+
 export function FeaturedProjects({ items }: { items: Project[] }) {
   return (
-    <section className="project-showcase section-pad" id="proyectos">
-      <div className="project-showcase-heading">
-        <div>
-          <p className="eyebrow">Proyectos VECA</p>
-          <h2>
-            Cada proyecto,
-            <br />
-            <span>otra perspectiva.</span>
-          </h2>
-        </div>
-        <div>
+    <section
+      className="home-work"
+      id="proyectos"
+      aria-labelledby="home-work-title"
+    >
+      <div className="home-work-inner">
+        <header className="home-work-heading">
+          <div>
+            <h2 id="home-work-title">Cada proyecto, otra perspectiva.</h2>
+          </div>
           <p>
-            Descubre cómo el vidrio puede dar forma a distintas maneras de
-            construir, habitar y renovar.
+            Ventanas, mamparas y fachadas de vidrio en obras realizadas en Lima.
           </p>
-          <a className="showcase-action" href="/proyectos/">
-            {items.length ? "Explorar proyectos" : "Entra a la galería"}
-            <span aria-hidden="true">
-              <Icon name="arrow-up-right" />
-            </span>
+        </header>
+        {!!items.length && (
+          <FeaturedProjectCarousel items={items.slice(0, 3)} />
+        )}
+        <div className="home-work-footer">
+          <ul aria-label="Categorías de proyectos">
+            {CATEGORIES.map((category) => (
+              <li key={category.id}>
+                <a href={`/proyectos/categoria/${category.id}/`}>
+                  {category.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <a className="home-work-all" href="/proyectos/">
+            {items.length ? "Ver todos los proyectos" : "Entra a la galería"}
+            <Icon name="arrow-up-right" size={18} />
           </a>
         </div>
-      </div>
-      {!!items.length && <ProjectGrid items={items.slice(0, 3)} />}
-      <div className="project-category-strip">
-        {CATEGORIES.map((c) => (
-          <a key={c.id} href={`/proyectos/categoria/${c.id}/`}>
-            <span>{c.name}</span>
-            <span aria-hidden="true">
-              <Icon name="arrow-up-right" />
-            </span>
-          </a>
-        ))}
       </div>
     </section>
   );
