@@ -218,6 +218,7 @@
 
 .ve-home .ve-solutions .ve-tabs {
   margin-bottom: 16px;
+  border-bottom: 0;
 }
 
 .ve-home .ve-solutions .ve-tabs button {
@@ -282,10 +283,27 @@
 .ve-home .ve-solutions .ve-explorer :is(.ve-action, .solution-card-copy > a) {
   margin-top: 0;
   border-radius: 4px;
+  background: #b93822;
 }
 
-.ve-home .ve-solutions .ve-explorer .ve-small-label {
-  margin-bottom: 0;
+.ve-home
+  .ve-solutions
+  .ve-explorer
+  :is(.ve-action, .solution-card-copy > a):is(:hover, :focus-visible) {
+  background: #962f1e;
+}
+
+.ve-home .ve-solutions .solution-card-copy > span:first-child {
+  display: none;
+}
+
+.ve-home
+  .ve-solutions
+  .ve-explorer
+  :is(.ve-explorer-copy, .solution-card-copy)
+  > p {
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 @media (max-width: 900px) {

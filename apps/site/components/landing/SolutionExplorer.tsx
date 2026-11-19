@@ -24,17 +24,10 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
       aria-labelledby="ve-solutions-title"
     >
       <div className="ve-section-head">
-        <div>
-          <p className="ve-kicker">Diseñado para tu manera de vivir</p>
-          <h2 id="ve-solutions-title">
-            Un material.
-            <br />
-            Todas tus posibilidades.
-          </h2>
-        </div>
+        <h2 id="ve-solutions-title">Vidrio para cada espacio.</h2>
         <p>
-          Encuentra el punto de partida para tu proyecto. Elige un espacio y
-          descubre cómo podemos ayudarte.
+          Explora nuestras soluciones para viviendas, edificios, interiores y
+          remodelaciones.
         </p>
       </div>
       <div
@@ -104,7 +97,6 @@ export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
               </span>
             </div>
             <div className="ve-explorer-copy" key={item.name}>
-              <span className="ve-small-label">{item.name}</span>
               <h3>{item.title}</h3>
               <p>{item.description}</p>
               <ul>
