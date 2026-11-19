@@ -70,7 +70,7 @@ export function PublishReview({
           <div className="publication-copy">
             <p>
               {CATEGORIES.find((c) => c.id === draft.category)?.name} ·{" "}
-              {draft.location || "Lima"}
+              {draft.location || "Ubicación pendiente"}
             </p>
             <h2>{draft.title || "Tu próximo proyecto"}</h2>
             <span>

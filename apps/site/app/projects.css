@@ -256,6 +256,22 @@
   color: #88828b;
   font-size: 11px;
 }
+.article-breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.article-breadcrumb li + li::before {
+  content: "/";
+  margin-right: 10px;
+}
+.article-breadcrumb a:focus-visible {
+  outline: none;
+  text-decoration: underline;
+}
 .pagination {
   display: flex;
   gap: 20px;

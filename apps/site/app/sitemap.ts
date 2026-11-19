@@ -4,9 +4,14 @@ import { api } from "../lib/api";
 export const dynamic = "force-dynamic";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const rows =
-    await api<{ slug: string; updatedAt: string; category: string }[]>(
-      "/public/sitemap",
-    );
+    await api<
+      {
+        slug: string;
+        updatedAt: string;
+        category: string;
+        image?: string | null;
+      }[]
+    >("/public/sitemap");
   const categories = new Set(rows.map((p) => p.category));
   return [
     ...[
@@ -26,6 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...rows.map((p) => ({
       url: `https://veca.com.pe/proyectos/${p.slug}/`,
       lastModified: p.updatedAt,
+      ...(p.image && { images: [p.image] }),
     })),
   ];
 }

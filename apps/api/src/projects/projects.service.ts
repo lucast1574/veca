@@ -134,6 +134,7 @@ export class ProjectsService {
     const issues = publicationIssues(value);
     if (issues.length) throw new BadRequestException(issues[0]);
     const now = new Date().toISOString();
+    const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
     const published = {
       version: version + 1,
       ...value,
@@ -143,9 +144,8 @@ export class ProjectsService {
       seo: seoFor(value, d.slug),
       createdAt: d.createdAt,
       updatedAt: now,
-      publishedAt: d.published?.publishedAt || now,
+      publishedAt: firstPublishedAt ?? now,
     };
-    const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
     const saved = this.admin(
       await this.repo.update(id, version, {
         published,
@@ -246,6 +246,7 @@ export class ProjectsService {
               slug: 1,
               "published.updatedAt": 1,
               "published.category": 1,
+              "published.seo.image": 1,
             },
           },
         )
@@ -254,6 +255,7 @@ export class ProjectsService {
       slug: d.slug,
       updatedAt: d.published!.updatedAt,
       category: d.published!.category,
+      image: d.published!.seo?.image ?? null,
     }));
   }
 }
