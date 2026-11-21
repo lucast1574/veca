@@ -24,6 +24,12 @@ export default function AccountDeletion() {
           las obras y el cumplimiento de obligaciones aplicables. Consulta
           nuestra <a href="/privacidad/">política de privacidad</a>.
         </p>
+        <p>
+          Si quieres eliminar un dato específico y conservar tu cuenta, escribe
+          a <a href="mailto:ventas@veca.com.pe">ventas@veca.com.pe</a> e indica
+          el dato que quieres eliminar. El equipo confirmará que la solicitud
+          corresponde a tu cuenta.
+        </p>
       </GalleryPage>
       <SiteFooter />
     </>
