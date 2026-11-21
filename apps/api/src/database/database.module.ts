@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { Db, MongoClient } from "mongodb";
 import { migrateAccess } from "./access-migration";
+import { provisionMobileReview } from "./mobile-review";
 import { config } from "../common/config";
 @Injectable()
 export class Database implements OnModuleInit, OnModuleDestroy {
@@ -27,6 +28,9 @@ export class Database implements OnModuleInit, OnModuleDestroy {
       this.db
         .collection("verification_challenges")
         .createIndex({ userId: 1, purpose: 1 }),
+      this.db
+        .collection("mobile_login_codes")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
       this.db
         .collection("users")
         .createIndex({ firebaseUid: 1 }, { unique: true, sparse: true }),
@@ -66,6 +70,7 @@ export class Database implements OnModuleInit, OnModuleDestroy {
       this.db.collection("media").createIndex({ key: 1 }, { unique: true }),
     ]);
     await migrateAccess(this.db);
+    await provisionMobileReview(this.db);
   }
   async onModuleDestroy() {
     await this.client.close();

@@ -7,6 +7,6 @@ import { StorageService } from "./storage.service";
   imports: [AuthModule],
   controllers: [MediaController],
   providers: [MediaService, StorageService],
-  exports: [StorageService],
+  exports: [StorageService, MediaService],
 })
 export class MediaModule {}

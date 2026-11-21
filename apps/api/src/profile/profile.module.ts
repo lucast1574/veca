@@ -19,6 +19,7 @@ import { MediaModule } from "../media/media.module";
 import { SessionEndpoint } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
+import { AccountDeletionController } from "./account-deletion.controller";
 import { ProfileService } from "./profile.service";
 @SessionEndpoint()
 @Controller("account/avatar")
@@ -69,7 +70,7 @@ class ProfileController {
 }
 @Module({
   imports: [AuthModule, MediaModule],
-  controllers: [ProfileController],
+  controllers: [ProfileController, AccountDeletionController],
   providers: [ProfileService],
 })
 export class ProfileModule {}

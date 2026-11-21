@@ -21,6 +21,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { photoMetadataSchema } from "@veca/content";
 import { GalleryController } from "../gallery/gallery.controller";
+import { MobileGalleryController } from "../gallery/mobile-gallery.controller";
 import { GalleryService } from "../gallery/gallery.service";
 import { PublicEndpoint, RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
@@ -182,7 +183,12 @@ class CrmController {
 }
 @Module({
   imports: [AuthModule, MediaModule],
-  controllers: [ConsultationController, CrmController, GalleryController],
+  controllers: [
+    ConsultationController,
+    CrmController,
+    GalleryController,
+    MobileGalleryController,
+  ],
   providers: [
     CrmRepository,
     CrmService,

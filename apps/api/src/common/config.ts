@@ -1,5 +1,7 @@
 import { z } from "zod";
 const schema = z.object({
+  MOBILE_REVIEW_GOOGLE_HASH: z.string().default(""),
+  MOBILE_REVIEW_APPLE_HASH: z.string().default(""),
   FIREBASE_PROJECT_ID: z.string().default(""),
   FIREBASE_API_KEY: z.string().default(""),
   FIREBASE_AUTH_DOMAIN: z.string().default(""),

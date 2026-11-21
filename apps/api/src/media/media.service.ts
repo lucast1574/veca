@@ -70,7 +70,7 @@ export class MediaService {
       positionY: 50,
     };
   }
-  async read(id: string, token: string) {
+  async read(id: string, token: string, mobile = false) {
     if (!ObjectId.isValid(id)) throw new NotFoundException();
     const media = await this.database.db
       .collection("media")
@@ -80,7 +80,7 @@ export class MediaService {
       .collection("projects")
       .countDocuments({ "published.images.id": id });
     if (!publicUse) {
-      const session = await this.auth.authenticate(token);
+      const session = await this.auth.authenticate(token, mobile);
       if (
         session.user.status !== "active" ||
         !session.user.emailVerified ||

@@ -31,13 +31,14 @@ export default function Privacy() {
         <h1 style={{ fontSize: "clamp(32px, 6vw, 52px)", lineHeight: 1.12 }}>
           Política de privacidad de Vidrios VECA
         </h1>
-        <p>Actualizado el 18 de octubre de 2026.</p>
+        <p>Actualizado el 21 de noviembre de 2026.</p>
         <p>
           Esta política describe cómo se utilizan los datos personales en la web
-          veca.com.pe y en el panel de trabajo panel.veca.com.pe. Vidrios VECA,
-          con sede principal en San Luis, Lima, es el equipo que recibe las
-          consultas y gestiona las cuentas de esta plataforma. Puedes consultar
-          esta página sin registrarte ni iniciar sesión.
+          veca.com.pe, en el panel de trabajo panel.veca.com.pe y en la app
+          Galería VECA. Vidrios VECA, con sede principal en San Luis, Lima, es
+          el equipo que recibe las consultas y gestiona las cuentas de esta
+          plataforma. Puedes consultar esta página sin registrarte ni iniciar
+          sesión.
         </p>
         <h2>Información que proporcionas</h2>
         <p>
@@ -132,16 +133,22 @@ export default function Privacy() {
           corrección mediante el contacto indicado abajo. El equipo verificará
           la relación con la cuenta y revisará qué datos puede eliminar y cuáles
           necesita conservar por obligaciones aplicables o por trabajos aún
-          abiertos. No existe todavía una opción de borrado automático desde el
-          panel. Las copias de respaldo pueden conservarse durante su ciclo de
-          sustitución y no se utilizan para nuevos fines comerciales.
+          abiertos. Puedes <a href="/eliminar-cuenta/">eliminar tu cuenta</a>{" "}
+          directamente tras confirmar tu identidad. El borrado elimina el
+          perfil, la foto de perfil propia, las credenciales de VECA y las
+          sesiones de la app y del panel. Las copias de respaldo pueden
+          conservarse durante su ciclo de sustitución y no se utilizan para
+          nuevos fines comerciales.
         </p>
         <h2>Sesión y comunicaciones</h2>
         <p>
-          El panel utiliza una cookie necesaria para mantener tu sesión, con una
-          vigencia de hasta doce horas. Puedes cerrarla desde el panel. Los
-          correos de la plataforma incluyen códigos de acceso y avisos
-          relacionados con tu cuenta, una consulta o un proyecto.
+          El panel utiliza una cookie y la app guarda la credencial de sesión en
+          el almacenamiento seguro del dispositivo. Ambas sesiones tienen una
+          vigencia de hasta doce horas. La app consulta las fotos de obra con
+          los permisos del panel y no solicita acceso a la cámara ni a las fotos
+          del dispositivo. Puedes cerrarla desde el panel. Los correos de la
+          plataforma incluyen códigos de acceso y avisos relacionados con tu
+          cuenta, una consulta o un proyecto.
         </p>
         <h2>Tus opciones y consultas sobre tus datos</h2>
         <p>
@@ -158,9 +165,10 @@ export default function Privacy() {
           También puedes retirar la conexión con VECA desde la configuración de
           conexiones con terceros de tu cuenta de Google. Esto impide futuros
           accesos mediante esa autorización, pero no elimina automáticamente los
-          registros que ya facilitaste a VECA. Para solicitar esa eliminación,
-          escribe al contacto anterior. Si actualizamos las funciones o el uso
-          de datos, publicaremos los cambios en esta página con una nueva fecha.
+          registros que ya facilitaste a VECA. Para borrar tu cuenta de VECA y
+          su perfil, usa el enlace de eliminación de cuenta. Si actualizamos las
+          funciones o el uso de datos, publicaremos los cambios en esta página
+          con una nueva fecha.
         </p>
         <p>
           <a href="/">Volver a la web de Vidrios VECA</a>

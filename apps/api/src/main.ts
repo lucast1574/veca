@@ -33,7 +33,7 @@ async function main() {
     }),
   );
   app.use(
-    "/auth",
+    ["/auth", "/mobile/auth", "/account/delete"],
     rateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 40,
@@ -57,7 +57,7 @@ async function main() {
     }),
   );
   app.use(
-    "/admin",
+    ["/admin", "/mobile"],
     rateLimit({
       windowMs: 60 * 1000,
       limit: 180,

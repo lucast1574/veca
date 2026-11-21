@@ -24,6 +24,7 @@ export interface UserDocument {
   approvedBy?: string;
   approvedAt?: Date;
   trustedInvitation?: boolean;
+  mobileReview?: boolean;
   accessEvents?: {
     actor: string;
     at: Date;
@@ -35,6 +36,7 @@ export interface SessionDocument {
   _id?: ObjectId;
   userId: ObjectId;
   tokenHash: string;
+  mobile?: boolean;
   csrf: string;
   expiresAt: Date;
 }

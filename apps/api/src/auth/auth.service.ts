@@ -108,12 +108,14 @@ export class AuthService {
       activationUrl: config.PANEL_ORIGIN + "/#activate=" + token,
     };
   }
-  async login(username: string, password: string) {
+  async login(username: string, password: string, mobile = false) {
     const user = await this.users.findOne({
       username: username.trim().toLowerCase(),
     });
     if (!user?.passwordHash || !(await verify(user.passwordHash, password)))
       throw new UnauthorizedException("Correo o contraseña incorrectos.");
+    if (user.mobileReview && !mobile)
+      throw new UnauthorizedException("Usa Galería VECA para iniciar sesión.");
     if (!(await this.view(user)).emailVerified) {
       return {
         verificationRequired: true,
@@ -125,7 +127,7 @@ export class AuthService {
         )),
       };
     }
-    return this.session(user._id);
+    return this.session(user._id, mobile);
   }
   async register(name: string, email: string, password: string) {
     if (!this.mail.configured)
@@ -166,7 +168,13 @@ export class AuthService {
   async resend(email: string, password: string) {
     return this.login(email, password);
   }
-  private async verified(userId: ObjectId, patch: Partial<UserDocument> = {}) {
+  private async verified(userId: ObjectId) {
+    return this.session(await this.verifyUser(userId));
+  }
+  private async verifyUser(
+    userId: ObjectId,
+    patch: Partial<UserDocument> = {},
+  ) {
     const user = await this.users.findOne({ _id: userId });
     if (!user) throw new UnauthorizedException();
     const defaults = await this.roles.defaults();
@@ -221,12 +229,12 @@ export class AuthService {
           `access-request:${userId}`,
         )
         .catch(() => {});
-    return this.session(userId);
+    return userId;
   }
   async confirm(token: string, code: string) {
     return this.verified(await this.codes.consume(token, code, "verify"));
   }
-  private async googleIdentity(idToken: string) {
+  async googleIdentity(idToken: string) {
     if (!config.FIREBASE_PROJECT_ID || !config.FIREBASE_API_KEY)
       throw new ServiceUnavailableException(
         "El acceso con Google aún no está configurado.",
@@ -273,9 +281,16 @@ export class AuthService {
     );
   }
   async google(idToken: string) {
+    return this.session(await this.googleUser(idToken));
+  }
+  async googleUser(idToken: string, existingOnly = false) {
     const identity = await this.googleIdentity(idToken);
     const email = identity.email!.toLowerCase();
     let user = await this.users.findOne({ username: email });
+    if (!user && existingOnly)
+      throw new ForbiddenException(
+        "Tu cuenta debe estar habilitada en el panel de VECA.",
+      );
     if (!user) {
       user = {
         _id: new ObjectId(),
@@ -302,14 +317,19 @@ export class AuthService {
       throw new UnauthorizedException(
         "Esta cuenta ya está vinculada a otra identidad.",
       );
-    return this.verified(user._id, {
+    const patch = {
       firebaseUid: identity.uid,
       googlePhotoUrl: googlePhotoUrl(identity.picture),
       ...(!user.emailVerified && !user.trustedInvitation
         ? { passwordHash: null }
         : {}),
       name: user.name || identity.name || email,
-    });
+    };
+    if (existingOnly && (user.status !== "active" || !user.emailVerified))
+      throw new ForbiddenException(
+        "Tu cuenta debe estar habilitada en el panel de VECA.",
+      );
+    return this.verifyUser(user._id, patch);
   }
   async forgot(email: string) {
     const user = await this.users.findOne({
@@ -330,21 +350,32 @@ export class AuthService {
       .deleteMany({ userId: id });
     return this.verified(id);
   }
-  private async session(userId: ObjectId) {
+  async session(userId: ObjectId, mobile = false) {
     const user = await this.users.findOne({ _id: userId });
     if (!user) throw new UnauthorizedException();
     const token = randomBytes(32).toString("base64url"),
       csrf = randomBytes(24).toString("base64url"),
       expiresAt = new Date(Date.now() + 12 * 3600000);
-    await this.database.db
-      .collection<SessionDocument>("sessions")
-      .insertOne({ userId, tokenHash: digest(token), csrf, expiresAt });
+    await this.database.db.collection<SessionDocument>("sessions").insertOne({
+      userId,
+      tokenHash: digest(token),
+      csrf,
+      expiresAt,
+      ...(mobile ? { mobile: true } : {}),
+    });
     return { token, csrf, expiresAt, user: await this.view(user) };
   }
-  async authenticate(token: string): Promise<AuthenticatedSession> {
+  async authenticate(
+    token: string,
+    mobile = false,
+  ): Promise<AuthenticatedSession> {
     const session = await this.database.db
       .collection<SessionDocument>("sessions")
-      .findOne({ tokenHash: digest(token), expiresAt: { $gt: new Date() } });
+      .findOne({
+        tokenHash: digest(token),
+        expiresAt: { $gt: new Date() },
+        mobile: mobile ? true : { $ne: true },
+      });
     if (!session)
       throw new UnauthorizedException("Inicia sesión para continuar.");
     const user = await this.users.findOne({ _id: session.userId });

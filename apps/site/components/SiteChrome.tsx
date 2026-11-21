@@ -107,6 +107,8 @@ export function SiteFooter() {
           <a href="/proyectos/">Proyectos</a>
           <a href="/#contacto">Contacto</a>
           <a href="/privacidad/">Privacidad</a>
+          <a href="/galeria/">Galería VECA</a>
+          <a href="/eliminar-cuenta/">Eliminar cuenta</a>
           <TeamAccess />
         </nav>
         <nav

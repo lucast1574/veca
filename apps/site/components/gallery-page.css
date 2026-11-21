@@ -1,0 +1,127 @@
+.ve-gallery-page {
+  max-width: 740px;
+  min-height: 55vh;
+  margin-inline: auto;
+  padding: clamp(32px, 8vw, 80px) 24px;
+  display: grid;
+  gap: 24px;
+  justify-items: start;
+  align-content: start;
+  color: #242641;
+}
+.ve-gallery-brand {
+  display: inline-flex;
+  border-radius: 8px;
+}
+.ve-gallery-page h1 {
+  font-size: clamp(36px, 7vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.ve-gallery-page p,
+.ve-gallery-dialog p {
+  margin: 0;
+  max-width: 62ch;
+  line-height: 1.65;
+}
+.ve-gallery-page p a {
+  color: #a43621;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.ve-gallery-actions {
+  display: grid;
+  gap: 14px;
+  justify-items: stretch;
+}
+.ve-gallery-button,
+.ve-gallery-cancel {
+  font: inherit;
+  font-weight: 750;
+  text-align: center;
+  cursor: pointer;
+  border: 0;
+  border-radius: 7px;
+  padding: 12px 20px;
+}
+.ve-gallery-button {
+  background: #242641;
+  color: white;
+}
+.ve-gallery-button.danger {
+  background: #a43621;
+}
+.ve-gallery-button.secondary,
+.ve-gallery-cancel {
+  background: #f0eee8;
+  color: #242641;
+}
+.ve-gallery-button:disabled,
+.ve-gallery-cancel:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.ve-gallery-page :focus-visible,
+.ve-gallery-dialog :focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+.ve-gallery-button:hover,
+.ve-gallery-button:focus-visible {
+  filter: brightness(0.88);
+}
+.ve-gallery-dialog {
+  margin: auto;
+  border: 0;
+  border-radius: 16px;
+  padding: clamp(22px, 5vw, 36px);
+  width: min(490px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  background: #fff;
+  color: #242641;
+}
+.ve-gallery-dialog[open] {
+  display: grid;
+  gap: 20px;
+}
+.ve-gallery-dialog::backdrop {
+  background: rgb(25 27 49 / 65%);
+}
+.ve-gallery-dialog h2 {
+  margin: 0;
+  line-height: 1.15;
+  font-size: clamp(24px, 5vw, 32px);
+}
+.ve-gallery-dialog label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+.ve-gallery-dialog input {
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  background: #f5f4f0;
+  padding: 11px 14px;
+  font: inherit;
+  color: inherit;
+}
+.ve-gallery-dialog input:focus-visible {
+  background: #eae6dd;
+  text-decoration: none;
+}
+.ve-gallery-error {
+  color: #a43621;
+}
+.ve-gallery-result {
+  padding: 16px;
+  border-radius: 7px;
+  background: #e8f3eb;
+}
+.ve-gallery-utility {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
