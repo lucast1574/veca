@@ -331,3 +331,4 @@ export * from "./crm.js";
 export * from "./access.js";
 export * from "./administration.js";
 export * from "./dispatch.js";
+export * from "./demo.js";

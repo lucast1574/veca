@@ -8,12 +8,15 @@ import {
 import { ObjectId } from "mongodb";
 import {
   dispatchSchema,
+  isDemoLead,
+  DEMO_CASES,
+  type DemoLink,
   type Dispatch,
   type DispatchInput,
   type DispatchStatus,
 } from "@veca/content";
 import { randomUUID } from "node:crypto";
-import { CrmRepository, type LeadDocument } from "../crm/crm.repository";
+import { CrmRepository } from "../crm/crm.repository";
 import { Database } from "../database/database.module";
 import { parse } from "../common/validation";
 import {
@@ -44,8 +47,6 @@ const accepted = ["accepted", "observed"];
 const reviewable = ["review", "rejected"] as const;
 const editable = ["draft", "returned"] as const;
 const operationalStages = ["coordination", "execution"];
-const isDemoLead = (lead: LeadDocument) =>
-  /^\[demo\]/i.test(lead.name) || /\.invalid$/i.test(lead.email);
 
 function idOf(id: string) {
   if (!/^[0-9a-f]{24}$/i.test(id))
@@ -146,6 +147,76 @@ export class DispatchService {
         .sort({ updatedAt: -1 })
         .toArray()
     ).map(view);
+  }
+
+  async demoLink(key: DemoLink["key"], leadId: string) {
+    const fixture = DEMO_CASES.find((entry) => entry.key === key)!;
+    const fixtureId =
+      key === "mamparas"
+        ? "de0000000000000000000001"
+        : "de0000000000000000000002";
+    const lead = await this.leads.get(leadId);
+    if (!isDemoLead(lead) || lead.name !== fixture.name)
+      throw new ConflictException(
+        "El despacho de ejemplo requiere su lead de demostración.",
+      );
+    const _id = idOf(fixtureId);
+    const now = new Date().toISOString();
+    const tomorrow = limaDate(new Date(Date.now() + 86_400_000));
+    const data = parse(dispatchSchema, {
+      startAddress: "Almacén VECA · dirección de ejemplo",
+      startUbigeo: "150134",
+      arrivalAddress:
+        lead.address || `Dirección de ejemplo · ${fixture.district}`,
+      arrivalUbigeo: fixture.ubigeo,
+      transferAt: tomorrow + (key === "mamparas" ? "T08:00" : "T11:00"),
+      motiveCode: "13",
+      motiveDescription: "Traslado para instalación · ejemplo",
+      recipientType: "6",
+      recipientNumber: "00000000000",
+      recipientName: "Cliente de ejemplo",
+      transportMode: fixture.transport,
+      carrierRuc: "",
+      carrierName: fixture.transport === "01" ? "Transportista de ejemplo" : "",
+      vehiclePlate: "DEMO01",
+      driverDocument: "00000000",
+      driverName: "Conductor",
+      driverLastName: "De ejemplo",
+      driverLicense: "DEMO00001",
+      weightKg: 250,
+      items: [
+        {
+          code: fixture.sku,
+          description: fixture.material,
+          unitCode: fixture.unitCode,
+          quantity: fixture.quantity,
+        },
+      ],
+    });
+    await this.collection.updateOne(
+      { _id, leadId, demo: true },
+      {
+        $setOnInsert: {
+          _id,
+          leadId,
+          demo: true,
+          data,
+          workName: lead.name,
+          status: fixture.guideStatus,
+          version: 1,
+          guideNumber: "",
+          observation:
+            fixture.guideStatus === "returned"
+              ? "Falta el RUC del transportista."
+              : "",
+          createdAt: now,
+          updatedAt: now,
+          events: [{ action: "demo", actor: "Demostración", at: now }],
+        },
+      },
+      { upsert: true },
+    );
+    return fixtureId;
   }
 
   async queue(page: number, filter: "all" | "review" | "issued") {

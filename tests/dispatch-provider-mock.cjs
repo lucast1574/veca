@@ -5,14 +5,66 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
   const fetch = globalThis.fetch;
   const url = "https://api.apisunat.net/api/v1/issuer";
   let id;
+  const invoices = new Map();
   globalThis.fetch = async (input, options) => {
     if (typeof input !== "string" || !input.startsWith(url + "/"))
       return fetch(input, options);
+    const path = input.slice(url.length);
+    if (
+      options.headers.Authorization === "Bearer asu_test_local_contract_mock"
+    ) {
+      if (path === "/issuers")
+        return Response.json({
+          data: [
+            {
+              ruc: "20000000001",
+              livemode: false,
+              active: true,
+              isDefault: true,
+            },
+            {
+              ruc: "20616656156",
+              livemode: true,
+              active: true,
+              isDefault: false,
+            },
+          ],
+        });
+      if (path === "/documents" && options.method === "POST") {
+        const idempotency = options.headers["Idempotency-Key"];
+        assert.match(idempotency, /^veca-demo-invoice-v1-/);
+        const payload = JSON.parse(options.body);
+        assert.equal(payload.ruc, "20000000001");
+        assert.equal(payload.items[0].includesTax, false);
+        const document = invoices.get(idempotency) || {
+          id: randomUUID(),
+          type: "01",
+          test: true,
+          issuerRuc: payload.ruc,
+          fullNumber: "F001-" + (invoices.size + 1),
+          status: "accepted",
+        };
+        invoices.set(idempotency, document);
+        return Response.json(document, { status: 202 });
+      }
+      const document = [...invoices.values()].find(
+        (entry) => path === `/documents/${entry.id}`,
+      );
+      if (document && !options.method) return Response.json(document);
+      if (
+        [...invoices.values()].some(
+          (entry) => path === `/documents/${entry.id}/pdf`,
+        )
+      )
+        return new Response("%PDF-1.4 INVOICE QA", {
+          headers: { "Content-Type": "application/pdf" },
+        });
+      throw new Error("Ruta beta inesperada en QA");
+    }
     assert.equal(
       options.headers.Authorization,
       "Bearer asu_live_local_contract_mock",
     );
-    const path = input.slice(url.length);
     if (path === "/guides" && options.method === "POST") {
       assert.equal(id, undefined, "Se envió la guía más de una vez.");
       assert.match(options.headers["Idempotency-Key"], /^[\w-]{36}$/);

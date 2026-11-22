@@ -14,6 +14,8 @@ const schema = z.object({
   SMTP_USER: z.string().default(""),
   SMTP_PASSWORD: z.string().default(""),
   APISUNAT_API_KEY: z.string().default(""),
+  APISUNAT_TEST_API_KEY: z.string().default(""),
+  APISUNAT_TEST_ISSUER_RUC: z.string().default(""),
   APISUNAT_LIVE_API_KEY: z.string().default(""),
   APISUNAT_ISSUER_RUC: z.string().default(""),
   APISUNAT_GUIDE_SERIES: z.string().default(""),

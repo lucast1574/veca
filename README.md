@@ -169,3 +169,14 @@ después de compilar:
 VECA_GUIDE_QA_MOCK=1 node scripts/local-qa.mjs
 VECA_GUIDE_QA_MOCK=1 node tests/dispatch-flow.mjs
 ```
+
+Administración → Demostración por rol prepara los dos leads de ejemplo y sus
+despachos. Las fotos y los importes se identifican como ilustrativos. La
+generación privada de facturas beta exige una clave de prueba configurada como
+`APISUNAT_TEST_API_KEY` y un emisor beta activo. Si hay varios emisores, se puede
+indicar `APISUNAT_TEST_ISSUER_RUC`. Las facturas de prueba se guardan aparte.
+Los despachos de ejemplo quedan bloqueados para emisión de guías reales.
+
+En una instancia fresca de QA con `VECA_GUIDE_QA_MOCK=1`, ejecutar
+`VECA_GUIDE_QA_MOCK=1 node tests/demo-workspace-flow.mjs` para verificar esta
+demostración sin solicitudes fiscales externas.

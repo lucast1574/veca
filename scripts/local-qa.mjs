@@ -66,6 +66,8 @@ const env = {
   ...process.env,
   NODE_ENV: "test",
   APISUNAT_API_KEY: "",
+  APISUNAT_TEST_API_KEY: guideMock ? "asu_test_local_contract_mock" : "",
+  APISUNAT_TEST_ISSUER_RUC: "",
   APISUNAT_LIVE_API_KEY: guideMock ? "asu_live_local_contract_mock" : "",
   APISUNAT_ISSUER_RUC: guideMock ? "20616656156" : "",
   APISUNAT_GUIDE_SERIES: "",

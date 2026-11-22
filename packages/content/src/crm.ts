@@ -287,3 +287,7 @@ export const crmLeadDefaults = {
   completionNote: "",
   discardReason: "",
 };
+
+export function isDemoLead(lead: Pick<Lead, "name" | "email">) {
+  return /^\[demo\]/i.test(lead.name) || /\.invalid$/i.test(lead.email ?? "");
+}

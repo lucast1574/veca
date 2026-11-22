@@ -16,6 +16,8 @@ import type { AuthenticatedRequest } from "../auth/auth.types";
 import { RequirePermission } from "../auth/route-access";
 import { CrmModule } from "../crm/crm.controller";
 import { parse } from "../common/validation";
+import { DemoInvoiceService } from "./demo-invoice.service";
+import { DemoController, DemoService } from "./demo.controller";
 import { DispatchService } from "./dispatch.service";
 import { GuideProvider } from "./guide-provider";
 
@@ -158,7 +160,11 @@ class AccountingGuideController {
 
 @Module({
   imports: [CrmModule],
-  controllers: [LeadDispatchController, AccountingGuideController],
-  providers: [DispatchService, GuideProvider],
+  controllers: [
+    LeadDispatchController,
+    AccountingGuideController,
+    DemoController,
+  ],
+  providers: [DispatchService, GuideProvider, DemoService, DemoInvoiceService],
 })
 export class DispatchModule {}

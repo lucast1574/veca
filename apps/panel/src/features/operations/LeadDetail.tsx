@@ -10,6 +10,8 @@ import {
   LEAD_SEGMENTS,
   REQUEST_TYPES,
   LEAD_SOURCE_LABELS,
+  DEMO_CASES,
+  isDemoLead,
   type LeadInput,
   type PhotoMetadata,
   type Lead,
@@ -18,6 +20,9 @@ import {
 import { Select } from "@veca/ui/src/Select";
 import {
   ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Pencil,
   Save,
   Phone,
   Mail,
@@ -27,13 +32,13 @@ import {
   Plus,
 } from "lucide-react";
 import { api, post, API_BASE } from "../../lib/api";
+import { DemoPhoto } from "../administration/DemoPhoto";
 import { LeadDispatches } from "../dispatch/LeadDispatches";
 import { Button, Field, Notice } from "../../components/ui";
 import {
   amount,
   date,
   leadInput,
-  segmentName,
   stageName,
   Movements,
   type LeadDetailData,
@@ -43,6 +48,8 @@ import {
 import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
+import { LeadStageDialog, stageAction } from "./LeadStageDialog";
+import "./lead-detail.css";
 const contracts = [
   { value: "pending", label: "Por definir" },
   { value: "preparing", label: "En preparación" },
@@ -74,6 +81,8 @@ export function LeadDetail({
     [draft, setDraft] = useState<LeadInput | null>(null),
     [tab, setTab] = useState("overview"),
     [busy, setBusy] = useState(false),
+    [editing, setEditing] = useState(false),
+    [transition, setTransition] = useState<LeadInput["stage"] | null>(null),
     [notice, setNotice] = useState(""),
     [materials, setMaterials] = useState<Material[]>([]),
     [movement, setMovement] = useState(false),
@@ -103,15 +112,12 @@ export function LeadDetail({
         .catch(fail);
   }, [refresh]);
   useEffect(() => {
-    if (data && proposal && LEAD_STAGES.some((s) => s.id === proposal)) {
-      setDraft({
-        ...leadInput(data.lead),
-        stage: proposal as LeadInput["stage"],
-      });
-      setNotice(
-        "Cambio de etapa preparado. Completa los datos y guarda para confirmarlo.",
-      );
-    }
+    if (!data || !proposal) return;
+    const from = data.lead.stage;
+    const next =
+      from === "discarded" ? "prelead" : phases[phases.indexOf(from) + 1];
+    if (proposal === next || (proposal === "discarded" && from !== "discarded"))
+      setTransition(proposal as LeadInput["stage"]);
   }, [proposal, data?.lead.id]);
   const refreshRelated = useCallback(() => {
     void api<LeadDetailData>(`/admin/crm/leads/${id}`)
@@ -166,18 +172,23 @@ export function LeadDetail({
     setDraft((old) => (old ? { ...old, [key]: value } : old));
     setNotice("");
   }
+  async function persist(next: LeadInput) {
+    const saved = await api<Lead>(`/admin/crm/leads/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(next),
+    });
+    setData((old) => (old ? { ...old, lead: saved } : old));
+    setDraft(leadInput(saved));
+    return saved;
+  }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!draft) return;
+    if (!draft || busy) return;
     setBusy(true);
     setError("");
     try {
-      const saved = await api<Lead>(`/admin/crm/leads/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(draft),
-      });
-      setData((old) => (old ? { ...old, lead: saved } : old));
-      setDraft(leadInput(saved));
+      await persist(draft);
+      setEditing(false);
       setNotice("Ficha guardada.");
     } catch (e) {
       fail(e);
@@ -248,14 +259,24 @@ export function LeadDetail({
     );
   const lead = data.lead;
   const index = phases.indexOf(lead.stage);
-  const available = LEAD_STAGES.filter(
-    (s) =>
-      s.id === lead.stage ||
-      s.id === "discarded" ||
-      (lead.stage === "discarded"
-        ? s.id === "prelead"
-        : s.id === phases[index + 1]),
-  );
+  const nextStage = (
+    lead.stage === "discarded" ? "prelead" : phases[index + 1]
+  ) as LeadInput["stage"] | undefined;
+  const demo = isDemoLead(lead);
+  const demoCase = demo
+    ? DEMO_CASES.find((item) => item.name === lead.name)
+    : undefined;
+  const displayName = lead.name.replace(/^\[demo\]\s*/i, "");
+  const request = REQUEST_TYPES.find(
+    (item) => item.id === lead.requestType,
+  )?.name;
+  const tabs = [
+    ["overview", "Resumen"],
+    ["work", "Obra"],
+    ["files", "Archivos"],
+    ["materials", "Materiales"],
+    ["history", "Historial"],
+  ].filter(([value]) => value !== "materials" || inventoryAccess);
   const formField = (key: keyof LeadInput, label: string, type = "text") => (
     <Field label={label}>
       <input
@@ -283,7 +304,7 @@ export function LeadDetail({
   );
   return (
     <main className="ops-page ops-detail">
-      <div className="ops-detail-top">
+      <div className="lead-detail-top">
         <button
           className="ops-back"
           onClick={() => {
@@ -294,18 +315,11 @@ export function LeadDetail({
               back();
           }}
         >
-          <ArrowLeft size={17} />
-          Leads
+          <ArrowLeft size={17} /> Leads
         </button>
-        <div>
-          <span className={`ops-ticket ticket-${lead.segment}`}>
-            {segmentName(lead.segment)}
-          </span>
-          <span className="ops-stage-label">{stageName(lead.stage)}</span>
-        </div>
         <button
           className="ops-icon-button"
-          title="Recargar ficha desde el servidor"
+          title="Recargar ficha"
           aria-label="Recargar ficha"
           onClick={() => {
             if (
@@ -318,101 +332,256 @@ export function LeadDetail({
           <RefreshCw size={17} />
         </button>
       </div>
-      <div className="ops-detail-heading">
+      <header className="lead-detail-hero">
         <div>
+          <div className="lead-detail-labels">
+            <span className="lead-detail-stage">{stageName(lead.stage)}</span>
+            {demo && <span className="lead-detail-demo">Demostración</span>}
+          </div>
+          <h1>{displayName}</h1>
           <p>
-            Ficha {id.slice(-8).toUpperCase()} ·{" "}
-            {LEAD_SOURCE_LABELS[lead.source]}
+            {[lead.district, request, lead.assignedTo]
+              .filter(Boolean)
+              .join(" · ") || LEAD_SOURCE_LABELS[lead.source]}
           </p>
-          <h1>{lead.name}</h1>
-          <span>
-            {lead.district && `${lead.district} · `}Recibido el{" "}
-            {date(lead.createdAt)}
-          </span>
         </div>
-        <div className="ops-contact-links">
-          <a href={`tel:${lead.phone}`}>
-            <Phone size={16} />
-            {lead.phone}
-          </a>
-          <a href={`mailto:${lead.email}`}>
-            <Mail size={16} />
-            {lead.email}
-          </a>
-        </div>
-      </div>
-      <ol className="ops-stage-track">
-        {LEAD_STAGES.slice(0, 5).map((s, i) => (
-          <li key={s.id} className={i <= index ? "passed" : ""}>
-            <span>{i + 1}</span>
-            {s.name}
+        {nextStage && (
+          <Button
+            disabled={busy || editing}
+            onClick={() => {
+              setError("");
+              setNotice("");
+              setTransition(nextStage);
+            }}
+          >
+            {stageAction(nextStage)} <ArrowRight size={16} />
+          </Button>
+        )}
+      </header>
+      <ol className="lead-detail-progress" aria-label="Avance del lead">
+        {LEAD_STAGES.slice(0, 5).map((stage, position) => (
+          <li
+            key={stage.id}
+            data-reached={position <= index}
+            aria-current={position === index ? "step" : undefined}
+          >
+            <span>
+              {
+                [
+                  "Recibido",
+                  "Contactado",
+                  "Coordinación",
+                  "En ejecución",
+                  "Realizada",
+                ][position]
+              }
+            </span>
           </li>
         ))}
       </ol>
-      <nav className="ops-detail-tabs" aria-label="Secciones de la ficha">
-        {[
-          ["overview", "Contacto y seguimiento"],
-          ["work", "Coordinación y obra"],
-          ["files", "Fotos y contratos"],
-          ["materials", "Materiales"],
-          ["history", "Historial"],
-        ]
-          .filter(([value]) => value !== "materials" || inventoryAccess)
-          .map(([value, label]) => (
-            <button
-              key={value}
-              aria-pressed={tab === value}
-              onClick={() => setTab(value)}
-            >
-              {label}
-            </button>
-          ))}
+      <nav className="lead-detail-tabs" aria-label="Secciones de la ficha">
+        {tabs.map(([value, label]) => (
+          <button
+            type="button"
+            key={value}
+            aria-pressed={tab === value}
+            onClick={() => setTab(value)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
+      {transition && (
+        <LeadStageDialog
+          stage={transition}
+          initial={draft}
+          onClose={() => setTransition(null)}
+          onSave={async (next) => {
+            const saved = await persist(next);
+            setTransition(null);
+            setNotice(`Etapa actualizada a «${stageName(saved.stage)}».`);
+          }}
+        />
+      )}
       {error && <Notice error>{error}</Notice>}
       {notice && (
         <p role="status" className="ops-success">
           {notice}
         </p>
       )}
-      <form onSubmit={save} hidden={!["overview", "work"].includes(tab)}>
-        <div className="ops-detail-layout">
-          <section className="ops-card">
+      {["overview", "work"].includes(tab) && !editing && (
+        <div className="lead-detail-content">
+          <section className="ops-card lead-detail-panel">
+            <div className="lead-detail-section-head">
+              <h2>
+                {tab === "overview"
+                  ? "Sobre esta oportunidad"
+                  : "Coordinación y obra"}
+              </h2>
+              <Button variant="ghost" onClick={() => setEditing(true)}>
+                <Pencil size={15} /> Editar datos
+              </Button>
+            </div>
             {tab === "overview" ? (
               <>
-                <h2>El cliente y su proyecto</h2>
+                <p className="lead-detail-copy">
+                  {lead.idea || "Aún no hay una descripción."}
+                </p>
+                {lead.contactResult && (
+                  <div className="lead-detail-followup">
+                    <strong>Último acuerdo</strong>
+                    <p>{lead.contactResult}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <dl className="lead-detail-facts">
+                <div>
+                  <dt>Cita</dt>
+                  <dd>
+                    {lead.appointment
+                      ? date(lead.appointment)
+                      : "Por programar"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Dirección</dt>
+                  <dd>{lead.address || "Por definir"}</dd>
+                </div>
+                <div>
+                  <dt>Alcance</dt>
+                  <dd>{lead.workPlan || "Por definir"}</dd>
+                </div>
+                <div>
+                  <dt>Contrato</dt>
+                  <dd>
+                    {
+                      contracts.find(
+                        (item) => item.value === lead.contractStatus,
+                      )?.label
+                    }
+                    {lead.contractReference && ` · ${lead.contractReference}`}
+                  </dd>
+                </div>
+                {lead.completionNote && (
+                  <div>
+                    <dt>Cierre</dt>
+                    <dd>{lead.completionNote}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </section>
+          <aside className="ops-card lead-detail-panel">
+            {tab === "overview" && demoCase && (
+              <DemoPhoto demo={demoCase.key} />
+            )}
+            <h2>{tab === "overview" ? "Contacto" : "Seguimiento"}</h2>
+            {tab === "overview" ? (
+              <div className="lead-detail-links">
+                {demo ? (
+                  <span>Contacto ficticio</span>
+                ) : (
+                  <>
+                    <a href={`tel:${lead.phone}`}>
+                      <Phone size={16} />
+                      {lead.phone}
+                    </a>
+                    <a href={`mailto:${lead.email}`}>
+                      <Mail size={16} />
+                      {lead.email}
+                    </a>
+                  </>
+                )}
+                <span>
+                  {LEAD_SOURCE_LABELS[lead.source]} · {date(lead.createdAt)}
+                </span>
+              </div>
+            ) : (
+              <>
+                <p className="lead-detail-inline">
+                  <CalendarDays size={17} />
+                  {lead.appointment ? "Cita programada" : "Sin cita programada"}
+                </p>
+                {dispatchAccess && (
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() =>
+                      document
+                        .getElementById("lead-dispatches")
+                        ?.scrollIntoView({ block: "start" })
+                    }
+                  >
+                    Ver despachos
+                  </Button>
+                )}
+              </>
+            )}
+            {lead.stage !== "discarded" &&
+              lead.stage !== "completed" &&
+              tab === "overview" && (
+                <Button
+                  variant="ghost"
+                  onClick={() => setTransition("discarded")}
+                >
+                  Descartar lead
+                </Button>
+              )}
+          </aside>
+        </div>
+      )}
+      {["overview", "work"].includes(tab) && editing && (
+        <form
+          onSubmit={save}
+          className="ops-card lead-detail-panel lead-detail-edit"
+        >
+          <h2>
+            {tab === "overview"
+              ? "Editar oportunidad"
+              : "Editar coordinación y obra"}
+          </h2>
+          <fieldset disabled={busy} className="lead-detail-fieldset">
+            {tab === "overview" ? (
+              <>
                 <div className="ops-form-grid">
                   {formField("name", "Nombre y apellido")}
-                  {formField("phone", "Teléfono o WhatsApp", "tel")}
-                  {formField("email", "Correo electrónico", "email")}
+                  {formField("phone", "Teléfono", "tel")}
+                  {formField("email", "Correo", "email")}
                   {formField("district", "Distrito")}
                   <Field label="Tipo de trabajo">
                     <Select
                       label="Tipo de trabajo"
                       value={draft.requestType}
-                      onChange={(v) =>
-                        patch("requestType", v as LeadInput["requestType"])
+                      onChange={(value) =>
+                        patch("requestType", value as LeadInput["requestType"])
                       }
-                      options={REQUEST_TYPES.map((t) => ({
-                        value: t.id,
-                        label: t.name,
+                      options={REQUEST_TYPES.map((type) => ({
+                        value: type.id,
+                        label: type.name,
                       }))}
                     />
                   </Field>
-                  {formField("assignedTo", "Responsable de atención")}
+                  <Field label="Tipo de lead">
+                    <Select
+                      label="Tipo de lead"
+                      value={draft.segment}
+                      onChange={(value) =>
+                        patch("segment", value as LeadInput["segment"])
+                      }
+                      options={LEAD_SEGMENTS.map((type) => ({
+                        value: type.id,
+                        label: type.name,
+                      }))}
+                    />
+                  </Field>
+                  {formField("assignedTo", "Responsable")}
                 </div>
-                {area("idea", "La consulta del cliente", 5)}
-                {area(
-                  "contactResult",
-                  "Contacto exitoso: resultado y acuerdos",
-                )}
+                {area("idea", "Consulta del cliente", 4)}
+                {area("contactResult", "Último acuerdo")}
               </>
             ) : (
               <>
-                <h2>Coordinación y ejecución</h2>
-                <p className="hint">
-                  Completa esta información a medida que avanzas. Las fotos y
-                  documentos se guardan en su propia sección.
-                </p>
                 <div className="ops-form-grid">
                   {formField(
                     "appointment",
@@ -425,65 +594,47 @@ export function LeadDetail({
                       label="Estado del contrato"
                       value={draft.contractStatus}
                       options={contracts}
-                      onChange={(v) =>
+                      onChange={(value) =>
                         patch(
                           "contractStatus",
-                          v as LeadInput["contractStatus"],
+                          value as LeadInput["contractStatus"],
                         )
                       }
                     />
                   </Field>
-                  {formField(
-                    "contractReference",
-                    "Referencia o número del contrato",
-                  )}
+                  {formField("contractReference", "Referencia del contrato")}
                 </div>
-                {area("workPlan", "Alcance de la obra y detalles técnicos", 6)}
-                {area("completionNote", "Resultado y cierre de la obra", 4)}
+                {area("workPlan", "Alcance de la obra", 4)}
+                {area("completionNote", "Resultado de la obra")}
               </>
             )}
-          </section>
-          <aside className="ops-card ops-detail-save">
-            <h3>Seguimiento comercial</h3>
-            <Field label="Tipo de lead">
-              <Select
-                label="Tipo de lead"
-                value={draft.segment}
-                onChange={(v) => patch("segment", v as LeadInput["segment"])}
-                options={LEAD_SEGMENTS.map((s) => ({
-                  value: s.id,
-                  label: s.name,
-                  description: s.description,
-                }))}
-              />
-            </Field>
-            <Field label="Etapa">
-              <Select
-                label="Etapa"
-                value={draft.stage}
-                onChange={(v) => {
-                  patch("stage", v as LeadInput["stage"]);
-                  if (["coordination", "execution", "completed"].includes(v))
-                    setTab("work");
-                }}
-                options={available.map((s) => ({ value: s.id, label: s.name }))}
-              />
-            </Field>
-            {draft.stage === "discarded" &&
-              area("discardReason", "Motivo de descarte")}
-            <p className="hint">
-              Cada avance se confirma al guardar. Contacto exitoso → fecha de
-              coordinación → dirección y alcance → nota de cierre.
-            </p>
+          </fieldset>
+          <div className="lead-detail-edit-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setDraft(leadInput(lead));
+                setEditing(false);
+              }}
+            >
+              Cancelar
+            </Button>
             <Button disabled={busy}>
               <Save size={16} />
-              {busy ? "Guardando…" : "Guardar ficha"}
+              {busy ? "Guardando…" : "Guardar cambios"}
             </Button>
-          </aside>
-        </div>
-      </form>
+          </div>
+        </form>
+      )}
       {tab === "files" && (
         <section className="ops-card">
+          {demoCase && (
+            <div className="lead-demo-gallery">
+              <DemoPhoto demo={demoCase.key} />
+            </div>
+          )}
           <div className="ops-card-heading">
             <div>
               <h2>Fotos de obra y contratos</h2>
@@ -554,7 +705,9 @@ export function LeadDetail({
         </section>
       )}
       {tab === "work" && dispatchAccess && (
-        <LeadDispatches lead={lead} inventoryAccess={inventoryAccess} />
+        <div id="lead-dispatches">
+          <LeadDispatches lead={lead} inventoryAccess={inventoryAccess} />
+        </div>
       )}
       {tab === "materials" && inventoryAccess && (
         <>

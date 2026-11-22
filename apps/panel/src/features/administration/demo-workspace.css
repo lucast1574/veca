@@ -1,0 +1,90 @@
+.demo-workspace {
+  max-width: 73rem;
+}
+.demo-workspace-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 14px 0 20px;
+}
+.demo-workspace-head h1 {
+  margin: 7px 0 0;
+  font-size: clamp(28px, 4vw, 44px);
+}
+.demo-marker {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+.demo-role-select {
+  max-width: 17rem;
+  margin-bottom: 16px;
+}
+.demo-workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.demo-workspace-case h2 {
+  margin: 0 0 14px;
+}
+.demo-workspace-case p {
+  line-height: 1.55;
+}
+.demo-workspace-facts {
+  margin: 0;
+}
+.demo-workspace-facts div {
+  padding: 10px 0;
+  border-top: 1px solid var(--panel-edge);
+}
+.demo-workspace-facts dt {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.demo-workspace-facts dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+}
+.demo-workspace-case .dispatch-link {
+  margin-top: 8px;
+}
+@media (max-width: 650px) {
+  .demo-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+  .demo-workspace-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+.demo-photo {
+  margin: 0 0 14px;
+}
+.demo-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  border-radius: 9px;
+}
+.demo-photo figcaption {
+  margin-top: 5px;
+  color: var(--panel-secondary);
+  font-size: 11px;
+}
+.demo-invoice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.demo-workspace-case .demo-photo img {
+  height: clamp(125px, 16vw, 185px);
+}

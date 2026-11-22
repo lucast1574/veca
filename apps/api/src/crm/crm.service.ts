@@ -7,6 +7,7 @@ import { ObjectId } from "mongodb";
 import type { Filter } from "mongodb";
 import {
   crmLeadDefaults,
+  isDemoLead,
   LEAD_SOURCE_LABELS,
   socialLeadSchema,
   type Lead,
@@ -291,7 +292,11 @@ export class CrmService {
       },
     );
     this.events.emit("leads");
-    if (changed && !["prelead", "discarded"].includes(saved.stage))
+    if (
+      changed &&
+      !isDemoLead(saved) &&
+      !["prelead", "discarded"].includes(saved.stage)
+    )
       await this.mail
         .queue(
           saved.email,

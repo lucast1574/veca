@@ -10,6 +10,7 @@ import {
 } from "@veca/content";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
+import { DemoWorkspace } from "./DemoWorkspace";
 import "./administration.css";
 
 const timestamp = new Intl.DateTimeFormat("es-PE", {
@@ -54,6 +55,14 @@ function readConnection(
 }
 
 export function Administration() {
+  const [showDemo, setShowDemo] = useState(
+    () => location.hash === "#administration/demo",
+  );
+  useEffect(() => {
+    const sync = () => setShowDemo(location.hash === "#administration/demo");
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
   const [data, setData] = useState<AdministrationOverview | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -84,6 +93,14 @@ export function Administration() {
     (person) => person.status === "pending",
   ).length;
 
+  if (showDemo)
+    return (
+      <DemoWorkspace
+        back={() => {
+          location.hash = "administration";
+        }}
+      />
+    );
   return (
     <main className="ops-page administration" aria-busy={busy}>
       <header className="administration-heading">
@@ -91,10 +108,20 @@ export function Administration() {
           <h1>Administración</h1>
           <p>Conexiones de redes, operación de VECA y actividad del equipo.</p>
         </div>
-        <Button variant="ghost" disabled={busy} onClick={() => void reload()}>
-          <RefreshCw size={16} aria-hidden="true" />
-          {busy ? "Consultando…" : "Actualizar datos"}
-        </Button>
+        <div className="dispatch-actions">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              location.hash = "administration/demo";
+            }}
+          >
+            Demostración por rol
+          </Button>
+          <Button variant="ghost" disabled={busy} onClick={() => void reload()}>
+            <RefreshCw size={16} aria-hidden="true" />
+            {busy ? "Consultando…" : "Actualizar datos"}
+          </Button>
+        </div>
       </header>
       {error && <Notice error>{error}</Notice>}
       {!data && busy && <p role="status">Cargando administración…</p>}

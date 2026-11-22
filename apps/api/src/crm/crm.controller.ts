@@ -189,7 +189,7 @@ class CrmController {
     GalleryController,
     MobileGalleryController,
   ],
-  exports: [CrmRepository],
+  exports: [CrmRepository, CrmService],
   providers: [
     CrmRepository,
     CrmService,
