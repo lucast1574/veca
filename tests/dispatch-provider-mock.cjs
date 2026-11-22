@@ -65,6 +65,28 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
       options.headers.Authorization,
       "Bearer asu_live_local_contract_mock",
     );
+    if (path === "/issuers/20616656156" && !options.method)
+      return Response.json({
+        ruc: "20616656156",
+        livemode: true,
+        active: true,
+        productionEnabled: true,
+        credentials: {
+          produccion: {
+            configured: true,
+            hasCertificate: true,
+            certificateExpiresAt: "2099-01-01",
+            validatedAt: "2026-11-01",
+          },
+        },
+      });
+    if (path === "/series?ruc=20616656156" && !options.method)
+      return Response.json({
+        data: [
+          { documentType: "01", series: "F001", active: true },
+          { documentType: "09", series: "T001", active: true },
+        ],
+      });
     if (path === "/documents" && options.method === "POST") {
       const attempt = options.headers["Idempotency-Key"];
       const payload = JSON.parse(options.body);

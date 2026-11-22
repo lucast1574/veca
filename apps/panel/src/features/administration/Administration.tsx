@@ -10,6 +10,7 @@ import {
 } from "@veca/content";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
+import { FiscalConnection } from "./FiscalConnection";
 import { DemoWorkspace } from "./DemoWorkspace";
 import "./administration.css";
 
@@ -93,7 +94,7 @@ export function Administration() {
     (person) => person.status === "pending",
   ).length;
 
-  if (showDemo)
+  if (showDemo && data?.demoEnabled)
     return (
       <DemoWorkspace
         back={() => {
@@ -109,14 +110,16 @@ export function Administration() {
           <p>Conexiones de redes, operación de VECA y actividad del equipo.</p>
         </div>
         <div className="dispatch-actions">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              location.hash = "administration/demo";
-            }}
-          >
-            Demostración por rol
-          </Button>
+          {data?.demoEnabled && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                location.hash = "administration/demo";
+              }}
+            >
+              Demostración por rol
+            </Button>
+          )}
           <Button variant="ghost" disabled={busy} onClick={() => void reload()}>
             <RefreshCw size={16} aria-hidden="true" />
             {busy ? "Consultando…" : "Actualizar datos"}
@@ -127,6 +130,7 @@ export function Administration() {
       {!data && busy && <p role="status">Cargando administración…</p>}
       {data && (
         <>
+          <FiscalConnection />
           <section
             className="administration-section"
             aria-labelledby="administration-connections"

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Get,
   Injectable,
+  NotFoundException,
   Param,
   Post,
   Req,
@@ -19,6 +20,7 @@ import {
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { RequirePermission } from "../auth/route-access";
+import { config } from "../common/config";
 import { CrmRepository } from "../crm/crm.repository";
 import { CrmService } from "../crm/crm.service";
 import { DemoInvoiceService } from "./demo-invoice.service";
@@ -119,6 +121,7 @@ export class DemoController {
   @Post("prepare")
   prepare(@Req() req: AuthenticatedRequest) {
     this.check(req);
+    if (config.NODE_ENV === "production") throw new NotFoundException();
     return this.demo.links(true, req.session.user.username);
   }
 
@@ -137,6 +140,7 @@ export class DemoController {
   @Post("invoices")
   generateInvoices(@Req() req: AuthenticatedRequest) {
     this.check(req);
+    if (config.NODE_ENV === "production") throw new NotFoundException();
     return this.invoices.generate();
   }
 

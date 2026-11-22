@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  ForbiddenException,
   Module,
   Param,
   Post,
@@ -17,11 +18,15 @@ import type { Response } from "express";
 import { z } from "zod";
 import {
   accountingId,
+  canViewAdministration,
+  type FiscalOverview,
   accountingMonth,
   costInput,
   invoiceInput,
   invoicePayment,
 } from "@veca/content";
+import { Database } from "../database/database.module";
+import { vecaDemoReport } from "../database/remove-veca-demo";
 import { RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
@@ -255,9 +260,33 @@ class LeadInvoiceRequestController {
   }
 }
 
+@RequirePermission("users")
+@Controller("admin/administration/fiscal")
+class FiscalConnectionController {
+  constructor(
+    private readonly invoiceProvider: InvoiceProvider,
+    private readonly db: Database,
+  ) {}
+
+  @Get()
+  async check(@Req() req: AuthenticatedRequest): Promise<FiscalOverview> {
+    if (!canViewAdministration(req.session.user))
+      throw new ForbiddenException();
+    const [readiness, cleanup] = await Promise.all([
+      this.invoiceProvider.readiness(),
+      vecaDemoReport(this.db.db),
+    ]);
+    return { ...readiness, cleanup };
+  }
+}
+
 @Module({
   imports: [CrmModule, MediaModule, WarehouseModule],
-  controllers: [AccountingController, LeadInvoiceRequestController],
+  controllers: [
+    AccountingController,
+    LeadInvoiceRequestController,
+    FiscalConnectionController,
+  ],
   providers: [AccountingService, InvoiceProvider, SireService],
 })
 export class AccountingModule {}

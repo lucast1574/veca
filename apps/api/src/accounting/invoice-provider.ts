@@ -6,6 +6,7 @@ import {
 import { z } from "zod";
 import type { AccountingInvoice } from "@veca/content";
 import { config } from "../common/config";
+import { fiscalIssuerRuc, fiscalLiveKey } from "../common/fiscal-config";
 
 const url = "https://api.apisunat.net/api/v1/issuer";
 const doc = z.object({
@@ -19,17 +20,126 @@ const doc = z.object({
 });
 export type FiscalInvoice = z.infer<typeof doc>;
 
+const issuerSchema = z.object({
+  ruc: z.string(),
+  active: z.boolean(),
+  livemode: z.boolean(),
+  productionEnabled: z.boolean(),
+  credentials: z.object({
+    produccion: z.object({
+      configured: z.boolean(),
+      hasCertificate: z.boolean(),
+      certificateExpiresAt: z.string().nullable(),
+      validatedAt: z.string().nullable(),
+    }),
+  }),
+});
+const seriesSchema = z.object({
+  data: z.array(
+    z.object({
+      documentType: z.string(),
+      series: z.string(),
+      active: z.boolean(),
+    }),
+  ),
+});
+
 @Injectable()
 export class InvoiceProvider {
   private get key() {
-    return config.APISUNAT_LIVE_API_KEY || config.APISUNAT_API_KEY;
+    return fiscalLiveKey;
   }
 
   get enabled() {
-    return (
-      this.key.startsWith("asu_live_") &&
-      /^\d{11}$/.test(config.APISUNAT_ISSUER_RUC)
+    return this.key.startsWith("asu_live_") && /^\d{11}$/.test(fiscalIssuerRuc);
+  }
+
+  async readiness() {
+    if (!this.key.startsWith("asu_live_"))
+      return { status: this.key ? "wrongKeyMode" : "missingKey" } as const;
+    if (!/^\d{11}$/.test(fiscalIssuerRuc))
+      return { status: "invalidIssuer" } as const;
+
+    let response: Response;
+    try {
+      response = await this.readOnly(`/issuers/${fiscalIssuerRuc}`);
+    } catch {
+      return { status: "unreachable" } as const;
+    }
+    if (!response.ok)
+      return { status: "issuerLookupFailed", http: response.status } as const;
+    const parsed = issuerSchema.safeParse(
+      await response.json().catch(() => null),
     );
+    if (
+      !parsed.success ||
+      parsed.data.ruc !== fiscalIssuerRuc ||
+      !parsed.data.livemode
+    )
+      return { status: "invalidIssuer" } as const;
+    const issuer = parsed.data;
+    const credentials = issuer.credentials.produccion;
+    const certificateExpired = credentials.certificateExpiresAt
+      ? Date.parse(credentials.certificateExpiresAt) <= Date.now()
+      : false;
+    if (
+      !issuer.active ||
+      !issuer.productionEnabled ||
+      !credentials.configured ||
+      !credentials.hasCertificate ||
+      !credentials.validatedAt ||
+      certificateExpired
+    )
+      return {
+        status: "notEnabled",
+        active: issuer.active,
+        productionEnabled: issuer.productionEnabled,
+        certificate: credentials.hasCertificate,
+        certificateExpired,
+        credentials: credentials.configured,
+        validated: Boolean(credentials.validatedAt),
+      } as const;
+
+    try {
+      const res = await this.readOnly(`/series?ruc=${fiscalIssuerRuc}`);
+      if (!res.ok)
+        return { status: "seriesLookupFailed", http: res.status } as const;
+      const parsedSeries = seriesSchema.safeParse(
+        await res.json().catch(() => null),
+      );
+      if (!parsedSeries.success)
+        return { status: "seriesLookupFailed" } as const;
+      const invoiceSeries = parsedSeries.data.data
+        .filter((row) => row.active && row.documentType === "01")
+        .map((row) => row.series);
+      const guideSeries = parsedSeries.data.data
+        .filter(
+          (row) =>
+            row.active &&
+            row.documentType === "09" &&
+            (!config.APISUNAT_GUIDE_SERIES ||
+              row.series === config.APISUNAT_GUIDE_SERIES),
+        )
+        .map((row) => row.series);
+      return {
+        status:
+          invoiceSeries.length && guideSeries.length
+            ? "ready"
+            : "missingSeries",
+        invoiceSeries,
+        guideSeries,
+      } as const;
+    } catch {
+      return { status: "unreachable" } as const;
+    }
+  }
+
+  private readOnly(path: string) {
+    return fetch(url + path, {
+      redirect: "error",
+      signal: AbortSignal.timeout(7_000),
+      headers: { Authorization: `Bearer ${this.key}` },
+    });
   }
 
   async issue(invoice: AccountingInvoice, attempt: string) {
@@ -41,7 +151,7 @@ export class InvoiceProvider {
       },
       body: JSON.stringify({
         documentType: "01",
-        ruc: config.APISUNAT_ISSUER_RUC,
+        ruc: fiscalIssuerRuc,
         currency: "PEN",
         issueDate: invoice.issueDate,
         customer: {
@@ -91,7 +201,7 @@ export class InvoiceProvider {
   ): Promise<FiscalInvoice> {
     const response = await this.request(path, options);
     const parsed = doc.safeParse(await response.json());
-    if (!parsed.success || parsed.data.issuerRuc !== config.APISUNAT_ISSUER_RUC)
+    if (!parsed.success || parsed.data.issuerRuc !== fiscalIssuerRuc)
       throw new ServiceUnavailableException(
         "No se pudo confirmar la identidad del comprobante.",
       );

@@ -7,6 +7,7 @@ import {
   type SocialChannel,
   type SocialCheckGroup,
 } from "@veca/content";
+import { config } from "../common/config";
 import { Database } from "../database/database.module";
 import { AuthService } from "../auth/auth.service";
 import type { AuthenticatedRequest, UserDocument } from "../auth/auth.types";
@@ -166,6 +167,7 @@ export class AdministrationController {
       deliveries[channel][bucket] += count;
     }
     return {
+      demoEnabled: config.NODE_ENV !== "production",
       asOf: new Date(now).toISOString(),
       projects: { published, drafts },
       leads: {

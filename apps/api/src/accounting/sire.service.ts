@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import type { SireBook, SireReconciliation } from "@veca/content";
-import { config } from "../common/config";
+import { fiscalIssuerRuc } from "../common/fiscal-config";
 import { Database } from "../database/database.module";
 
 type Issue = SireReconciliation["issues"][number];
@@ -56,10 +56,7 @@ function sunatRows(file: Buffer, month: string, book: SireBook) {
         `Fila ${index + 1}. Revisa que sea la propuesta de SUNAT del libro y periodo seleccionados.`,
       );
     owner ||= data[0];
-    if (
-      owner !== data[0] ||
-      (config.APISUNAT_ISSUER_RUC && owner !== config.APISUNAT_ISSUER_RUC)
-    )
+    if (owner !== data[0] || (fiscalIssuerRuc && owner !== fiscalIssuerRuc))
       throw new BadRequestException(
         "El archivo no corresponde al mismo contribuyente.",
       );

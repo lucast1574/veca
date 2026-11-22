@@ -17,6 +17,7 @@ export type ConnectionSnapshot = {
   accounts: SocialCheck[];
 };
 export type AdministrationOverview = {
+  demoEnabled: boolean;
   asOf: string;
   projects: { published: number; drafts: number };
   leads: {
@@ -36,4 +37,36 @@ export type AdministrationOverview = {
     status: AccountStatus;
     activity: { crm: number; inventory: number; last: string | null };
   }[];
+};
+
+export type FiscalOverview = {
+  status:
+    | "ready"
+    | "missingKey"
+    | "wrongKeyMode"
+    | "invalidIssuer"
+    | "unreachable"
+    | "issuerLookupFailed"
+    | "seriesLookupFailed"
+    | "notEnabled"
+    | "missingSeries";
+  http?: number;
+  invoiceSeries?: string[];
+  guideSeries?: string[];
+  active?: boolean;
+  credentials?: boolean;
+  certificate?: boolean;
+  certificateExpired?: boolean;
+  validated?: boolean;
+  productionEnabled?: boolean;
+  cleanup: {
+    deleted: {
+      leads: number;
+      dispatches: number;
+      files: number;
+      invoices: number;
+      blocked: number;
+    } | null;
+    remaining: { leads: number; dispatches: number; invoices: number };
+  };
 };

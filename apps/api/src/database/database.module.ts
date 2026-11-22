@@ -2,10 +2,13 @@ import {
   Global,
   Injectable,
   Module,
+  Logger,
   OnModuleDestroy,
   OnModuleInit,
 } from "@nestjs/common";
 import { Db, MongoClient } from "mongodb";
+import { isVecaProduction } from "../common/fiscal-config";
+import { removeVecaDemo } from "./remove-veca-demo";
 import { migrateAccess } from "./access-migration";
 import { provisionMobileReview } from "./mobile-review";
 import { config } from "../common/config";
@@ -103,6 +106,18 @@ export class Database implements OnModuleInit, OnModuleDestroy {
       this.db.collection("media").createIndex({ key: 1 }, { unique: true }),
     ]);
     await migrateAccess(this.db);
+    if (isVecaProduction) {
+      const logger = new Logger(Database.name);
+      try {
+        const result = await removeVecaDemo(this.db);
+        if (result.blocked)
+          logger.warn(
+            "Se conservaron ejemplos vinculados a registros operativos.",
+          );
+      } catch {
+        logger.error("No se pudo completar la limpieza de ejemplos de VECA.");
+      }
+    }
     await provisionMobileReview(this.db);
   }
   async onModuleDestroy() {

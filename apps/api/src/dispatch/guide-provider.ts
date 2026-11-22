@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import type { DispatchInput } from "@veca/content";
 import { config } from "../common/config";
+import { fiscalIssuerRuc, fiscalLiveKey } from "../common/fiscal-config";
 
 const issuerUrl = "https://api.apisunat.net/api/v1/issuer";
 
@@ -28,13 +29,13 @@ export function limaDate(now = new Date()) {
 @Injectable()
 export class GuideProvider {
   private get key() {
-    return config.APISUNAT_LIVE_API_KEY || config.APISUNAT_API_KEY;
+    return fiscalLiveKey;
   }
 
   assertReady() {
     if (
       !this.key.startsWith("asu_live_") ||
-      !/^\d{11}$/.test(config.APISUNAT_ISSUER_RUC) ||
+      !/^\d{11}$/.test(fiscalIssuerRuc) ||
       (config.APISUNAT_GUIDE_SERIES &&
         !/^T[A-Z0-9]{3}$/.test(config.APISUNAT_GUIDE_SERIES))
     )
@@ -54,7 +55,7 @@ export class GuideProvider {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": key },
         body: JSON.stringify({
-          ruc: config.APISUNAT_ISSUER_RUC,
+          ruc: fiscalIssuerRuc,
           series: config.APISUNAT_GUIDE_SERIES || undefined,
           issueDate: date,
           transferDate: data.transferAt.slice(0, 10),
@@ -134,7 +135,7 @@ export class GuideProvider {
       !/^[0-9a-f-]{36}$/i.test(result.id) ||
       result.type !== "09" ||
       result.test !== false ||
-      result.issuerRuc !== config.APISUNAT_ISSUER_RUC ||
+      result.issuerRuc !== fiscalIssuerRuc ||
       typeof result.status !== "string"
     )
       throw new GuideRequestError(false);
