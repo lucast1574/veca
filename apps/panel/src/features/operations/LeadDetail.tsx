@@ -27,6 +27,7 @@ import {
   Plus,
 } from "lucide-react";
 import { api, post, API_BASE } from "../../lib/api";
+import { LeadDispatches } from "../dispatch/LeadDispatches";
 import { Button, Field, Notice } from "../../components/ui";
 import {
   amount,
@@ -60,11 +61,13 @@ export function LeadDetail({
   id,
   proposal,
   inventoryAccess = true,
+  dispatchAccess = false,
   back,
 }: {
   id: string;
   proposal?: string;
   inventoryAccess?: boolean;
+  dispatchAccess?: boolean;
   back: () => void;
 }) {
   const [data, setData] = useState<LeadDetailData | null>(null),
@@ -549,6 +552,9 @@ export function LeadDetail({
             </p>
           )}
         </section>
+      )}
+      {tab === "work" && dispatchAccess && (
+        <LeadDispatches lead={lead} inventoryAccess={inventoryAccess} />
       )}
       {tab === "materials" && inventoryAccess && (
         <>

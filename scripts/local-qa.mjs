@@ -61,9 +61,14 @@ const mailServer = createServer(async (req, res) => {
   res.writeHead(200).end("ok");
 });
 await new Promise((resolve) => mailServer.listen(4510, "127.0.0.1", resolve));
+const guideMock = process.env.VECA_GUIDE_QA_MOCK === "1";
 const env = {
   ...process.env,
   NODE_ENV: "test",
+  APISUNAT_API_KEY: "",
+  APISUNAT_LIVE_API_KEY: guideMock ? "asu_live_local_contract_mock" : "",
+  APISUNAT_ISSUER_RUC: guideMock ? "20616656156" : "",
+  APISUNAT_GUIDE_SERIES: "",
   EMAIL_TEST_ENDPOINT: "http://127.0.0.1:4510/send",
   FIREBASE_PROJECT_ID: "veca-local-qa",
   FIREBASE_API_KEY: "local-public-config-only",
@@ -81,10 +86,17 @@ const env = {
   S3_SECRET_ACCESS_KEY: "S3RVER",
   PUBLIC_API_URL: "http://localhost:4400",
 };
-const api = spawn(process.execPath, ["apps/api/dist/main.js"], {
-  env,
-  stdio: ["ignore", "ignore", "inherit"],
-});
+const guideMockArgs = guideMock
+  ? ["--require", path.resolve("tests/dispatch-provider-mock.cjs")]
+  : [];
+const api = spawn(
+  process.execPath,
+  [...guideMockArgs, "apps/api/dist/main.js"],
+  {
+    env,
+    stdio: ["ignore", "ignore", "inherit"],
+  },
+);
 const panel = spawn(process.execPath, ["scripts/serve-panel.mjs"], {
   env: { ...env, PORT: "3300" },
   stdio: ["ignore", "ignore", "inherit"],

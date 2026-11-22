@@ -5,6 +5,8 @@ export const PERMISSIONS = [
   "leads",
   "gallery",
   "inventory",
+  "dispatches",
+  "accounting",
   "users",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];

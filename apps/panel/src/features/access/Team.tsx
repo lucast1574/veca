@@ -263,6 +263,8 @@ export function Team({ currentId }: { currentId: string }) {
                     leads: "Leads",
                     gallery: "Galería",
                     inventory: "Inventario",
+                    dispatches: "Despachos",
+                    accounting: "Contabilidad",
                     users: "Equipo",
                   })[p],
               )

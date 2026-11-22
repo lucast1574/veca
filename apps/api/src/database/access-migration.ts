@@ -104,4 +104,26 @@ export async function migrateAccess(db: Db) {
       { upsert: true },
     );
   }
+  if (!(await migrations.findOne({ name: "dispatch-permissions-v1" }))) {
+    const roles = db.collection<{ id: string; permissions: string[] }>("roles");
+    await roles.updateMany(
+      {
+        id: { $in: ["admin", "operations"] },
+        permissions: { $all: ["leads", "inventory"], $nin: ["dispatches"] },
+      },
+      { $addToSet: { permissions: "dispatches" }, $inc: { revision: 1 } },
+    );
+    await roles.updateMany(
+      {
+        id: { $in: ["admin", "accounting"] },
+        permissions: { $ne: "accounting" },
+      },
+      { $addToSet: { permissions: "accounting" }, $inc: { revision: 1 } },
+    );
+    await migrations.updateOne(
+      { name: "dispatch-permissions-v1" },
+      { $setOnInsert: { completedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

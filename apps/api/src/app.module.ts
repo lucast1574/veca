@@ -7,6 +7,7 @@ import { ProfileModule } from "./profile/profile.module";
 import { AuthModule } from "./auth/auth.module";
 import { ProjectsModule } from "./projects/projects.module";
 import { MediaModule } from "./media/media.module";
+import { DispatchModule } from "./dispatch/dispatch.module";
 import { CrmModule } from "./crm/crm.controller";
 import { PublicEndpoint, RequirePermission } from "./auth/route-access";
 import { StorageService } from "./media/storage.service";
@@ -47,6 +48,7 @@ class HealthController {
     ProjectsModule,
     MediaModule,
     CrmModule,
+    DispatchModule,
   ],
   controllers: [HealthController],
 })

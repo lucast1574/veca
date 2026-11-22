@@ -13,6 +13,7 @@ import { Administration } from "./features/administration/Administration";
 import { type AuthSession } from "@veca/content";
 
 import { PrivateGallery } from "./features/gallery/PrivateGallery";
+import { GuideAccounting } from "./features/dispatch/GuideAccounting";
 import { Operations } from "./features/operations/Operations";
 
 import { useEffect, useMemo, useState } from "react";
@@ -179,9 +180,18 @@ export default function App() {
       ) : view === "administration" ? (
         <Administration />
       ) : view === "gallery" ? (
-        <PrivateGallery canOpenLead={can("leads")} canOpenProjects={can("projects")} />
-      ) : view !== "projects" ? (
-        <Operations view={view} inventoryAccess={can("inventory")} />
+        <PrivateGallery
+          canOpenLead={can("leads")}
+          canOpenProjects={can("projects")}
+        />
+      ) : view === "accounting" ? (
+        <GuideAccounting />
+      ) : view === "leads" || view === "inventory" ? (
+        <Operations
+          view={view}
+          inventoryAccess={can("inventory")}
+          dispatchAccess={session.user.permissions.includes("dispatches")}
+        />
       ) : editing !== undefined ? (
         <ProjectEditor
           key={editing?.id || "new"}

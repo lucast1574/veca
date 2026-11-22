@@ -12,9 +12,11 @@ function current() {
 export function Operations({
   view,
   inventoryAccess = true,
+  dispatchAccess = false,
 }: {
   view: "leads" | "inventory";
   inventoryAccess?: boolean;
+  dispatchAccess?: boolean;
 }) {
   const [route, setRoute] = useState(current);
   useEffect(() => {
@@ -28,6 +30,7 @@ export function Operations({
       key={route.id}
       id={route.id}
       inventoryAccess={inventoryAccess}
+      dispatchAccess={dispatchAccess}
       proposal={route.proposal}
       back={() => {
         location.hash = "leads";

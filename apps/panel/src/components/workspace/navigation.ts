@@ -6,6 +6,7 @@ import {
   Users,
   Images,
   ShieldCheck,
+  ReceiptText,
 } from "lucide-react";
 import {
   canViewAdministration,
@@ -56,6 +57,13 @@ export const WORKSPACE_ITEMS = [
     label: "Inventario",
     description: "Materiales y movimientos",
     Icon: Package,
+    group: "Empresa",
+  },
+  {
+    id: "accounting",
+    label: "Contabilidad",
+    description: "Guías de remisión",
+    Icon: ReceiptText,
     group: "Empresa",
   },
   {

@@ -146,3 +146,26 @@ El modal de Equipo consume el catálogo del servidor. Cada petición autenticada
 vuelve a resolver los permisos en MongoDB; un rol inexistente no concede acceso.
 Solo los permisos de capacidades de la aplicación tienen claves estables en código.
 El catálogo se entrega únicamente en la ruta protegida de administración de usuarios.
+
+## Guías de remisión
+
+Operaciones prepara el despacho desde Leads → Coordinación y obra. Contabilidad
+revisa, devuelve con observación o emite y consulta el resultado. La guía aceptada
+se puede descargar desde ambas pantallas. Emitir una guía no registra una salida de
+inventario. Los registros de demostración quedan bloqueados para emisión fiscal.
+
+Configurar en el backend `APISUNAT_LIVE_API_KEY` (o el nombre compatible
+`APISUNAT_API_KEY`) y `APISUNAT_ISSUER_RUC`. `APISUNAT_GUIDE_SERIES` es
+opcional si el emisor ya tiene una serie predeterminada. Las credenciales se
+configuran en el servidor. La API de guías exige un emisor habilitado en
+producción. Si la respuesta al envío queda indeterminada, revisar el intento
+antes de emitir un nuevo documento.
+
+Para validar el flujo sin emitir, usar la base aislada de `scripts/local-qa.mjs`
+y el proveedor simulado de `tests/dispatch-provider-mock.cjs`. En dos terminales,
+después de compilar:
+
+```bash
+VECA_GUIDE_QA_MOCK=1 node scripts/local-qa.mjs
+VECA_GUIDE_QA_MOCK=1 node tests/dispatch-flow.mjs
+```
