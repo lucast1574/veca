@@ -60,7 +60,10 @@ export class DemoInvoiceService {
   async generate() {
     const key = this.key();
     const result = issuerList.safeParse(await this.request("/issuers", key));
-    if (!result.success) throw failure();
+    if (!result.success)
+      throw new ServiceUnavailableException(
+        "La API de prueba devolvió una lista de emisores inesperada.",
+      );
     const issuers = result.data.data.filter(
       (item) => !item.livemode && item.active,
     );
@@ -172,7 +175,9 @@ export class DemoInvoiceService {
       parsed.data.issuerRuc !== ruc ||
       (record.id && record.id !== parsed.data.id)
     )
-      throw failure();
+      throw new ServiceUnavailableException(
+        "La API no confirmó que el comprobante corresponda al emisor beta.",
+      );
     const document = parsed.data;
     await this.collection.updateOne(
       { _id: example.key },
@@ -191,21 +196,42 @@ export class DemoInvoiceService {
     key: string,
     options: RequestInit = {},
   ): Promise<unknown> {
+    const response = await this.fetch(path, key, options);
     try {
-      const response = await this.fetch(path, key, options);
       return await response.json();
     } catch {
       throw failure();
     }
   }
+
   private async fetch(path: string, key: string, options: RequestInit = {}) {
-    const response = await fetch(base + path, {
-      ...options,
-      redirect: "error",
-      signal: AbortSignal.timeout(15_000),
-      headers: { ...options.headers, Authorization: `Bearer ${key}` },
-    });
-    if (!response.ok) throw failure();
+    let response: Response;
+    try {
+      response = await fetch(base + path, {
+        ...options,
+        redirect: "error",
+        signal: AbortSignal.timeout(15_000),
+        headers: { ...options.headers, Authorization: `Bearer ${key}` },
+      });
+    } catch {
+      throw new ServiceUnavailableException(
+        "No hubo respuesta del entorno beta. Puedes volver a consultar.",
+      );
+    }
+    if (!response.ok) {
+      const payload: unknown = await response.json().catch(() => null);
+      const error = z
+        .object({
+          error: z.object({ code: z.string().regex(/^[A-Z_0-9]{2,50}$/) }),
+        })
+        .safeParse(payload);
+      const operation =
+        path === "/issuers" ? "Consultar emisores" : "Procesar factura";
+      const code = error.success ? ` · ${error.data.error.code}` : "";
+      throw new ServiceUnavailableException(
+        `${operation} en beta: HTTP ${response.status}${code}.`,
+      );
+    }
     return response;
   }
 }
