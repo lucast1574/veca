@@ -37,6 +37,34 @@ async function login(username = "admin") {
   cookie = r.headers.get("set-cookie").split(";")[0];
   csrf = r.body.csrf;
 }
+async function mobileLogin(username) {
+  const r = await req(
+    "/mobile/auth/login",
+    "POST",
+    {
+      username,
+      password: "Local-only-visual-test-2026!",
+    },
+    false,
+  );
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.ok(r.body.token);
+  return r.body.token;
+}
+function mobileGet(path, token) {
+  return fetch(base + path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+}
+const invalidGoogle = await req(
+  "/mobile/auth/google/native",
+  "POST",
+  {
+    idToken: "not-a-valid-firebase-id-token",
+  },
+  false,
+);
+assert.equal(invalidGoogle.status, 401);
 await login();
 const leadResult = await req("/admin/crm/leads", "POST", {
   name: "Cliente local de galería",
@@ -281,6 +309,27 @@ try {
     encodeURIComponent(projectInput.title);
   r = await req(projectGallery + "&category=interiores");
   assert.equal(r.body.total, 3);
+  const mobileProjects = projectGallery.replace("/admin/gallery", "/mobile");
+  const adminToken = await mobileLogin("admin");
+  const mobileAdmin = await mobileGet(mobileProjects, adminToken);
+  assert.equal(mobileAdmin.status, 200);
+  const mobileProjectItems = (await mobileAdmin.json()).items;
+  assert.deepEqual(
+    mobileProjectItems.map((photo) => photo.id),
+    r.body.items.map((photo) => photo.id),
+  );
+  assert.ok(
+    mobileProjectItems.every((photo) =>
+      photo.subtitle.includes(projectInput.title),
+    ),
+  );
+  for (const photo of mobileProjectItems) {
+    const binary = await mobileGet(photo.url, adminToken);
+    assert.equal(binary.status, 200);
+    assert.equal(binary.headers.get("content-type"), "image/webp");
+    assert.ok((await binary.arrayBuffer()).byteLength > 0);
+    assert.equal((await mobileGet(photo.url)).status, 401);
+  }
   assert.equal(
     r.body.items.filter((photo) => photo.publication.status === "draft").length,
     1,
@@ -316,7 +365,19 @@ try {
   });
   await login("gallery-local-test");
   assert.equal((await req(gallery)).status, 200);
-  assert.equal((await req(projectGallery)).body.total, 2);
+  const allowedProjects = (await req(projectGallery)).body;
+  assert.equal(allowedProjects.total, 2);
+  const galleryToken = await mobileLogin("gallery-local-test");
+  const mobileLimited = await mobileGet(mobileProjects, galleryToken);
+  assert.equal(mobileLimited.status, 200);
+  assert.deepEqual(
+    (await mobileLimited.json()).items.map((photo) => photo.id),
+    allowedProjects.items.map((photo) => photo.id),
+  );
+  assert.equal(
+    (await mobileGet(`/mobile/media/${images[2].id}`, galleryToken)).status,
+    403,
+  );
   assert.equal((await req(projectGallery + "&status=draft")).body.total, 0);
   assert.equal((await req(new URL(images[2].url).pathname)).status, 403);
   assert.equal((await req(`${gallery}/${approved.id}`)).status, 200);
@@ -331,6 +392,7 @@ try {
       { $set: { permissions: [] }, $inc: { revision: 1 } },
     );
   assert.equal((await req(gallery)).status, 403);
+  assert.equal((await mobileGet(mobileProjects, galleryToken)).status, 403);
   assert.equal((await req(`${gallery}/${approved.id}`)).status, 403);
 } finally {
   await mongo.close();
