@@ -12,6 +12,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import type { ObjectId } from "mongodb";
+import type { SessionUser } from "@veca/content";
 import { Readable } from "node:stream";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
@@ -64,11 +65,7 @@ export class MobileGalleryController {
     );
   }
 
-  private async access(req: Request) {
-    const { user, userId } = await this.auth.authenticate(
-      this.token(req),
-      true,
-    );
+  private async galleryAccess(user: SessionUser, userId: ObjectId) {
     if (user.status !== "active" || !user.emailVerified)
       throw new ForbiddenException("Tu cuenta de VECA no tiene acceso activo.");
     const review = !!(await this.auth.users.findOne({
@@ -78,6 +75,14 @@ export class MobileGalleryController {
     if (!review && !user.permissions.includes("gallery"))
       throw new ForbiddenException("Tu cuenta no tiene acceso a Galería.");
     return { user, review };
+  }
+
+  private async access(req: Request) {
+    const { user, userId } = await this.auth.authenticate(
+      this.token(req),
+      true,
+    );
+    return this.galleryAccess(user, userId);
   }
 
   @Post("auth/login")
@@ -132,6 +137,24 @@ export class MobileGalleryController {
     return { code };
   }
 
+  @Post("auth/google/native")
+  async googleNative(
+    @Body() input: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.set("Cache-Control", "no-store");
+    const { idToken } = parse(
+      z.object({ idToken: z.string().min(20).max(10000) }).strict(),
+      input,
+    );
+    const userId = await this.auth.googleUser(idToken, true);
+    const user = await this.auth.users.findOne({ _id: userId });
+    if (!user) throw new UnauthorizedException();
+    await this.galleryAccess(await this.auth.view(user), userId);
+    const { token } = await this.auth.session(userId, true);
+    return { token };
+  }
+
   @Post("auth/exchange")
   async exchange(
     @Body() input: unknown,
@@ -183,11 +206,12 @@ export class MobileGalleryController {
   ) {
     res.set("Cache-Control", "private, no-store");
     const { user, review } = await this.access(req);
-    const { search, page } = parse(
+    const { search, page, source } = parse(
       z
         .object({
           search: z.string().trim().max(120).default(""),
           page: z.coerce.number().int().min(1).max(10000).default(1),
+          source: z.enum(["", "publication", "lead"]).default(""),
         })
         .strict(),
       input,
@@ -203,7 +227,7 @@ export class MobileGalleryController {
       };
     }
     const result = await this.gallery.list(
-      { search, page },
+      { search, page, source },
       user.permissions.includes("projects"),
     );
     const items = result.items.map((photo) => {
@@ -222,7 +246,9 @@ export class MobileGalleryController {
         id: photo.id,
         url: media ? "/mobile" + url.pathname : url.href,
         title: photo.caption || photo.alt || photo.publication.title,
-        subtitle: photo.publication.location || "Proyecto",
+        subtitle: [photo.publication.title, photo.publication.location]
+          .filter(Boolean)
+          .join(" · "),
       };
     });
     return { items, total: result.total, pages: result.pages };

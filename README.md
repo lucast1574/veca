@@ -2,6 +2,8 @@
 
 Sitio público, panel privado y API para publicar proyectos reales de Vidrios VECA. TypeScript, NestJS, Next.js, React/Tiptap, MongoDB y almacenamiento S3 compatible.
 
+La app Flutter se mantiene en [Galería VECA](https://github.com/lucast1574/veca-mobile). Usa la misma galería privada del panel a través de `/mobile/photos`. La API valida la identidad de Firebase en `/mobile/auth/google/native` y comprueba el permiso de Galería antes de crear la sesión móvil.
+
 ## Estructura
 
 - `apps/api/src/auth`: administrador, activación de un solo uso y sesiones revocables.
