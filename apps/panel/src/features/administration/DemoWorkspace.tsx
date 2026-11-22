@@ -90,6 +90,22 @@ export function DemoWorkspace({ back }: { back: () => void }) {
     }
   }
 
+  async function checkFiscalConnection() {
+    setInvoiceBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await api("/admin/administration/demo/connection", {
+        signal: AbortSignal.timeout(18_000),
+      });
+      setNotice("Conexión de prueba verificada.");
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setInvoiceBusy(false);
+    }
+  }
+
   async function generateInvoices() {
     setInvoiceBusy(true);
     setError("");
@@ -159,6 +175,14 @@ export function DemoWorkspace({ back }: { back: () => void }) {
       )}
       {role === "accounting" && tab === "Facturas y cobros" && (
         <div className="demo-invoice-actions">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={invoiceBusy}
+            onClick={() => void checkFiscalConnection()}
+          >
+            Comprobar conexión de prueba
+          </Button>
           <Button
             variant="ghost"
             disabled={invoiceBusy}

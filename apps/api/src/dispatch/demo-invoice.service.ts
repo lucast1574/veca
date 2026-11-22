@@ -57,8 +57,12 @@ export class DemoInvoiceService {
     }));
   }
 
-  async generate() {
-    const key = this.key();
+  async checkConnection() {
+    await this.testIssuer(this.key());
+    return { connected: true };
+  }
+
+  private async testIssuer(key: string) {
     const result = issuerList.safeParse(await this.request("/issuers", key));
     if (!result.success)
       throw new ServiceUnavailableException(
@@ -76,6 +80,12 @@ export class DemoInvoiceService {
       throw new ServiceUnavailableException(
         "El espacio de prueba necesita un emisor beta configurado.",
       );
+    return issuer;
+  }
+
+  async generate() {
+    const key = this.key();
+    const issuer = await this.testIssuer(key);
     await Promise.all(
       DEMO_CASES.map((example) => this.generateOne(example, key, issuer.ruc)),
     );
@@ -114,7 +124,8 @@ export class DemoInvoiceService {
   }
 
   private key() {
-    const key = config.APISUNAT_TEST_API_KEY || config.APISUNAT_API_KEY;
+    const key =
+      config.APISUNAT_TEST_API_KEY.trim() || config.APISUNAT_API_KEY.trim();
     if (!key.startsWith("asu_test_"))
       throw new ServiceUnavailableException(
         "La credencial de prueba todavía no está configurada en el servidor.",

@@ -90,6 +90,16 @@ class LeadDispatchController {
     );
   }
 
+  @RequirePermission("inventory")
+  @Post(":id/depart")
+  depart(
+    @Param("leadId") leadId: string,
+    @Param("id") id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.dispatches.depart(leadId, id, req.session.user.username);
+  }
+
   @Get(":id/pdf")
   async pdf(
     @Param("leadId") leadId: string,

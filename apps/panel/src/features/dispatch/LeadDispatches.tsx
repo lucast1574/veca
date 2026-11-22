@@ -9,6 +9,7 @@ import {
 } from "@veca/content";
 import { Button, Notice } from "../../components/ui";
 import { API_BASE, api, post } from "../../lib/api";
+import { WarehouseForm } from "../warehouse/shared";
 import { DispatchForm, newDispatch } from "./DispatchForm";
 import { dispatchInput, transferLabel } from "./shared";
 import "./dispatch.css";
@@ -22,6 +23,7 @@ export function LeadDispatches({
 }) {
   const path = `/admin/crm/leads/${lead.id}/dispatches`;
   const [rows, setRows] = useState<Dispatch[] | null>(null);
+  const [departing, setDeparting] = useState<Dispatch>();
   const [error, setError] = useState("");
   const [initial, setInitial] = useState<DispatchInput | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -38,6 +40,18 @@ export function LeadDispatches({
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function depart(row: Dispatch) {
+    const next = await api<Dispatch>(`${path}/${row.id}/depart`, {
+      method: "POST",
+      signal: AbortSignal.timeout(25_000),
+    });
+    setRows(
+      (current) =>
+        current?.map((item) => (item.id === row.id ? next : item)) || null,
+    );
+    setDeparting(undefined);
+  }
 
   function open(row?: Dispatch) {
     editing.current = row || null;
@@ -114,6 +128,24 @@ export function LeadDispatches({
                     Editar despacho
                   </Button>
                 )}
+                {row.departedAt && (
+                  <span className="dispatch-pill" data-state="accepted">
+                    Salida confirmada
+                  </span>
+                )}
+                {inventoryAccess &&
+                  !row.demo &&
+                  !row.departedAt &&
+                  ["accepted", "observed"].includes(row.status) && (
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      disabled={Boolean(departing)}
+                      onClick={() => setDeparting(row)}
+                    >
+                      Confirmar salida
+                    </Button>
+                  )}
                 {["accepted", "observed"].includes(row.status) && (
                   <a
                     className="dispatch-link"
@@ -126,6 +158,20 @@ export function LeadDispatches({
             </li>
           ))}
         </ul>
+      )}
+      {departing && (
+        <WarehouseForm
+          title="Confirmar salida del despacho"
+          action="Confirmar salida"
+          onClose={() => setDeparting(undefined)}
+          save={() => depart(departing)}
+        >
+          <p className="hint">
+            {departing.items.some((item) => item.materialId)
+              ? "Los materiales vinculados se moverán del almacén a la obra."
+              : "Se registrará la salida física de este despacho."}
+          </p>
+        </WarehouseForm>
       )}
       {initial && (
         <DispatchForm

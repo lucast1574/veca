@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
   GUIDE_UNITS,
+  guideUnitForMaterial,
   type DispatchInput,
   type Lead,
   type Material,
@@ -88,17 +89,11 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
   function addMaterial(code: string) {
     const material = materials.find((row) => row.sku === code);
     if (!material) return;
-    const units = {
-      m2: "MTK",
-      m: "MTR",
-      unit: "NIU",
-      kg: "KGM",
-      l: "LTR",
-    } as const;
     const item = {
       code: material.sku,
+      materialId: material.id,
       description: material.name,
-      unitCode: units[material.unit],
+      unitCode: guideUnitForMaterial[material.unit],
       quantity: 1,
     };
     const blank =
@@ -235,6 +230,7 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
                 <input
                   maxLength={60}
                   value={item.code}
+                  readOnly={Boolean(item.materialId)}
                   onChange={(e) => setLine(index, { code: e.target.value })}
                 />
               </Field>
@@ -263,6 +259,7 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
                   id={`${formId}-unit-${index}`}
                   label="Unidad"
                   value={item.unitCode}
+                  disabled={Boolean(item.materialId)}
                   options={GUIDE_UNITS.map((unit) => ({
                     value: unit.id,
                     label: unit.name,

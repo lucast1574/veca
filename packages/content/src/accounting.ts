@@ -93,6 +93,8 @@ export const costInput = z
       .or(z.literal(""))
       .default(""),
     reference: z.string().trim().max(80).default(""),
+    purchaseId: accountingId.optional(),
+    dispatchId: accountingId.optional(),
     netCents: amount.positive(),
     taxCents: amount,
     allocations: z
@@ -138,6 +140,10 @@ export type AccountingMargin = {
   paid: number;
   balance: number;
   costCount: number;
+  materialCosts: number;
+  budgetCents: number;
+  pendingValuation: boolean;
+  manualMaterialsToReview: number;
 };
 export type AccountingPeriod = {
   salesNet: number;
@@ -158,4 +164,19 @@ export const accountingTotals = (items: InvoiceInput["items"]) => {
     0,
   );
   return { netCents, taxCents, totalCents: netCents + taxCents };
+};
+
+export type SireBook = "purchases" | "sales";
+export type SireReconciliation = {
+  count: number;
+  matches: number;
+  issues: {
+    status: "different" | "onlySunat" | "onlyPanel" | "manual";
+    reference: string;
+    taxId: string;
+    sunat?: number;
+    panel?: number;
+    currency: string;
+    note?: string;
+  }[];
 };

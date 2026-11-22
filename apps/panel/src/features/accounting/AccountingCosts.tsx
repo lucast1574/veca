@@ -164,6 +164,20 @@ export function AccountingCosts() {
               ? `Asignado a ${active.allocations.length} obra(s)`
               : "Gasto general"}
           </p>
+          {active.purchaseId && (
+            <RelatedCost
+              label="Compra asociada"
+              id={active.purchaseId}
+              name="purchases"
+            />
+          )}
+          {active.dispatchId && (
+            <RelatedCost
+              label="Despacho asociado"
+              id={active.dispatchId}
+              name="dispatches"
+            />
+          )}
           {active.proof ? (
             <a
               className="accounting-inline"
@@ -214,6 +228,31 @@ export function AccountingCosts() {
   );
 }
 
+type OriginList = Record<
+  "purchases" | "dispatches",
+  { value: string; label: string }[]
+>;
+
+function RelatedCost({
+  label,
+  id,
+  name,
+}: {
+  label: string;
+  id: string;
+  name: keyof OriginList;
+}) {
+  const query = useAccountingQuery<OriginList>(
+    accountingPath + "/cost-origins",
+  );
+  const target = query.data?.[name].find((item) => item.value === id);
+  return (
+    <p>
+      <strong>{label}</strong> · {target?.label || id.slice(-8)}
+    </p>
+  );
+}
+
 function CostForm({
   current,
   onClose,
@@ -227,6 +266,11 @@ function CostForm({
   const [kind, setKind] = useState<CostInput["kind"]>(
     current?.kind || "purchase",
   );
+  const origins = useAccountingQuery<OriginList>(
+    accountingPath + "/cost-origins",
+  );
+  const [purchaseId, setPurchase] = useState(current?.purchaseId || "");
+  const [dispatchId, setDispatch] = useState(current?.dispatchId || "");
   const [net, setNet] = useState(current ? String(current.netCents / 100) : "");
   const [splits, setSplits] = useState(() =>
     (current?.allocations || []).map((row) => ({
@@ -249,6 +293,8 @@ function CostForm({
       supplier: fields.get("supplier"),
       supplierRuc: fields.get("supplierRuc"),
       reference: fields.get("reference"),
+      ...(purchaseId && kind !== "materials" ? { purchaseId } : {}),
+      ...(dispatchId ? { dispatchId } : {}),
       kind,
       netCents: decimal(net),
       taxCents:
@@ -360,6 +406,39 @@ function CostForm({
               </Field>
             )}
           </div>
+          <details
+            className="accounting-group"
+            open={purchaseId || dispatchId ? true : undefined}
+          >
+            <summary>Vincular compra o despacho</summary>
+            {origins.error && <Notice error>{origins.error}</Notice>}
+            <div className="accounting-grid">
+              {kind !== "materials" && (
+                <Field label="Compra asociada">
+                  <Select
+                    label="Compra asociada"
+                    value={purchaseId}
+                    onChange={setPurchase}
+                    options={[
+                      { value: "", label: "Sin compra asociada" },
+                      ...(origins.data?.purchases || []),
+                    ]}
+                  />
+                </Field>
+              )}
+              <Field label="Despacho asociado">
+                <Select
+                  label="Despacho asociado"
+                  value={dispatchId}
+                  onChange={setDispatch}
+                  options={[
+                    { value: "", label: "Sin despacho asociado" },
+                    ...(origins.data?.dispatches || []),
+                  ]}
+                />
+              </Field>
+            </div>
+          </details>
           <div className="accounting-group">
             <h3>Asignación por obra</h3>
             {splits.length === 0 && (

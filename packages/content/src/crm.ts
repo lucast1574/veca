@@ -161,6 +161,7 @@ export const MATERIAL_CATEGORIES = [
   "Aluminio",
   "Herrajes",
   "Selladores",
+  "Aglomerado",
   "Otros",
 ] as const;
 export const quantitySchema = z
@@ -202,6 +203,7 @@ export type Material = z.infer<typeof materialSchema> & {
   balance: number;
   version: number;
   updatedAt: string;
+  unitCostCents?: number;
 };
 export type Movement = {
   id: string;
@@ -209,7 +211,14 @@ export type Movement = {
   materialName: string;
   unit: string;
   leadId: string | null;
-  kind: "receipt" | "consumption" | "return";
+  kind: "receipt" | "consumption" | "return" | "count" | "dispatch";
+  costCents?: number;
+  unvaluedQuantity?: number;
+  valuedQuantity?: number;
+  purchaseId?: string;
+  dispatchId?: string;
+  counted?: number;
+  previousBalance?: number;
   quantity: number;
   reason: string;
   actor: string;

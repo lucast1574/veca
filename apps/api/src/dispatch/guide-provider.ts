@@ -84,7 +84,7 @@ export class GuideProvider {
                 driverLicense: data.driverLicense.toUpperCase(),
               }),
           weightKg: data.weightKg,
-          items: data.items.map((item) => ({
+          items: data.items.map(({ materialId, ...item }) => ({
             ...item,
             code: item.code || undefined,
           })),

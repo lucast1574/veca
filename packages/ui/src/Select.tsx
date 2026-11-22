@@ -15,6 +15,7 @@ export function Select({
   onChange,
   placeholder = "Selecciona una opción",
   error,
+  disabled,
   triggerRef,
 }: {
   id?: string;
@@ -25,6 +26,7 @@ export function Select({
   onChange: (value: string) => void;
   placeholder?: string;
   error?: string;
+  disabled?: boolean;
   triggerRef?: Ref<HTMLButtonElement>;
 }) {
   const uid = useId();
@@ -72,6 +74,7 @@ export function Select({
         }}
         id={id}
         type="button"
+        disabled={disabled}
         role="combobox"
         aria-label={label}
         aria-expanded={open}

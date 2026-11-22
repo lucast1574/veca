@@ -108,11 +108,15 @@ export function Movements({ items }: { items: Movement[] }) {
       {items.map((m) => (
         <div key={m.id}>
           <span className={`ops-move-kind ${m.kind}`}>
-            {m.kind === "consumption"
-              ? "Salida"
-              : m.kind === "return"
-                ? "Devolución"
-                : "Entrada"}
+            {
+              {
+                consumption: "Consumo",
+                return: "Devolución",
+                receipt: "Entrada",
+                count: "Conteo",
+                dispatch: "Despacho",
+              }[m.kind]
+            }
           </span>
           <div>
             <strong>{m.materialName}</strong>
@@ -121,10 +125,15 @@ export function Movements({ items }: { items: Movement[] }) {
               {date(m.at)} · {m.actor}
             </small>
             {m.leadId && <a href={`#leads/${m.leadId}`}>Ver obra</a>}
+            {m.purchaseId && (
+              <a href={`#inventory/compras/${m.purchaseId}`}>Ver compra</a>
+            )}
           </div>
           <strong>
-            {m.kind === "consumption" ? "−" : "+"}
-            {amount(m.quantity)} <small>{unitName(m.unit)}</small>
+            {m.kind === "count"
+              ? amount(m.counted ?? m.balanceAfter)
+              : amount(m.quantity)}{" "}
+            <small>{unitName(m.unit)}</small>
           </strong>
           <small>Saldo: {amount(m.balanceAfter)}</small>
         </div>

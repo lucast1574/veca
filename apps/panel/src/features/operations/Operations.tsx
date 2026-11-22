@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { LeadBoard } from "./LeadBoard";
 import { LeadDetail } from "./LeadDetail";
-import { Inventory } from "./Inventory";
+import { InventoryWorkspace } from "../warehouse/InventoryWorkspace";
 function current() {
   const parts = location.hash.slice(1).split("/");
   return {
     id: parts[0] === "leads" ? parts[1] || "" : "",
     proposal: parts[2] || undefined,
+    inventoryTab: parts[1],
+    inventoryRecord: parts[2],
+    workId: parts[3],
   };
 }
 export function Operations({
@@ -24,7 +27,14 @@ export function Operations({
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);
-  if (view === "inventory") return <Inventory />;
+  if (view === "inventory")
+    return (
+      <InventoryWorkspace
+        tab={route.inventoryTab}
+        selected={route.inventoryRecord}
+        workId={route.workId}
+      />
+    );
   return route.id ? (
     <LeadDetail
       key={route.id}

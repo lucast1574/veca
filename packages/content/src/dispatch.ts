@@ -10,6 +10,14 @@ export const GUIDE_UNITS = [
   { id: "SET", name: "Juego" },
 ] as const;
 
+export const guideUnitForMaterial = {
+  m2: "MTK",
+  m: "MTR",
+  unit: "NIU",
+  kg: "KGM",
+  l: "LTR",
+} as const;
+
 export const dispatchSchema = z
   .object({
     startAddress: text(250),
@@ -36,6 +44,10 @@ export const dispatchSchema = z
         z
           .object({
             code: text(60),
+            materialId: z
+              .string()
+              .regex(/^[a-f\d]{24}$/i)
+              .optional(),
             description: text(250),
             unitCode: z.enum(["NIU", "MTR", "MTK", "KGM", "LTR", "SET"]),
             quantity: z.number().finite().min(0).max(1_000_000),
@@ -67,6 +79,7 @@ export type Dispatch = DispatchInput & {
   observation: string;
   guideNumber: string;
   canCheckStatus: boolean;
+  departedAt?: string;
 };
 
 export const DISPATCH_STATUS: Record<DispatchStatus, string> = {

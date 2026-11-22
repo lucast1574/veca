@@ -25,9 +25,11 @@ import {
 import { RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
+import { WarehouseModule } from "../inventory/warehouse.module";
 import { CrmModule } from "../crm/crm.controller";
 import { MediaModule } from "../media/media.module";
 import { AccountingService } from "./accounting.service";
+import { SireService } from "./sire.service";
 import { InvoiceProvider } from "./invoice-provider";
 
 const revision = z.object({ version: z.number().int().positive() }).strict();
@@ -37,7 +39,15 @@ const entry = z.object({ id: accountingId, data: z.unknown() }).strict();
 @Controller("admin/accounting")
 @RequirePermission("accounting")
 class AccountingController {
-  constructor(private readonly accounts: AccountingService) {}
+  constructor(
+    private readonly accounts: AccountingService,
+    private readonly sire: SireService,
+  ) {}
+
+  @Get("cost-origins")
+  costOrigins() {
+    return this.accounts.costOrigins();
+  }
 
   @Get("works")
   works() {
@@ -177,6 +187,22 @@ class AccountingController {
     );
   }
 
+  @Post("period/:month/reconcile/:book")
+  @UseInterceptors(
+    FileInterceptor("file", { limits: { fileSize: 8_000_000, files: 1 } }),
+  )
+  reconcile(
+    @Param("month") month: string,
+    @Param("book") book: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.sire.reconcile(
+      parse(accountingMonth, month),
+      parse(z.enum(["sales", "purchases"]), book),
+      file,
+    );
+  }
+
   @Get("period/:month")
   period(@Param("month") month: string) {
     return this.accounts.period(parse(accountingMonth, month));
@@ -230,8 +256,8 @@ class LeadInvoiceRequestController {
 }
 
 @Module({
-  imports: [CrmModule, MediaModule],
+  imports: [CrmModule, MediaModule, WarehouseModule],
   controllers: [AccountingController, LeadInvoiceRequestController],
-  providers: [AccountingService, InvoiceProvider],
+  providers: [AccountingService, InvoiceProvider, SireService],
 })
 export class AccountingModule {}

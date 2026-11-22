@@ -122,6 +122,12 @@ export class DemoController {
     return this.demo.links(true, req.session.user.username);
   }
 
+  @Get("connection")
+  connection(@Req() req: AuthenticatedRequest) {
+    this.check(req);
+    return this.invoices.checkConnection();
+  }
+
   @Get("invoices")
   listInvoices(@Req() req: AuthenticatedRequest) {
     this.check(req);

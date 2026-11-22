@@ -333,3 +333,5 @@ export * from "./administration.js";
 export * from "./dispatch.js";
 export * from "./demo.js";
 export * from "./accounting.js";
+
+export * from "./warehouse.js";

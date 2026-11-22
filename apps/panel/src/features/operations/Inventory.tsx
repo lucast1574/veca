@@ -14,6 +14,11 @@ import {
 import { Select } from "@veca/ui/src/Select";
 import { Plus, Package, Search, RefreshCw, X } from "lucide-react";
 import { api, post } from "../../lib/api";
+import {
+  CatalogImport,
+  CountStock,
+  ImportCatalogButton,
+} from "../warehouse/CatalogActions";
 import { Field, Button, Notice } from "../../components/ui";
 import {
   amount,
@@ -145,6 +150,9 @@ export function MaterialMovement({
   );
 }
 export function Inventory() {
+  const [importing, setImporting] = useState(false);
+  const [count, setCount] = useState<Material>();
+  const [message, setMessage] = useState("");
   const [items, setItems] = useState<Material[]>([]),
     [moves, setMoves] = useState<Movement[]>([]),
     [search, setSearch] = useState(""),
@@ -196,14 +204,10 @@ export function Inventory() {
     <main className="ops-page">
       <div className="ops-heading">
         <div>
-          <p>Almacén y trazabilidad por obra</p>
-          <h1>Materiales bajo control.</h1>
-          <span>
-            Entradas, consumo real y devoluciones. Cada movimiento conserva su
-            motivo y responsable.
-          </span>
+          <h2>Materiales</h2>
         </div>
         <div className="ops-heading-actions">
+          <ImportCatalogButton onClick={() => setImporting(true)} />
           <Button variant="ghost" onClick={() => setCreate(!create)}>
             <Plus size={16} />
             Nuevo material
@@ -229,6 +233,32 @@ export function Inventory() {
         </div>
       </div>
       {error && <Notice error>{error}</Notice>}
+      {message && (
+        <p className="warehouse-message" role="status">
+          {message}
+        </p>
+      )}
+      {importing && (
+        <CatalogImport
+          close={() => setImporting(false)}
+          done={(message) => {
+            setMessage(message);
+            setImporting(false);
+            refresh();
+          }}
+        />
+      )}
+      {count && (
+        <CountStock
+          material={count}
+          close={() => setCount(undefined)}
+          done={() => {
+            setCount(undefined);
+            setMessage("Conteo guardado.");
+            refresh();
+          }}
+        />
+      )}
       {create && (
         <form className="ops-card" onSubmit={add}>
           <h2>Nuevo material</h2>
@@ -329,6 +359,7 @@ export function Inventory() {
               <th>Disponible</th>
               <th>Mínimo</th>
               <th>Estado</th>
+              <th>Acción</th>
             </tr>
           </thead>
           <tbody>
@@ -356,6 +387,16 @@ export function Inventory() {
                         ? "Reponer"
                         : "Disponible"}
                   </span>
+                </td>
+                <td>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setCount(m)}
+                    aria-label={`Contar ${m.name}`}
+                  >
+                    Contar
+                  </Button>
                 </td>
               </tr>
             ))}

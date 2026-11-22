@@ -37,6 +37,7 @@ export function dispatchInput(dispatch: Dispatch): DispatchInput {
     observation,
     guideNumber,
     canCheckStatus,
+    departedAt,
     ...data
   } = dispatch;
   return data;

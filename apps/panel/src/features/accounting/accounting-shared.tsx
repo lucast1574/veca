@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { Button, Notice } from "../../components/ui";
 import { api } from "../../lib/api";
@@ -42,6 +42,7 @@ export const accountingPost = <T,>(path: string, data: unknown) =>
 
 export function useAccountingQuery<T>(path: string) {
   const [attempt, setAttempt] = useState(0);
+  const refresh = useCallback(() => setAttempt((count) => count + 1), []);
   const [result, setResult] = useState<{
     path: string;
     attempt: number;
@@ -75,7 +76,7 @@ export function useAccountingQuery<T>(path: string) {
     data: match?.data,
     error: match?.attempt === attempt ? match?.error : undefined,
     loading: Boolean(path) && match?.attempt !== attempt,
-    refresh: () => setAttempt((count) => count + 1),
+    refresh,
   };
 }
 

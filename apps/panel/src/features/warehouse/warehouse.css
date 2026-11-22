@@ -1,0 +1,137 @@
+.inventory-workspace > .ops-page {
+  padding: 0;
+  width: auto;
+}
+.warehouse-section,
+.warehouse-fields,
+.warehouse-panel,
+.warehouse-lines {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.warehouse-section {
+  padding-top: 1rem;
+}
+.warehouse-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.warehouse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.warehouse-grid.is-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.warehouse-line,
+.warehouse-preview {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid var(--line, #e1e2d8);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+}
+.warehouse-line header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.warehouse-preview {
+  background: var(--paper, #f6f5f0);
+}
+.warehouse-preview p,
+.warehouse-preview ul {
+  margin: 0;
+}
+.warehouse-preview ul {
+  padding-inline-start: 1.2rem;
+}
+.warehouse-list {
+  padding: 0;
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e1e2d8);
+  background: var(--surface, #fff);
+  list-style: none;
+}
+.warehouse-list > li {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.65rem 0.9rem;
+}
+.warehouse-list > li + li {
+  border-top: 1px solid var(--line, #e1e2d8);
+}
+.warehouse-list > li > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.warehouse-list small {
+  display: block;
+  color: var(--muted, #586474);
+}
+.warehouse-list a:hover,
+.warehouse-list a:focus-visible,
+.warehouse-link:hover,
+.warehouse-link:focus-visible {
+  text-decoration: underline;
+}
+.warehouse-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 0.35rem;
+  min-height: 2rem;
+  color: var(--accent, #b93018);
+  font-weight: 700;
+}
+.warehouse-message {
+  color: #315839;
+  margin: 0.65rem 0;
+}
+.warehouse-panel h2,
+.warehouse-panel h3,
+.warehouse-section h2,
+.warehouse-section h3 {
+  margin: 0;
+}
+.warehouse-edit-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.42fr) auto;
+  align-items: end;
+  gap: 0.65rem;
+}
+.warehouse-edit-line.is-tool {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.warehouse-plan-table th,
+.warehouse-plan-table td {
+  white-space: nowrap;
+}
+.warehouse-detail-list {
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 620px) {
+  .warehouse-grid,
+  .warehouse-grid.is-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .warehouse-list > li {
+    gap: 0.55rem;
+    padding: 0.65rem;
+  }
+  .warehouse-list > li > svg {
+    display: none;
+  }
+  .warehouse-edit-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .warehouse-edit-line > :first-child:not(:nth-last-child(2)) {
+    grid-column: 1 / -1;
+  }
+}

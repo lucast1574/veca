@@ -20,6 +20,8 @@ import {
   type InvoiceStatus,
 } from "@veca/content";
 import { Database } from "../database/database.module";
+import { WarehouseService } from "../inventory/warehouse.service";
+import { InventoryService } from "../inventory/inventory.service";
 import { CrmRepository } from "../crm/crm.repository";
 import { StorageService } from "../media/storage.service";
 import { limaDate } from "../dispatch/guide-provider";
@@ -86,6 +88,8 @@ export class AccountingService {
     private readonly crm: CrmRepository,
     private readonly fiscal: InvoiceProvider,
     private readonly storage: StorageService,
+    private readonly inventory: InventoryService,
+    private readonly warehouse: WarehouseService,
   ) {}
 
   get enabled() {
@@ -383,6 +387,43 @@ export class AccountingService {
     return invoiceView(next);
   }
 
+  async costOrigins() {
+    const [purchases, dispatches] = await Promise.all([
+      this.db.db
+        .collection("warehouse_purchases")
+        .find({ cancelled: { $ne: true }, requestedOnly: { $ne: true } })
+        .project({ supplier: 1, createdAt: 1, workName: 1 })
+        .sort({ _id: -1 })
+        .limit(300)
+        .toArray(),
+      this.db.db
+        .collection("dispatches")
+        .find({ demo: { $ne: true } })
+        .project({ guideNumber: 1, workName: 1, "data.transferAt": 1 })
+        .sort({ _id: -1 })
+        .limit(300)
+        .toArray(),
+    ]);
+    return {
+      purchases: purchases.map((row) => ({
+        value: String(row._id),
+        label: [row.supplier, row.workName, row.createdAt?.slice(0, 10)]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+      dispatches: dispatches.map((row) => ({
+        value: String(row._id),
+        label: [
+          row.guideNumber,
+          row.workName,
+          row.data?.transferAt?.slice(0, 10),
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    };
+  }
+
   async listCosts(page: number, month?: string) {
     const rows = await this.costs
       .find(month ? { date: monthBounds(month) } : {})
@@ -425,7 +466,14 @@ export class AccountingService {
     const fields = await this.costFields(data);
     const row = await this.costs.findOneAndUpdate(
       { _id: new ObjectId(id), version, reviewed: false },
-      { $set: fields, $inc: { version: 1 } },
+      {
+        $set: fields,
+        $unset: {
+          ...(data.purchaseId ? {} : { purchaseId: "" }),
+          ...(data.dispatchId ? {} : { dispatchId: "" }),
+        },
+        $inc: { version: 1 },
+      },
       { returnDocument: "after" },
     );
     if (!row)
@@ -436,6 +484,31 @@ export class AccountingService {
   private async costFields(data: CostInput) {
     if (data.date > limaDate())
       throw new BadRequestException("La fecha del gasto no puede ser futura.");
+    if (data.purchaseId) {
+      const purchase = await this.warehouse.purchase(data.purchaseId);
+      if (
+        ["cancelled", "requested"].includes(purchase.status) ||
+        data.kind === "materials"
+      )
+        throw new BadRequestException(
+          "Selecciona una compra vigente para el comprobante.",
+        );
+    }
+    if (data.dispatchId) {
+      const dispatch = await this.db.db
+        .collection("dispatches")
+        .findOne({ _id: new ObjectId(data.dispatchId), demo: { $ne: true } });
+      if (
+        !dispatch ||
+        (data.allocations.length &&
+          !data.allocations.some(
+            (row) => row.workId.toLowerCase() === dispatch.leadId,
+          ))
+      )
+        throw new BadRequestException(
+          "El despacho debe corresponder a una de las obras asignadas.",
+        );
+    }
     const allocations = await Promise.all(
       data.allocations.map(async ({ workId, cents }) => {
         const work = await this.work(workId);
@@ -633,7 +706,8 @@ export class AccountingService {
   async margin(workId: string): Promise<AccountingMargin> {
     const work = await this.work(workId);
     if (!work) throw new NotFoundException("Obra no encontrada.");
-    const [sales, costs] = await Promise.all([
+    await this.inventory.flush();
+    const [sales, valuation, plan] = await Promise.all([
       this.invoices
         .aggregate<{
           sales: number;
@@ -651,34 +725,95 @@ export class AccountingService {
           },
         ])
         .next(),
-      this.costs
+      this.inventory.ledger
         .aggregate<{
           costs: number;
           count: number;
+          since: string | null;
+          unvalued: number;
         }>([
           {
-            $match: { kind: { $ne: "purchase" }, "allocations.workId": workId },
+            $match: {
+              leadId: workId,
+              kind: { $in: ["consumption", "return"] },
+            },
           },
-          { $unwind: "$allocations" },
-          { $match: { "allocations.workId": workId } },
           {
             $group: {
               _id: null,
-              costs: { $sum: "$allocations.cents" },
-              count: { $sum: 1 },
+              costs: { $sum: "$costCents" },
+              count: {
+                $sum: { $cond: [{ $gt: ["$valuedQuantity", 0] }, 1, 0] },
+              },
+              since: {
+                $min: { $cond: [{ $gt: ["$valuedQuantity", 0] }, "$at", null] },
+              },
+              unvalued: {
+                $sum: {
+                  $ifNull: [
+                    "$unvaluedQuantity",
+                    {
+                      $cond: [
+                        { $eq: ["$kind", "consumption"] },
+                        "$quantity",
+                        { $multiply: ["$quantity", -1] },
+                      ],
+                    },
+                  ],
+                },
+              },
             },
           },
         ])
         .next(),
+      this.warehouse.plan(workId),
     ]);
+    const firstValuation = valuation?.since
+      ? limaDate(new Date(valuation.since))
+      : "";
+    const costs = await this.costs
+      .aggregate<{ costs: number; count: number; manual: number }>([
+        { $match: { kind: { $ne: "purchase" }, "allocations.workId": workId } },
+        { $unwind: "$allocations" },
+        { $match: { "allocations.workId": workId } },
+        {
+          $set: {
+            duplicateRisk: firstValuation
+              ? {
+                  $and: [
+                    { $eq: ["$kind", "materials"] },
+                    { $gte: ["$date", firstValuation] },
+                  ],
+                }
+              : false,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            costs: {
+              $sum: { $cond: ["$duplicateRisk", 0, "$allocations.cents"] },
+            },
+            count: { $sum: { $cond: ["$duplicateRisk", 0, 1] } },
+            manual: {
+              $sum: { $cond: ["$duplicateRisk", "$allocations.cents", 0] },
+            },
+          },
+        },
+      ])
+      .next();
     return {
       workId,
       workName: work.name,
       sales: sales?.sales || 0,
       paid: sales?.paid || 0,
       balance: sales?.balance || 0,
-      costs: costs?.costs || 0,
-      costCount: costs?.count || 0,
+      costs: (costs?.costs || 0) + (valuation?.costs || 0),
+      costCount: (costs?.count || 0) + (valuation?.count || 0),
+      materialCosts: valuation?.costs || 0,
+      budgetCents: plan.budgetCents,
+      pendingValuation: (valuation?.unvalued || 0) > 0.0001,
+      manualMaterialsToReview: costs?.manual || 0,
     };
   }
 }

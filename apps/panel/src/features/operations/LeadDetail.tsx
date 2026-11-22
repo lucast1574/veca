@@ -48,6 +48,7 @@ import {
 import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
+import { WorkSupply } from "../warehouse/WorkSupply";
 import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
 import "./lead-detail.css";
@@ -717,6 +718,10 @@ export function LeadDetail({
       )}
       {tab === "materials" && inventoryAccess && (
         <>
+          {!demo &&
+            ["coordination", "execution", "completed"].includes(lead.stage) && (
+              <WorkSupply id={lead.id} />
+            )}
           <section className="ops-card">
             <div className="ops-card-heading">
               <div>

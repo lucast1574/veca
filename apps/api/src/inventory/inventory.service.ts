@@ -13,16 +13,64 @@ import {
   movementSchema,
   type Material,
   type Movement,
+  stockCount,
+  inventoryImport,
 } from "@veca/content";
 import { Database } from "../database/database.module";
 import { parse } from "../common/validation";
 import { CrmRepository } from "../crm/crm.repository";
-type StoredMovement = Movement & { _id: string; fingerprint: string };
-type MaterialDocument = Omit<Material, "id" | "balance" | "minimum"> & {
+type StoredMovement = Movement & {
+  _id: string;
+  fingerprint: string;
+  returnedUse?: number;
+};
+type Stock = { quantity: number; valued: number; cents: number };
+type StockOrigin = {
+  unitCents?: number;
+  purchaseId?: string;
+  dispatchId?: string;
+  count?: { version: number; counted: number };
+};
+const emptyStock: Stock = { quantity: 0, valued: 0, cents: 0 };
+const ratio = (amount: number, numerator: number, divisor: number) =>
+  Number(
+    (BigInt(amount) * BigInt(numerator) + BigInt(divisor) / 2n) /
+      BigInt(divisor),
+  );
+const stock = (quantity: number, unitCents?: number): Stock => ({
+  quantity,
+  valued: unitCents === undefined ? 0 : quantity,
+  cents: ratio(quantity, unitCents ?? 0, 1000),
+});
+const combine = (a: Stock, b: Stock): Stock => ({
+  quantity: a.quantity + b.quantity,
+  valued: a.valued + b.valued,
+  cents: a.cents + b.cents,
+});
+function withdraw(from: Stock, quantity: number) {
+  if (quantity === from.quantity) return { taken: from, remaining: emptyStock };
+  if (!quantity) return { taken: emptyStock, remaining: from };
+  const valued = ratio(from.valued, quantity, from.quantity);
+  const cents = from.valued ? ratio(from.cents, valued, from.valued) : 0;
+  return {
+    taken: { quantity, valued, cents },
+    remaining: {
+      quantity: from.quantity - quantity,
+      valued: from.valued - valued,
+      cents: from.cents - cents,
+    },
+  };
+}
+type MaterialDocument = Omit<
+  Material,
+  "id" | "balance" | "minimum" | "unitCostCents"
+> & {
   _id: ObjectId;
   balanceMilli: number;
   minimumMilli: number;
   pending: StoredMovement[];
+  stockValue?: Pick<Stock, "valued" | "cents">;
+  workStock?: Record<string, Stock>;
 };
 @Injectable()
 export class InventoryService
@@ -54,12 +102,24 @@ export class InventoryService
     return new ObjectId(id);
   }
   view(doc: MaterialDocument): Material {
-    const { _id, balanceMilli, minimumMilli, pending, ...rest } = doc;
+    const {
+      _id,
+      balanceMilli,
+      minimumMilli,
+      pending,
+      stockValue,
+      workStock,
+      ...rest
+    } = doc;
     return {
       ...rest,
       id: String(_id),
       balance: balanceMilli / 1000,
       minimum: minimumMilli / 1000,
+      unitCostCents:
+        balanceMilli > 0 && stockValue?.valued === balanceMilli
+          ? Math.round((stockValue.cents * 1000) / balanceMilli)
+          : undefined,
     };
   }
   /** Stock and its pending audit event commit together in one MongoDB document.
@@ -129,44 +189,270 @@ export class InventoryService
     this.events.emit("inventory");
     return this.view(doc);
   }
-  async move(materialId: string, input: unknown, actor: string) {
+  async importMaterials(input: unknown) {
+    const { materials } = parse(inventoryImport, input);
+    const codes = materials.map((row) => row.sku);
+    if (new Set(codes).size !== codes.length)
+      throw new BadRequestException("El archivo contiene códigos repetidos.");
+    const existing = await this.materials
+      .find({ sku: { $in: codes } })
+      .toArray();
+    const byCode = new Map(existing.map((row) => [row.sku, row]));
+    for (const row of materials) {
+      const current = byCode.get(row.sku);
+      if (current && current.unit !== row.unit)
+        throw new BadRequestException(
+          `La unidad de ${row.sku} debe coincidir con la del catálogo.`,
+        );
+    }
+    const now = new Date().toISOString();
+    const result = await this.materials
+      .bulkWrite(
+        materials.map(({ minimum, ...row }) => ({
+          updateOne: {
+            filter: { sku: row.sku, unit: row.unit },
+            update: {
+              $set: {
+                ...row,
+                minimumMilli: Math.round(minimum * 1000),
+                updatedAt: now,
+              },
+              $setOnInsert: { balanceMilli: 0, pending: [] },
+              $inc: { version: 1 },
+            },
+            upsert: true,
+          },
+        })),
+      )
+      .catch((error) => {
+        if ((error as { code?: number }).code === 11000)
+          throw new ConflictException(
+            "El catálogo cambió durante la carga. Revisa las unidades y vuelve a importar.",
+          );
+        throw error;
+      });
+    this.events.emit("inventory");
+    return { created: result.upsertedCount, updated: result.matchedCount };
+  }
+
+  async count(materialId: string, input: unknown, actor: string) {
+    const { operationId, version, counted, reason, unitCents } = parse(
+      stockCount,
+      input,
+    );
+    return this.move(
+      materialId,
+      { operationId, kind: "receipt", quantity: 1, leadId: null, reason },
+      actor,
+      {
+        count: { version, counted },
+        unitCents,
+      },
+    );
+  }
+
+  async move(
+    materialId: string,
+    input: unknown,
+    actor: string,
+    origin: StockOrigin = {},
+  ) {
     const data = parse(movementSchema, input);
     const id = this.id(materialId);
+    materialId = String(id);
     const key = `${materialId}:${data.operationId}`;
-    const fingerprint = JSON.stringify(data);
+    const fingerprint = JSON.stringify(
+      Object.keys(origin).length ? { data, origin } : data,
+    );
     await this.flush(id);
-    const old = await this.ledger.findOne({ _id: key });
-    if (old) {
-      if (old.fingerprint !== fingerprint)
+    const readPrevious = async () => {
+      const entry = await this.ledger.findOne({ _id: key });
+      if (entry && entry.fingerprint !== fingerprint)
         throw new ConflictException(
           "La referencia de este movimiento ya fue utilizada con otros datos.",
         );
-      return old;
-    }
-    if (data.kind !== "receipt" && !data.leadId)
-      throw new BadRequestException(
-        "Asocia el consumo o devolución a una obra.",
-      );
-    if (data.leadId) {
+      return entry;
+    };
+    const previous = await readPrevious();
+    if (previous) return previous;
+    if ((data.kind !== "receipt" || origin.dispatchId) && !data.leadId)
+      throw new BadRequestException("Asocia el movimiento a una obra.");
+    if (data.leadId && !origin.purchaseId) {
       const lead = await this.leads.get(data.leadId);
-      if (!["execution", "completed"].includes(lead.stage))
+      const stages = origin.dispatchId
+        ? ["coordination", "execution", "completed"]
+        : ["execution", "completed"];
+      if (!stages.includes(lead.stage))
         throw new BadRequestException(
-          "Registra materiales cuando la obra esté en ejecución o realizada.",
+          "Revisa la etapa de la obra antes de mover sus materiales.",
         );
     }
     const doc = await this.materials.findOne({ _id: id });
     if (!doc) throw new NotFoundException("Material no encontrado.");
-    const pending = doc.pending.find((e) => e._id === key);
+    const pending = doc.pending.find((entry) => entry._id === key);
     if (pending) {
-      if (pending.fingerprint !== fingerprint)
-        throw new ConflictException(
-          "Movimiento repetido con datos diferentes.",
-        );
       await this.flush(id);
-      return pending;
+      return readPrevious();
     }
-    const milli = Math.round(data.quantity * 1000),
-      delta = data.kind === "consumption" ? -milli : milli;
+    if (origin.count && origin.count.version !== doc.version)
+      throw new ConflictException(
+        "El saldo cambió. Vuelve a abrir el conteo antes de confirmarlo.",
+      );
+
+    const milli = Math.round(data.quantity * 1000);
+    let warehouse: Stock = {
+      ...emptyStock,
+      ...doc.stockValue,
+      quantity: doc.balanceMilli,
+    };
+    const workId = data.leadId || "";
+    const workStock = { ...doc.workStock };
+    let held = workStock[workId] || emptyStock;
+    let measured = emptyStock;
+    let consumed = emptyStock;
+    let kind: Movement["kind"] = data.kind;
+    let reportedQuantity = milli;
+
+    if (origin.count) {
+      kind = "count";
+      const counted = Math.round(origin.count.counted * 1000);
+      reportedQuantity = Math.abs(counted - warehouse.quantity);
+      if (counted < warehouse.quantity)
+        warehouse = withdraw(warehouse, warehouse.quantity - counted).remaining;
+      else
+        warehouse = combine(
+          warehouse,
+          stock(counted - warehouse.quantity, origin.unitCents),
+        );
+      if (origin.unitCents !== undefined) {
+        warehouse = combine(
+          { ...warehouse, quantity: warehouse.valued },
+          stock(warehouse.quantity - warehouse.valued, origin.unitCents),
+        );
+      }
+    } else if (origin.dispatchId || data.kind === "consumption") {
+      const fromWork = origin.dispatchId ? 0 : Math.min(held.quantity, milli);
+      if (warehouse.quantity < milli - fromWork)
+        throw new ConflictException("Stock insuficiente para este movimiento.");
+      const workWithdrawal = withdraw(held, fromWork);
+      const warehouseWithdrawal = withdraw(warehouse, milli - fromWork);
+      held = workWithdrawal.remaining;
+      warehouse = warehouseWithdrawal.remaining;
+      measured = combine(workWithdrawal.taken, warehouseWithdrawal.taken);
+      if (origin.dispatchId) {
+        kind = "dispatch";
+        held = combine(held, measured);
+      } else {
+        consumed = measured;
+      }
+    } else if (data.kind === "return") {
+      const heldReturn = withdraw(held, Math.min(held.quantity, milli));
+      held = heldReturn.remaining;
+      const remainder = milli - heldReturn.taken.quantity;
+      if (remainder) {
+        await this.flush(id);
+        const history = await this.ledger
+          .aggregate<{ quantity: number; valued: number; cents: number }>([
+            {
+              $match: {
+                materialId,
+                leadId: workId,
+                kind: { $in: ["consumption", "return"] },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                quantity: {
+                  $sum: {
+                    $cond: [
+                      { $eq: ["$kind", "consumption"] },
+                      "$quantity",
+                      {
+                        $multiply: [
+                          -1,
+                          { $ifNull: ["$returnedUse", "$quantity"] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                valued: {
+                  $sum: {
+                    $subtract: [
+                      {
+                        $cond: [
+                          { $eq: ["$kind", "consumption"] },
+                          "$quantity",
+                          {
+                            $multiply: [
+                              -1,
+                              { $ifNull: ["$returnedUse", "$quantity"] },
+                            ],
+                          },
+                        ],
+                      },
+                      {
+                        $ifNull: [
+                          "$unvaluedQuantity",
+                          {
+                            $cond: [
+                              { $eq: ["$kind", "consumption"] },
+                              "$quantity",
+                              {
+                                $multiply: [
+                                  -1,
+                                  { $ifNull: ["$returnedUse", "$quantity"] },
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                cents: { $sum: "$costCents" },
+              },
+            },
+          ])
+          .next();
+        const quantity = Math.max(
+          0,
+          Math.round((history?.quantity ?? 0) * 1000),
+        );
+        if (quantity < remainder)
+          throw new BadRequestException(
+            "La devolución supera los materiales entregados o consumidos por esta obra.",
+          );
+        const valued = Math.max(
+          0,
+          Math.min(quantity, Math.round((history?.valued ?? 0) * 1000)),
+        );
+        const returned = withdraw(
+          { quantity, valued, cents: Math.max(0, history?.cents ?? 0) },
+          remainder,
+        ).taken;
+        consumed = {
+          quantity: -returned.quantity,
+          valued: -returned.valued,
+          cents: -returned.cents,
+        };
+      }
+      measured = combine(heldReturn.taken, {
+        quantity: -consumed.quantity,
+        valued: -consumed.valued,
+        cents: -consumed.cents,
+      });
+      warehouse = combine(warehouse, measured);
+    } else {
+      measured = stock(milli, origin.unitCents);
+      warehouse = combine(warehouse, measured);
+    }
+    if (workId) {
+      if (held.quantity) workStock[workId] = held;
+      else delete workStock[workId];
+    }
     const event: StoredMovement = {
       _id: key,
       id: key,
@@ -175,52 +461,51 @@ export class InventoryService
       materialName: doc.name,
       unit: doc.unit,
       leadId: data.leadId,
-      kind: data.kind,
-      quantity: milli / 1000,
+      kind,
+      quantity: reportedQuantity / 1000,
       reason: data.reason,
       actor,
       at: new Date().toISOString(),
-      balanceAfter: 0,
+      balanceAfter: warehouse.quantity / 1000,
+      costCents: consumed.cents,
+      unvaluedQuantity: (consumed.quantity - consumed.valued) / 1000,
+      valuedQuantity: consumed.valued / 1000,
+      ...(origin.purchaseId ? { purchaseId: origin.purchaseId } : {}),
+      ...(origin.dispatchId ? { dispatchId: origin.dispatchId } : {}),
+      ...(origin.count
+        ? {
+            counted: origin.count.counted,
+            previousBalance: doc.balanceMilli / 1000,
+          }
+        : {}),
+      ...(kind === "return" ? { returnedUse: -consumed.quantity / 1000 } : {}),
     };
-    // Optimistic revision makes balanceAfter exact even when other operators use
-    // the same material simultaneously. Reattempting is safe with operationId.
-    const result = await this.materials.findOneAndUpdate(
+    const result = await this.materials.updateOne(
+      { _id: id, version: doc.version, "pending._id": { $ne: key } },
       {
-        _id: id,
-        version: doc.version,
-        "pending._id": { $ne: key },
-        ...(delta < 0 ? { balanceMilli: { $gte: milli } } : {}),
-      },
-      {
-        $inc: { balanceMilli: delta, version: 1 },
-        $set: { updatedAt: event.at },
-        $push: {
-          pending: {
-            ...event,
-            balanceAfter: (doc.balanceMilli + delta) / 1000,
-          },
+        $inc: { version: 1 },
+        $set: {
+          balanceMilli: warehouse.quantity,
+          stockValue: { valued: warehouse.valued, cents: warehouse.cents },
+          workStock,
+          updatedAt: event.at,
         },
+        $push: { pending: event },
       },
-      { returnDocument: "after" },
     );
-    if (!result) {
+    if (!result.modifiedCount) {
       await this.flush(id);
-      const duplicate = await this.ledger.findOne({ _id: key });
-      if (duplicate) {
-        if (duplicate.fingerprint !== fingerprint)
-          throw new ConflictException(
-            "Movimiento repetido con datos diferentes.",
-          );
-        return duplicate;
-      }
+      const repeated = await readPrevious();
+      if (repeated) return repeated;
       throw new ConflictException(
-        "Stock insuficiente o actualizado por otra persona. Revisa el saldo y vuelve a intentar.",
+        "El saldo cambió. Vuelve a revisar el movimiento.",
       );
     }
     this.events.emit("inventory");
     await this.flush(id);
-    return { ...event, balanceAfter: result.balanceMilli / 1000 };
+    return event;
   }
+
   async movements(leadId?: string, materialId?: string, page = 1) {
     if (leadId) await this.leads.get(leadId);
     await this.flush();

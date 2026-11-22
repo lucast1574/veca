@@ -8,6 +8,8 @@ import {
 import { ObjectId } from "mongodb";
 import {
   dispatchSchema,
+  guideUnitForMaterial,
+  quantitySchema,
   isDemoLead,
   DEMO_CASES,
   type DemoLink,
@@ -15,8 +17,9 @@ import {
   type DispatchInput,
   type DispatchStatus,
 } from "@veca/content";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { CrmRepository } from "../crm/crm.repository";
+import { InventoryService } from "../inventory/inventory.service";
 import { Database } from "../database/database.module";
 import { parse } from "../common/validation";
 import {
@@ -38,6 +41,7 @@ type DispatchRecord = {
   guideNumber: string;
   externalId?: string;
   attemptKey?: string;
+  departedAt?: string;
   createdAt: string;
   updatedAt: string;
   events: { action: string; actor: string; at: string }[];
@@ -70,6 +74,7 @@ function view(record: DispatchRecord): Dispatch {
       ? "El envío quedó sin confirmar. Administración debe verificarlo antes de volver a emitir."
       : record.observation,
     guideNumber: record.guideNumber,
+    departedAt: record.departedAt,
     canCheckStatus: record.status === "pending" && Boolean(record.externalId),
   };
 }
@@ -124,6 +129,7 @@ export class DispatchService {
     private readonly database: Database,
     private readonly leads: CrmRepository,
     private readonly provider: GuideProvider,
+    private readonly inventory: InventoryService,
   ) {}
 
   private get collection() {
@@ -380,6 +386,7 @@ export class DispatchService {
       throw new BadRequestException(
         "La salida prevista debe ser posterior a la emisión.",
       );
+    await this.stockLines(doc.data.items);
     this.provider.assertReady();
     const attemptKey = randomUUID();
     const locked = await this.change(
@@ -434,6 +441,92 @@ export class DispatchService {
         "La consulta no pudo confirmar la identidad de la guía.",
       );
     return this.recordResult(doc, version, ["pending"], result, actor);
+  }
+
+  private async stockLines(items: DispatchInput["items"]) {
+    const totals = new Map<string, number>();
+    for (const item of items) {
+      if (!item.materialId) continue;
+      const material = await this.inventory.materials.findOne({
+        _id: idOf(item.materialId),
+      });
+      if (
+        !material ||
+        item.code !== material.sku ||
+        item.unitCode !== guideUnitForMaterial[material.unit]
+      )
+        throw new ConflictException(
+          `Revisa el código y la unidad de ${item.description} en Inventario.`,
+        );
+      parse(quantitySchema, item.quantity);
+      const key = String(material._id);
+      totals.set(
+        key,
+        (totals.get(key) || 0) + Math.round(item.quantity * 1000),
+      );
+    }
+    return [...totals].map(([materialId, milli]) => ({
+      materialId,
+      quantity: parse(quantitySchema, milli / 1000),
+    }));
+  }
+
+  async depart(leadId: string, id: string, actor: string) {
+    const row = await this.get(id, leadId);
+    if (row.demo || !accepted.includes(row.status))
+      throw new ConflictException(
+        "Confirma la salida con una guía emitida para una obra real.",
+      );
+    if (row.departedAt) return view(row);
+    const stockLines = await this.stockLines(row.data.items);
+    const lines = stockLines.map(({ materialId, quantity }) => {
+      const hash = createHash("sha256")
+        .update(`dispatch:${row._id}:${materialId}`)
+        .digest("hex");
+      const operationId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+      return { materialId, quantity, operationId };
+    });
+    for (const item of lines) {
+      await this.inventory.flush(idOf(item.materialId));
+      const material = await this.inventory.materials.findOne({
+        _id: idOf(item.materialId),
+      });
+      const exists = await this.inventory.ledger.findOne({
+        _id: `${item.materialId}:${item.operationId}`,
+      });
+      if (
+        !exists &&
+        material &&
+        material.balanceMilli < Math.round(item.quantity * 1000)
+      )
+        throw new ConflictException(
+          `Stock insuficiente de ${material.name}. Revisa el saldo y vuelve a confirmar la salida.`,
+        );
+    }
+    for (const item of lines) {
+      await this.inventory.move(
+        item.materialId,
+        {
+          operationId: item.operationId,
+          kind: "consumption",
+          quantity: item.quantity,
+          leadId: row.leadId,
+          reason: `Salida con guía ${row.guideNumber}`,
+        },
+        actor,
+        { dispatchId: String(row._id) },
+      );
+    }
+    const at = new Date().toISOString();
+    await this.collection.updateOne(
+      { _id: row._id, departedAt: { $exists: false } },
+      {
+        $set: { departedAt: at },
+        $inc: { version: 1 },
+        $push: { events: { action: "depart", actor, at } },
+      },
+    );
+    return view(await this.get(id, leadId));
   }
 
   async download(id: string, leadId?: string) {

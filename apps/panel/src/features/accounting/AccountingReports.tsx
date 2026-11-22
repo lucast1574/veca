@@ -1,3 +1,4 @@
+import { SireReconciliation } from "./SireReconciliation";
 import { useState } from "react";
 import { Select } from "@veca/ui/src/Select";
 import type {
@@ -8,6 +9,7 @@ import type {
 import { Field } from "../../components/ui";
 import {
   accountingPath,
+  amount,
   QueryState,
   Refresh,
   today,
@@ -86,6 +88,7 @@ export function TaxPeriod() {
           </div>
         )}
       </QueryState>
+      <SireReconciliation month={month} key={month} />
     </section>
   );
 }
@@ -141,10 +144,32 @@ export function Margin() {
                     ["Por cobrar", query.data.balance],
                   ]}
                 />
-                <p className="hint">
-                  {query.data.costCount} costos imputados. Registra como consumo
-                  solo los materiales utilizados.
-                </p>
+                <Summary
+                  entries={[
+                    ["Materiales valorizados", query.data.materialCosts],
+                    ...(query.data.budgetCents
+                      ? ([
+                          ["Presupuesto de costos", query.data.budgetCents],
+                          [
+                            "Presupuesto disponible",
+                            query.data.budgetCents - query.data.costs,
+                          ],
+                        ] as [string, number][])
+                      : []),
+                  ]}
+                />
+                {query.data.pendingValuation && (
+                  <p className="hint">
+                    Hay consumos con saldo de origen sin costo registrado.
+                  </p>
+                )}
+                {Boolean(query.data.manualMaterialsToReview) && (
+                  <p className="hint">
+                    {amount(query.data.manualMaterialsToReview)} de consumos
+                    manuales del periodo con valorización automática. Revisa si
+                    corresponden a los mismos movimientos.
+                  </p>
+                )}
               </section>
             )}
           </QueryState>
