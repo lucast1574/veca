@@ -1,0 +1,233 @@
+.accounting-workspace {
+  max-width: 80rem;
+}
+.accounting-title h1 {
+  font-size: clamp(30px, 4vw, 44px);
+  letter-spacing: -0.055em;
+  margin: 0 0 16px;
+}
+.accounting-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  border-bottom: 1px solid var(--panel-edge);
+  margin-bottom: 22px;
+}
+.accounting-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border-bottom: 2px solid transparent;
+  color: var(--panel-secondary);
+  font-weight: 750;
+  text-decoration: none;
+}
+.accounting-tabs a[aria-current] {
+  color: var(--panel-accent);
+  border-color: var(--panel-brand);
+}
+.accounting-tabs a:focus-visible,
+.accounting-refresh:focus-visible,
+.accounting-inline:focus-visible {
+  outline: none;
+  background: var(--panel-accent-soft);
+  text-decoration: underline;
+}
+.accounting-section-head,
+.accounting-tools,
+.accounting-pagination,
+.accounting-retry,
+.accounting-form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.accounting-section-head {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.accounting-section-head h2 {
+  margin: 0;
+  font-size: clamp(20px, 3vw, 25px);
+  letter-spacing: -0.035em;
+}
+.accounting-tools {
+  flex-wrap: nowrap;
+}
+.accounting-tools > .veca-select {
+  width: auto;
+  min-width: 150px;
+}
+.accounting-refresh {
+  background: var(--panel-surface);
+  color: var(--panel-secondary);
+  border: 1px solid var(--panel-edge);
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+}
+.accounting-refresh:hover {
+  color: var(--panel-accent);
+  background: var(--panel-accent-soft);
+}
+.accounting-refresh:disabled {
+  opacity: 0.45;
+}
+.accounting-empty {
+  padding: 18px;
+  margin: 0;
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  color: var(--panel-secondary);
+}
+.accounting-retry {
+  margin-bottom: 12px;
+}
+.accounting-retry .notice {
+  margin: 0;
+  flex: 1;
+}
+.accounting-pagination,
+.accounting-form-actions {
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.accounting-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.accounting-form {
+  max-width: 62rem;
+  padding: 18px;
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+}
+.accounting-form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.accounting-form h3 {
+  margin: 8px 0 10px;
+}
+.accounting-group {
+  margin-top: 12px;
+  border-top: 1px solid var(--panel-edge);
+  padding-top: 10px;
+}
+.accounting-line {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.accounting-line > *,
+.accounting-grid > * {
+  min-width: 0;
+}
+.accounting-line .field {
+  margin: 0;
+}
+.accounting-line .btn {
+  min-height: 39px;
+}
+.accounting-inline {
+  color: var(--panel-accent);
+  font-weight: 750;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.accounting-inline:hover {
+  text-decoration: underline;
+}
+.accounting-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+.accounting-summary > div {
+  background: var(--panel-soft);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 14px;
+}
+.accounting-summary span {
+  display: block;
+  color: var(--panel-secondary);
+}
+.accounting-summary strong,
+.accounting-value {
+  font-variant-numeric: tabular-nums;
+}
+.accounting-summary strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.accounting-list-detail {
+  color: var(--panel-secondary);
+  display: block;
+  margin-top: 3px;
+}
+.accounting-row-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.accounting-file {
+  max-width: 100%;
+}
+.accounting-guide-review {
+  margin-top: 12px;
+}
+@media (max-width: 650px) {
+  .accounting-tabs {
+    gap: 0 13px;
+    font-size: 13px;
+  }
+  .accounting-section-head {
+    align-items: start;
+  }
+  .accounting-grid,
+  .accounting-summary {
+    grid-template-columns: 1fr;
+  }
+  .accounting-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .accounting-line > :first-child {
+    grid-column: 1 / -1;
+  }
+  .accounting-form {
+    padding: 12px;
+  }
+}
+.accounting-form-fields {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.accounting-filters {
+  max-width: 14rem;
+  margin-bottom: 12px;
+}
+.accounting-grid .accounting-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr));
+}
+a.accounting-inline.btn-primary {
+  color: var(--panel-btn-primary-text, #fff);
+}

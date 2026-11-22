@@ -65,6 +65,24 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
       options.headers.Authorization,
       "Bearer asu_live_local_contract_mock",
     );
+    if (path === "/documents" && options.method === "POST") {
+      const attempt = options.headers["Idempotency-Key"];
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.documentType, "01");
+      assert.equal(payload.ruc, "20616656156");
+      assert.equal(payload.items[0].includesTax, false);
+      const issued = {
+        id: randomUUID(),
+        issuerRuc: payload.ruc,
+        type: "01",
+        test: false,
+        status: "accepted",
+        fullNumber: "F001-90",
+        total: 118,
+      };
+      invoices.set(attempt, issued);
+      return Response.json(issued, { status: 202 });
+    }
     if (path === "/guides" && options.method === "POST") {
       assert.equal(id, undefined, "Se envió la guía más de una vez.");
       assert.match(options.headers["Idempotency-Key"], /^[\w-]{36}$/);

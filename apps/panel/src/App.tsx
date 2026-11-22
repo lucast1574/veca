@@ -13,7 +13,7 @@ import { Administration } from "./features/administration/Administration";
 import { type AuthSession } from "@veca/content";
 
 import { PrivateGallery } from "./features/gallery/PrivateGallery";
-import { GuideAccounting } from "./features/dispatch/GuideAccounting";
+import { AccountingWorkspace } from "./features/accounting/AccountingWorkspace";
 import { Operations } from "./features/operations/Operations";
 
 import { useEffect, useMemo, useState } from "react";
@@ -185,7 +185,7 @@ export default function App() {
           canOpenProjects={can("projects")}
         />
       ) : view === "accounting" ? (
-        <GuideAccounting />
+        <AccountingWorkspace />
       ) : view === "leads" || view === "inventory" ? (
         <Operations
           view={view}

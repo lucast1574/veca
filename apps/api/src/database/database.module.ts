@@ -40,6 +40,24 @@ export class Database implements OnModuleInit, OnModuleDestroy {
       this.db
         .collection("crm_leads")
         .createIndex({ submissionId: 1 }, { unique: true }),
+      this.db.collection("accounting_invoices").createIndex({ createdAt: -1 }),
+      this.db.collection("accounting_invoices").createIndex(
+        { workId: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { status: "requested" },
+        },
+      ),
+      this.db
+        .collection("accounting_invoices")
+        .createIndex({ workId: 1, status: 1 }),
+      this.db
+        .collection("accounting_invoices")
+        .createIndex({ issueDate: 1, status: 1 }),
+      this.db.collection("accounting_costs").createIndex({ date: -1 }),
+      this.db
+        .collection("accounting_costs")
+        .createIndex({ "allocations.workId": 1 }),
       this.db
         .collection("dispatches")
         .createIndex({ leadId: 1, updatedAt: -1 }),

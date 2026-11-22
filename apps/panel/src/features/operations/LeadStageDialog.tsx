@@ -79,6 +79,17 @@ export function LeadStageDialog({
             from <= phase && (from === phase || !initial[key].trim()),
         );
 
+  const completeFields = relevant.every(({ key }) => draft[key].trim());
+  const completeWork =
+    phase < 2 ||
+    stage === "discarded" ||
+    Boolean(
+      draft.district.trim().length >= 2 &&
+      draft.requestType &&
+      draft.idea.trim().length >= 10,
+    );
+  const ready = completeFields && completeWork;
+
   function close() {
     if (
       !busy &&
@@ -99,7 +110,7 @@ export function LeadStageDialog({
           <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button type="submit" form={id} disabled={busy}>
+          <Button type="submit" form={id} disabled={busy || !ready}>
             {busy ? "Guardando…" : "Confirmar cambio"}
           </Button>
         </footer>
@@ -109,7 +120,7 @@ export function LeadStageDialog({
         id={id}
         onSubmit={async (event) => {
           event.preventDefault();
-          if (busy) return;
+          if (busy || !ready) return;
           setBusy(true);
           setError("");
           try {
@@ -195,6 +206,9 @@ export function LeadStageDialog({
             </Field>
           );
         })}
+        {!ready && (
+          <p className="hint">Completa los campos obligatorios para avanzar.</p>
+        )}
         {error && <Notice error>{error}</Notice>}
       </form>
     </Modal>

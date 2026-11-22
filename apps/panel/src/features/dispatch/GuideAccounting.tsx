@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import {
   DISPATCH_STATUS,
@@ -16,6 +16,13 @@ import {
   transferLabel,
   transportLabel,
 } from "./shared";
+import {
+  inquiryTimeout,
+  Pagination,
+  QueryState,
+  Refresh,
+  useAccountingQuery,
+} from "../accounting/accounting-shared";
 import "./dispatch.css";
 
 type QueueRow = Pick<
@@ -31,42 +38,19 @@ type QueueRow = Pick<
 type QueuePage = { items: (QueueRow & { issue: string })[]; hasMore: boolean };
 type GuideDetail = { dispatch: Dispatch; issues: string[] };
 
-export function GuideAccounting() {
-  const [selected, setSelected] = useState(
-    () => location.hash.split("/")[1] || "",
-  );
-  const [rows, setRows] = useState<QueuePage | null>(null);
-  const [error, setError] = useState("");
+export function GuideAccounting({ selected }: { selected: string }) {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const latestLoad = useRef(0);
-  useEffect(() => {
-    const sync = () => setSelected(location.hash.split("/")[1] || "");
-    window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
-  }, []);
-  const load = useCallback(async () => {
-    const sequence = ++latestLoad.current;
-    try {
-      const next = await api<QueuePage>(
-        `${guidePath}?status=${filter}&page=${page}`,
-      );
-      if (sequence !== latestLoad.current) return;
-      setRows(next);
-      setError("");
-    } catch (e) {
-      if (sequence === latestLoad.current) setError((e as Error).message);
-    }
-  }, [filter, page]);
-  useEffect(() => {
-    if (!selected) void load();
-  }, [load, selected]);
+  const query = useAccountingQuery<QueuePage>(
+    selected ? "" : `${guidePath}?status=${filter}&page=${page}`,
+  );
+  const rows = query.data;
   if (selected) return <GuideReview key={selected} id={selected} />;
   return (
-    <main className="ops-page dispatch-accounting">
-      <div className="dispatch-toolbar">
-        <h1>Guías de remisión</h1>
-        <div className="dispatch-actions">
+    <section aria-labelledby="accounting-guides">
+      <div className="accounting-section-head">
+        <h2 id="accounting-guides">Guías de remisión</h2>
+        <div className="accounting-tools">
           <Select
             label="Estado de las guías"
             value={filter}
@@ -76,75 +60,48 @@ export function GuideAccounting() {
               { value: "issued", label: "Emitidas" },
             ]}
             onChange={(value) => {
-              setRows(null);
-              setPage(1);
+              if (filter === value && page === 1) return;
               setFilter(value);
+              setPage(1);
             }}
           />
-          <Button type="button" variant="ghost" onClick={() => void load()}>
-            Actualizar
-          </Button>
+          <Refresh loading={query.loading} onClick={query.refresh} />
         </div>
       </div>
-      {error && <Notice error>{error}</Notice>}
-      {!error && !rows && <p role="status">Cargando guías…</p>}
-      {rows?.items.length === 0 && (
-        <p className="hint">
-          Los despachos enviados desde Leads aparecerán aquí.
-        </p>
-      )}
-      {rows && rows.items.length > 0 && (
-        <ul className="dispatch-list dispatch-queue">
-          {rows.items.map((row) => (
-            <li key={row.id}>
-              <div>
-                <strong>{row.workName}</strong>
-                <small>
-                  {transportLabel(row.transportMode)}
-                  {row.guideNumber && ` · ${row.guideNumber}`}
-                </small>
-              </div>
-              <div>{transferLabel(row.transferAt)}</div>
-              <span className="dispatch-pill" data-state={row.status}>
-                {row.issue || DISPATCH_STATUS[row.status]}
-              </span>
-              <a className="dispatch-link" href={`#accounting/${row.id}`}>
-                {row.status === "review" ? "Revisar" : "Ver despacho"}{" "}
-                <ChevronRight size={15} />
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-      {(page > 1 || rows?.hasMore) && (
-        <nav
-          className="dispatch-actions dispatch-pagination"
-          aria-label="Paginación de guías"
-        >
-          <Button
-            variant="ghost"
-            disabled={page === 1}
-            onClick={() => {
-              setRows(null);
-              setPage(page - 1);
-            }}
-          >
-            Anterior
-          </Button>
-          <span>Página {page}</span>
-          <Button
-            variant="ghost"
-            disabled={!rows?.hasMore}
-            onClick={() => {
-              setRows(null);
-              setPage(page + 1);
-            }}
-          >
-            Siguiente
-          </Button>
-        </nav>
-      )}
-    </main>
+      <QueryState {...query} empty="No hay guías para este filtro.">
+        {rows && rows.items.length > 0 && (
+          <ul className="dispatch-list dispatch-queue">
+            {rows.items.map((row) => (
+              <li key={row.id}>
+                <div>
+                  <strong>{row.workName}</strong>
+                  <small>
+                    {transportLabel(row.transportMode)}
+                    {row.guideNumber && ` · ${row.guideNumber}`}
+                  </small>
+                </div>
+                <div>{transferLabel(row.transferAt)}</div>
+                <span className="dispatch-pill" data-state={row.status}>
+                  {row.issue || DISPATCH_STATUS[row.status]}
+                </span>
+                <a
+                  className="dispatch-link"
+                  href={`#accounting/guias/${row.id}`}
+                >
+                  {row.status === "review" ? "Revisar" : "Ver despacho"}{" "}
+                  <ChevronRight size={15} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryState>
+      <Pagination
+        page={page}
+        hasMore={Boolean(rows?.hasMore)}
+        change={setPage}
+      />
+    </section>
   );
 }
 
@@ -158,7 +115,7 @@ function GuideReview({ id }: { id: string }) {
   const [observation, setObservation] = useState("");
   const load = useCallback(async () => {
     try {
-      setData(await api<GuideDetail>(path));
+      setData(await api<GuideDetail>(path, { signal: inquiryTimeout() }));
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -195,8 +152,8 @@ function GuideReview({ id }: { id: string }) {
     row?.status === "review" && !row.demo && !data?.issues.length;
   const external = row?.transportMode === "01";
   return (
-    <main className="ops-page dispatch-accounting dispatch-review">
-      <a className="dispatch-link" href="#accounting">
+    <section className="dispatch-review accounting-guide-review">
+      <a className="dispatch-link" href="#accounting/guias">
         <ArrowLeft size={16} /> Volver a guías
       </a>
       {error && <Notice error>{error}</Notice>}
@@ -471,6 +428,6 @@ function GuideReview({ id }: { id: string }) {
           )}
         </div>
       )}
-    </main>
+    </section>
   );
 }

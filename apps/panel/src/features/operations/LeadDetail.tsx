@@ -48,6 +48,7 @@ import {
 import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
+import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
 import "./lead-detail.css";
 const contracts = [
@@ -516,6 +517,11 @@ export function LeadDetail({
                     Ver despachos
                   </Button>
                 )}
+                {dispatchAccess &&
+                  !demo &&
+                  ["coordination", "execution", "completed"].includes(
+                    lead.stage,
+                  ) && <WorkInvoiceRequest id={id} />}
               </>
             )}
             {lead.stage !== "discarded" &&
