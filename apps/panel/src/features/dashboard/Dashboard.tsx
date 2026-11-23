@@ -49,7 +49,6 @@ type Summary = {
   }[];
   publishedProjects: number | null;
   pendingUsers: number | null;
-  mail?: { configured: boolean; pending: number };
 };
 export function Dashboard({ user }: { user: SessionUser }) {
   const [data, setData] = useState<Summary | null>(null),
@@ -178,12 +177,6 @@ export function Dashboard({ user }: { user: SessionUser }) {
           </a>
         ))}
       </div>
-      {data?.mail && !data.mail.configured && (
-        <Notice>
-          El envío de correos necesita configuración. Las solicitudes por Google
-          y el trabajo del panel siguen disponibles.
-        </Notice>
-      )}
       {can("leads") && (
         <section className="workspace-pipeline">
           <div className="workspace-section-head">
