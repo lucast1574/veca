@@ -10,7 +10,6 @@ import {
 } from "@veca/content";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
-import { FiscalConnection } from "./FiscalConnection";
 import { DemoWorkspace } from "./DemoWorkspace";
 import "./administration.css";
 
@@ -130,7 +129,6 @@ export function Administration() {
       {!data && busy && <p role="status">Cargando administración…</p>}
       {data && (
         <>
-          <FiscalConnection />
           <section
             className="administration-section"
             aria-labelledby="administration-connections"
