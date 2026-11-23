@@ -42,7 +42,9 @@ export function PendingAccess({
         <h1>
           {session.user.status === "pending"
             ? "Tu cuenta ya está verificada."
-            : "Tu acceso está pausado."}
+            : session.user.status === "rejected"
+              ? "Tu solicitud no fue aprobada."
+              : "Tu acceso está pausado."}
         </h1>
         <p>
           {session.user.status === "pending"
@@ -58,6 +60,14 @@ export function PendingAccess({
           <RefreshCw size={15} />
           {busy ? "Revisando…" : "Comprobar acceso"}
         </Button>
+        <a
+          className="access-logout"
+          href="https://veca.com.pe/galeria/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Contactar con soporte de VECA
+        </a>
         <button className="access-logout" onClick={onProfile}>
           <UserRound size={15} />
           Ver mi perfil

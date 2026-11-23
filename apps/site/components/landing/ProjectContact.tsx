@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   REQUEST_TYPES,
   publicLeadSchema,
@@ -22,13 +22,28 @@ export function ProjectContact({
   const [reference, setReference] = useState("");
   const operation = useRef("");
   const trigger = useRef<HTMLButtonElement>(null);
+  const section = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const contact = section.current;
+    if (!contact) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        document.body.classList.toggle(
+          "ve-contact-in-view",
+          entry.isIntersecting,
+        );
+      },
+      { rootMargin: "0px 0px -8% 0px" },
+    );
+    observer.observe(contact);
+    return () => {
+      observer.disconnect();
+      document.body.classList.remove("ve-contact-in-view");
+    };
+  }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!type) {
-      setError("Elige el tipo de trabajo que tienes en mente.");
-      trigger.current?.focus();
-      return;
-    }
+    if (busy) return;
     const form = new FormData(event.currentTarget);
     if (!operation.current) operation.current = crypto.randomUUID();
     const data = {
@@ -47,7 +62,13 @@ export function ProjectContact({
           district: String(form.get("district") || ""),
         });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      const issue = parsed.error.issues[0];
+      setError(issue.message);
+      const field = event.currentTarget.elements.namedItem(
+        String(issue.path[0]),
+      );
+      if (field instanceof HTMLElement) field.focus();
+      else if (issue.path[0] === "requestType") trigger.current?.focus();
       return;
     }
     setBusy(true);
@@ -78,6 +99,7 @@ export function ProjectContact({
   }
   return (
     <section
+      ref={section}
       className={source ? "ve-inquiry ve-inquiry--social" : "ve-inquiry"}
       id="contacto"
       aria-labelledby={source ? "ve-social-contact-title" : "ve-contact-title"}
@@ -134,14 +156,11 @@ export function ProjectContact({
               <br />
               en nuestras manos.
             </h3>
-            <p>
-              Nuestro equipo te contactará por el teléfono o correo que
-              indicaste.
-            </p>
+            <p>Nuestro equipo te contactará usando el dato que indicaste.</p>
             <span>Referencia {reference.slice(-8).toUpperCase()}</span>
             <a
               className="ve-inline-link"
-              href={WHATSAPP}
+              href={`${WHATSAPP}?text=${encodeURIComponent(`Hola, envié una consulta a VECA. Mi referencia es ${reference.slice(-8).toUpperCase()}.`)}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -166,20 +185,25 @@ export function ProjectContact({
               <p>
                 {source
                   ? "Déjanos tus datos y cuéntanos qué quieres hacer. Te contactaremos para ayudarte con tu proyecto."
-                  : "Indica la ciudad o el distrito y describe el trabajo. Puedes incluir medidas aproximadas."}
+                  : "Si ya tienes detalles, añade la ubicación, el trabajo o medidas aproximadas."}
               </p>
             </div>
             <div className="ve-inquiry-type">
-              <label htmlFor="project-space">¿Qué tienes en mente?</label>
+              <label htmlFor="project-space">
+                ¿Qué tienes en mente? (opcional)
+              </label>
               <Select
                 id="project-space"
                 label="Tipo de trabajo"
                 value={type}
-                options={REQUEST_TYPES.map((t) => ({
-                  value: t.id,
-                  label: t.name,
-                  description: t.description,
-                }))}
+                options={[
+                  { value: "", label: "Por definir" },
+                  ...REQUEST_TYPES.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                    description: t.description,
+                  })),
+                ]}
                 onChange={(value) => {
                   setType(value);
                   setError("");
@@ -187,6 +211,11 @@ export function ProjectContact({
                 triggerRef={trigger}
               />
             </div>
+            <p className="ve-inquiry-privacy">
+              Indica un teléfono o un correo para poder contactarte.
+              {source &&
+                " Si quieres adelantar detalles, elige un tipo de trabajo y describe tu idea."}
+            </p>
             <div className="ve-inquiry-fields">
               <label>
                 Tu nombre
@@ -205,7 +234,6 @@ export function ProjectContact({
                   type="tel"
                   autoComplete="tel"
                   placeholder="Ej. +51 908 917 621"
-                  required
                   maxLength={30}
                 />
               </label>
@@ -216,25 +244,24 @@ export function ProjectContact({
                   type="email"
                   autoComplete="email"
                   placeholder="tu@correo.com"
-                  required
                   maxLength={180}
                 />
               </label>
               {!source && (
                 <label>
-                  Ciudad o distrito de la obra
+                  Ciudad o distrito de la obra (opcional)
                   <input
                     name="district"
                     placeholder="Ej. Huancayo, Junín"
-                    required
-                    minLength={2}
                     maxLength={120}
                   />
                 </label>
               )}
             </div>
             <label>
-              {source ? "Cuéntanos qué quieres hacer" : "Cuéntanos tu idea"}
+              {source
+                ? "Cuéntanos qué quieres hacer (opcional)"
+                : "Cuéntanos tu idea (opcional)"}
               <textarea
                 name="idea"
                 placeholder={
@@ -242,8 +269,6 @@ export function ProjectContact({
                     ? "Por ejemplo, quiero instalar una mampara de vidrio en el baño."
                     : "El espacio, lo que quieres cambiar, medidas aproximadas…"
                 }
-                required
-                minLength={10}
                 maxLength={4000}
                 rows={3}
               />
@@ -265,8 +290,7 @@ export function ProjectContact({
             </button>
             <p className="ve-inquiry-privacy">
               Usaremos tus datos para atender esta consulta y coordinar tu
-              proyecto.{" "}
-              {source && <a href="/privacidad/">Política de privacidad</a>}
+              proyecto. <a href="/privacidad/">Política de privacidad</a>
             </p>
           </form>
         )}

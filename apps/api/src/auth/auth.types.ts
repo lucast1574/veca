@@ -29,7 +29,7 @@ export interface UserDocument {
     actor: string;
     at: Date;
     from: { role: Role | null; status?: AccountStatus };
-    to: { role: Role; status: AccountStatus };
+    to: { role: Role | null; status: AccountStatus };
   }[];
 }
 export interface SessionDocument {

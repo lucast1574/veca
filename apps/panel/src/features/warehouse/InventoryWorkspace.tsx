@@ -13,10 +13,12 @@ export function InventoryWorkspace({
   tab,
   selected,
   workId,
+  accountingAccess = false,
 }: {
   tab?: string;
   selected?: string;
   workId?: string;
+  accountingAccess?: boolean;
 }) {
   const active = sections.some(([value]) => value === tab) ? tab : "materiales";
   return (
@@ -35,10 +37,13 @@ export function InventoryWorkspace({
           </a>
         ))}
       </nav>
-      {active === "materiales" && <Inventory />}
+      {active === "materiales" && (
+        <Inventory key={selected || "catalog"} materialId={selected} />
+      )}
       {active === "compras" && (
         <Purchases
           key={selected || "list"}
+          accountingAccess={accountingAccess}
           selected={selected === "nueva" ? undefined : selected}
           workId={selected === "nueva" ? workId : ""}
         />

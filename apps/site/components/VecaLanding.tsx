@@ -7,7 +7,6 @@ import { WHATSAPP, questions } from "./landing/content";
 import { Arrow, Action } from "./landing/Controls";
 import { SolutionExplorer } from "./landing/SolutionExplorer";
 import { LandingNavigation } from "./landing/LandingNavigation";
-import { LogoEntrance } from "./landing/LogoEntrance";
 import { ProjectContact } from "./landing/ProjectContact";
 export function VecaLanding({
   intro,
@@ -52,7 +51,6 @@ export function VecaLanding({
   }, []);
   return (
     <div className="ve-home" ref={root}>
-      <LogoEntrance />
       <LandingNavigation home />
       <main id="contenido">
         <section className="ve-hero" id="inicio" aria-labelledby="ve-title">

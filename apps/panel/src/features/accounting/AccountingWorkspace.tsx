@@ -19,7 +19,11 @@ function locationSection() {
   return tab ? { tab: tab[0], id } : { tab: "guias" as const, id: part };
 }
 
-export function AccountingWorkspace() {
+export function AccountingWorkspace({
+  inventoryAccess,
+}: {
+  inventoryAccess: boolean;
+}) {
   const [route, setRoute] = useState(locationSection);
   useEffect(() => {
     const onChange = () => setRoute(locationSection());
@@ -43,14 +47,37 @@ export function AccountingWorkspace() {
           </a>
         ))}
       </nav>
-      {route.tab === "guias" && <GuideAccounting selected={route.id || ""} />}
+      {route.tab === "guias" && (
+        <GuideAccounting
+          selected={route.id === "revision" ? "" : route.id || ""}
+          initialFilter={route.id === "revision" ? "review" : "all"}
+          key={route.id === "revision" ? "review" : "default"}
+        />
+      )}
       {route.tab === "facturas" && (
         <AccountingInvoices
-          selected={route.id || ""}
+          selected={
+            ["solicitadas", "por-cobrar"].includes(route.id || "")
+              ? ""
+              : route.id || ""
+          }
+          queue={
+            route.id === "solicitadas"
+              ? "requested"
+              : route.id === "por-cobrar"
+                ? "collect"
+                : ""
+          }
           key={route.id || "list"}
         />
       )}
-      {route.tab === "gastos" && <AccountingCosts />}
+      {route.tab === "gastos" && (
+        <AccountingCosts
+          key={route.id || "all"}
+          purchaseId={route.id}
+          inventoryAccess={inventoryAccess}
+        />
+      )}
       {route.tab === "impuestos" && <TaxPeriod />}
       {route.tab === "margen" && <Margin />}
     </main>

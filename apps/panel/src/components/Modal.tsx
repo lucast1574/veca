@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+const layers: HTMLElement[] = [];
+let unlock: (() => void) | undefined;
+
 export function Modal({
   title,
   description,
@@ -25,12 +28,25 @@ export function Modal({
   const latest = useRef({ busy, onClose });
   latest.current = { busy, onClose };
   useEffect(() => {
-    const background = document.getElementById("root");
-    const wasInert = background?.inert || false;
+    const layer = dialog.current?.parentElement;
+    if (!layer) return;
     const previous = document.activeElement as HTMLElement | null;
-    const old = document.body.style.overflow;
-    if (background) background.inert = true;
-    document.body.style.overflow = "hidden";
+    if (!layers.length) {
+      const background =
+        document.getElementById("workspace-surface") ??
+        document.getElementById("root");
+      const wasInert = background?.inert || false;
+      const old = document.body.style.overflow;
+      if (background) background.inert = true;
+      document.body.style.overflow = "hidden";
+      unlock = () => {
+        if (background) background.inert = wasInert;
+        document.body.style.overflow = old;
+      };
+    }
+    const covered = layers.at(-1);
+    if (covered) covered.inert = true;
+    layers.push(layer);
     const focusables = () =>
       [
         ...(dialog.current?.querySelectorAll<HTMLElement>(
@@ -39,6 +55,7 @@ export function Modal({
       ].filter((el) => el.getClientRects().length);
     (focusables()[0] || dialog.current)?.focus();
     const keys = (event: KeyboardEvent) => {
+      if (layers.at(-1) !== layer || layer.closest("[hidden]")) return;
       if (
         event.key === "Escape" &&
         !latest.current.busy &&
@@ -63,9 +80,15 @@ export function Modal({
     document.addEventListener("keydown", keys);
     return () => {
       document.removeEventListener("keydown", keys);
-      document.body.style.overflow = old;
-      if (background) background.inert = wasInert;
-      previous?.focus();
+      const wasTop = layers.at(-1) === layer;
+      layers.splice(layers.indexOf(layer), 1);
+      if (!layers.length) {
+        unlock?.();
+        unlock = undefined;
+      } else if (wasTop) {
+        layers[layers.length - 1].inert = false;
+      }
+      if (wasTop) previous?.focus();
     };
   }, []);
   const content = (
@@ -106,6 +129,6 @@ export function Modal({
   );
   return createPortal(
     className ? <div className={className}>{content}</div> : content,
-    document.body,
+    document.getElementById("workspace-overlays") ?? document.body,
   );
 }

@@ -61,13 +61,14 @@ export function useAccountingQuery<T>(path: string) {
       })
       .catch((error: Error) => {
         if (cancelled.signal.aborted) return;
-        setResult({
+        setResult((previous) => ({
           path,
           attempt,
+          data: previous?.path === path ? previous.data : undefined,
           error: deadline.aborted
             ? "La consulta tardó demasiado. Vuelve a intentarlo."
             : error.message,
-        });
+        }));
       });
     return () => cancelled.abort();
   }, [path, attempt]);

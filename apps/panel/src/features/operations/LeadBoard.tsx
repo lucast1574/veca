@@ -1,117 +1,155 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LEAD_STAGES,
   LEAD_SEGMENTS,
   REQUEST_TYPES,
   LEAD_SOURCE_LABELS,
+  isDemoLead,
   type Lead,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import {
-  ArrowUpRight,
-  Plus,
-  Search,
-  Phone,
-  Mail,
+  ArrowRight,
   GripVertical,
+  List,
+  Kanban,
+  MessageCircle,
+  Phone,
+  Plus,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
 import { CreateLeadModal } from "./CreateLeadModal";
-import { segmentName, useLiveRefresh, useMessage } from "./shared";
-type List = {
-  items: Lead[];
-  total: number;
-  page: number;
-  pageSize: number;
-  counts: Record<string, number>;
+import { stageName, useLiveRefresh } from "./shared";
+
+type LeadPage = { items: Lead[]; total: number };
+export type LeadBoardFilters = {
+  search: string;
+  segment: string;
+  stage: string;
 };
+export const emptyLeadFilters: LeadBoardFilters = {
+  search: "",
+  segment: "",
+  stage: "",
+};
+const layoutOptions = [
+  { value: "list", label: "Lista" },
+  { value: "board", label: "Tablero" },
+];
+
 export function LeadBoard({
+  filters,
+  onFilter,
+  page,
+  active,
+  setPage,
   open,
 }: {
+  filters: LeadBoardFilters;
+  onFilter: (value: LeadBoardFilters) => void;
+  page: number;
+  active: boolean;
+  setPage: (page: number) => void;
   open: (id: string, stage?: string) => void;
 }) {
-  const [data, setData] = useState<List | null>(null),
-    [search, setSearch] = useState(""),
-    [query, setQuery] = useState(""),
-    [segment, setSegment] = useState("all"),
-    [create, setCreate] = useState(false);
-  const { error, setError, fail } = useMessage();
-  const pages = useRef(1);
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(search), 300);
-    return () => clearTimeout(timer);
-  }, [search]);
-  const refresh = useCallback(() => {
-    void Promise.all(
-      Array.from({ length: pages.current }, (_, index) =>
-        api<List>(
-          `/admin/crm/leads?search=${encodeURIComponent(query)}&segment=${segment}&page=${index + 1}`,
-        ),
-      ),
-    )
-      .then((results) =>
-        setData({
-          ...results[results.length - 1],
-          items: results.flatMap((r) => r.items),
-        }),
-      )
-      .catch(fail);
-  }, [query, segment]);
-  useEffect(() => {
-    pages.current = 1;
-    refresh();
-  }, [query, segment]);
-  useEffect(refresh, [refresh]);
-  useLiveRefresh(refresh);
-  async function loadMore() {
-    if (!data) return;
-    try {
-      const next = await api<List>(
-        `/admin/crm/leads?search=${encodeURIComponent(query)}&segment=${segment}&page=${data.page + 1}`,
-      );
-      pages.current = next.page;
-      setData({ ...next, items: [...data.items, ...next.items] });
-    } catch (e) {
-      fail(e);
-    }
-  }
-  const items = (data?.items || []).filter(
-    (l) => segment === "all" || l.segment === segment,
+  const { search, segment, stage } = filters;
+  const [create, setCreate] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(
+    () => matchMedia("(max-width: 1000px)").matches,
   );
+  const [layout, setLayout] = useState("");
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [data, setData] = useState<{
+    key: string;
+    revision: number;
+    page: number;
+    result: LeadPage;
+  }>();
+  const key = JSON.stringify(filters);
+  const visible = data?.key === key ? data.result : undefined;
+  const loading =
+    !visible || data?.revision !== revision || data?.page !== page;
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+
+  useEffect(() => {
+    const media = matchMedia("(max-width: 1000px)");
+    const match = () => setIsNarrow(media.matches);
+    media.addEventListener("change", match);
+    return () => media.removeEventListener("change", match);
+  }, []);
+  useEffect(() => {
+    if (!active) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(
+      () => {
+        setError("");
+        void Promise.all(
+          Array.from({ length: page }, (_, index) => {
+            const query = new URLSearchParams({
+              search,
+              segment,
+              stage,
+              page: String(index + 1),
+            });
+            return api<LeadPage>(`/admin/crm/leads?${query}`, {
+              signal: controller.signal,
+            });
+          }),
+        )
+          .then((pages) => {
+            if (controller.signal.aborted) return;
+            const items = new Map(
+              pages.flatMap((value) =>
+                value.items.map((lead) => [lead.id, lead] as const),
+              ),
+            );
+            setData({
+              key,
+              revision,
+              page,
+              result: { items: [...items.values()], total: pages[0].total },
+            });
+          })
+          .catch((issue: Error) => {
+            if (!controller.signal.aborted) setError(issue.message);
+          });
+      },
+      search ? 250 : 0,
+    );
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [active, key, search, segment, stage, page, revision]);
+  useLiveRefresh(refresh, false, active);
+
+  function change<K extends keyof LeadBoardFilters>(
+    field: K,
+    value: LeadBoardFilters[K],
+  ) {
+    setError("");
+    onFilter({ ...filters, [field]: value });
+    setPage(1);
+  }
+
+  const asList = (layout || (isNarrow ? "list" : "board")) === "list";
+  const items = visible?.items ?? [];
+  const stages = LEAD_STAGES.filter((item) => !stage || item.id === stage);
   return (
-    <main className="ops-page">
-      <div className="ops-heading">
+    <main className="ops-page leads-page">
+      <header className="ops-heading">
         <div>
-          <p>Atención comercial y seguimiento de obras</p>
-          <h1>
-            De la primera consulta
-            <br />a la última instalación.
-          </h1>
-          <span>
-            Contactos, coordinación y avance de cada lead en un solo lugar.
-          </span>
+          <h1>Leads</h1>
+          <span>Consultas de clientes y seguimiento de obras</span>
         </div>
         <Button onClick={() => setCreate(true)} aria-haspopup="dialog">
-          <Plus size={17} />
-          Registrar lead
+          <Plus size={17} /> Registrar lead
         </Button>
-      </div>
-      <div className="ops-summary">
-        {LEAD_STAGES.slice(0, 5).map((stage) => (
-          <div key={stage.id}>
-            <span>{stage.name}</span>
-            <strong>{data?.counts[stage.id] || 0}</strong>
-          </div>
-        ))}
-      </div>
-      {error && (
-        <Notice error>
-          {error}
-          <button onClick={refresh}>Reintentar</button>
-        </Notice>
-      )}
+      </header>
       {create && (
         <CreateLeadModal
           onClose={() => setCreate(false)}
@@ -121,145 +159,231 @@ export function LeadBoard({
           }}
         />
       )}
-      <div className="ops-toolbar">
+      <div className="ops-toolbar lead-tools">
         <label className="search-input">
           <Search size={17} />
           <input
             aria-label="Buscar leads"
-            placeholder="Nombre, teléfono, correo o distrito…"
+            placeholder="Nombre, teléfono, correo o distrito"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => change("search", event.target.value)}
           />
         </label>
         <Select
-          label="Filtrar por tipo de lead"
-          value={segment}
-          onChange={setSegment}
+          label="Etapa del lead"
+          value={stage}
+          onChange={(value) => change("stage", value)}
           options={[
-            { value: "all", label: "Todos los tipos" },
-            ...LEAD_SEGMENTS.map((s) => ({ value: s.id, label: s.name })),
+            { value: "", label: "Todas las etapas" },
+            ...LEAD_STAGES.map((item) => ({
+              value: item.id,
+              label: item.name,
+            })),
           ]}
         />
-        <button
-          className="ops-icon-button"
-          onClick={refresh}
-          aria-label="Actualizar tablero"
-        >
-          <RefreshCw size={18} />
-        </button>
+        <Select
+          label="Tipo de lead"
+          value={segment}
+          onChange={(value) => change("segment", value)}
+          options={[
+            { value: "", label: "Todos los tipos" },
+            ...LEAD_SEGMENTS.map((item) => ({
+              value: item.id,
+              label: item.name,
+            })),
+          ]}
+        />
+        <div className="lead-view-actions">
+          <div className="lead-layout" role="group" aria-label="Vista de leads">
+            {layoutOptions.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={asList === (value === "list")}
+                onClick={() => setLayout(value)}
+              >
+                {value === "list" ? <List size={15} /> : <Kanban size={15} />}{" "}
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="ops-icon-button"
+            onClick={refresh}
+            aria-label="Actualizar leads"
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </div>
-      <div className="ops-kanban" aria-label="Tablero de leads">
-        {LEAD_STAGES.map((stage) => {
-          const group = items.filter((l) => l.stage === stage.id);
-          return (
-            <section
-              className={`ops-column stage-${stage.id}`}
-              key={stage.id}
-              aria-label={stage.name}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const id = e.dataTransfer.getData("text/veca-lead");
-                const lead = items.find((l) => l.id === id);
-                if (!lead || lead.stage === stage.id) return;
-                const phases = LEAD_STAGES.filter((s) => s.id !== "discarded");
-                const next =
-                  phases[phases.findIndex((s) => s.id === lead.stage) + 1]?.id;
-                if (
-                  stage.id !== "discarded" &&
-                  stage.id !== (lead.stage === "discarded" ? "prelead" : next)
-                ) {
-                  setError(
-                    "Avanza una etapa a la vez. Abre la ficha para completar el seguimiento.",
-                  );
-                  return;
-                }
-                open(id, stage.id);
-              }}
-            >
-              <header>
-                <span className="ops-stage-dot" />
-                <h2>{stage.name}</h2>
-                <span>{group.length}</span>
-              </header>
-              <div className="ops-column-body">
-                {group.map((lead) => (
-                  <button
-                    className="ops-lead-card"
-                    key={lead.id}
-                    draggable
-                    onDragStart={(e) =>
-                      e.dataTransfer.setData("text/veca-lead", lead.id)
+      {error && (
+        <Notice error>
+          {error}{" "}
+          <button type="button" onClick={refresh}>
+            Reintentar
+          </button>
+        </Notice>
+      )}
+      {loading && !error && (
+        <p className="hint" role="status">
+          {visible ? "Actualizando leads…" : "Buscando leads…"}
+        </p>
+      )}
+      {visible &&
+        (asList ? (
+          items.length > 0 ? (
+            <ul className="lead-list" aria-label="Lista de leads">
+              {items.map((lead) => (
+                <li key={lead.id}>
+                  <LeadCard lead={lead} open={open} list />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="ops-column-empty">No hay leads con estos filtros.</p>
+          )
+        ) : (
+          <div className="ops-kanban" aria-label="Tablero de leads">
+            {stages.map((column) => {
+              const group = items.filter((lead) => lead.stage === column.id);
+              return (
+                <section
+                  className={`ops-column stage-${column.id}`}
+                  key={column.id}
+                  aria-label={column.name}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const lead = items.find(
+                      (row) =>
+                        row.id === event.dataTransfer.getData("text/veca-lead"),
+                    );
+                    if (!lead || lead.stage === column.id) return;
+                    const next =
+                      lead.stage === "discarded"
+                        ? "prelead"
+                        : LEAD_STAGES[
+                            LEAD_STAGES.findIndex(
+                              (item) => item.id === lead.stage,
+                            ) + 1
+                          ]?.id;
+                    if (column.id !== "discarded" && next !== column.id) {
+                      setError(
+                        "Avanza una etapa a la vez. Abre la ficha para continuar.",
+                      );
+                      return;
                     }
-                    onClick={() => open(lead.id)}
-                  >
-                    <div>
-                      <span className={`ops-ticket ticket-${lead.segment}`}>
-                        {segmentName(lead.segment)}
-                      </span>
-                      <GripVertical size={14} />
-                    </div>
-                    <h3>{lead.name}</h3>
-                    {(lead.district || lead.requestType) && (
-                      <p>
-                        {[
-                          lead.district,
-                          REQUEST_TYPES.find((t) => t.id === lead.requestType)
-                            ?.name,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                    open(lead.id, column.id);
+                  }}
+                >
+                  <header>
+                    <span className="ops-stage-dot" />
+                    <h2>{column.name}</h2>
+                    <span>{group.length}</span>
+                  </header>
+                  <div className="ops-column-body">
+                    {group.map((lead) => (
+                      <LeadCard key={lead.id} lead={lead} open={open} />
+                    ))}
+                    {!group.length && (
+                      <p className="ops-column-empty">
+                        Sin leads en esta etapa
                       </p>
                     )}
-                    {lead.idea && <p className="ops-card-idea">{lead.idea}</p>}
-                    <div className="ops-card-contact">
-                      <span>
-                        <Phone size={12} />
-                        {lead.phone}
-                      </span>
-                      <span>
-                        <Mail size={12} />
-                        {lead.email}
-                      </span>
-                    </div>
-                    <footer>
-                      <span>
-                        {new Date(lead.createdAt).toLocaleDateString("es-PE")}
-                      </span>
-                      <span>
-                        {LEAD_SOURCE_LABELS[lead.source]}
-                        <ArrowUpRight size={14} />
-                      </span>
-                    </footer>
-                  </button>
-                ))}
-                {!group.length && (
-                  <p className="ops-column-empty">
-                    {data ? "Sin leads en esta etapa" : "Cargando tablero…"}
-                  </p>
-                )}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        ))}
       <div className="ops-board-bottom">
-        <p>
-          Abre una ficha para completar los datos y avanzar. Al arrastrar una
-          tarjeta se prepara el cambio; no se guarda hasta confirmarlo en la
-          ficha.
-        </p>
-        {data && (
-          <span>
-            Mostrando {data.items.length} de {data.total} leads
+        {visible && (
+          <span role="status">
+            Mostrando {items.length} de {visible.total}{" "}
+            {visible.total === 1 ? "lead" : "leads"}
           </span>
         )}
-        {data && data.items.length < data.total && (
-          <Button variant="ghost" onClick={() => void loadMore()}>
+        {visible && items.length < visible.total && (
+          <Button
+            variant="ghost"
+            disabled={loading && !error}
+            onClick={() => setPage(page + 1)}
+          >
             Cargar más
           </Button>
         )}
       </div>
     </main>
+  );
+}
+
+function LeadCard({
+  lead,
+  open,
+  list = false,
+}: {
+  lead: Lead;
+  open: (id: string, stage?: string) => void;
+  list?: boolean;
+}) {
+  const phone = lead.phone.replace(/[^\d+]/g, "");
+  const whatsapp = phone.startsWith("+")
+    ? phone.slice(1)
+    : phone.length === 9
+      ? "51" + phone
+      : phone;
+  const context = [
+    lead.district,
+    REQUEST_TYPES.find((item) => item.id === lead.requestType)?.name,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <article
+      className="ops-lead-card"
+      draggable={!list}
+      onDragStart={(event) =>
+        event.dataTransfer.setData("text/veca-lead", lead.id)
+      }
+    >
+      <div className="lead-card-context">
+        <span>
+          {list ? stageName(lead.stage) : LEAD_SOURCE_LABELS[lead.source]}
+        </span>
+        {!list && <GripVertical size={14} />}
+      </div>
+      <button
+        type="button"
+        className="lead-card-open"
+        onClick={() => open(lead.id)}
+      >
+        <strong>{lead.name}</strong>
+        <ArrowRight size={16} />
+      </button>
+      {context && <p>{context}</p>}
+      {lead.idea && <p className="ops-card-idea">{lead.idea}</p>}
+      <div className="lead-card-actions">
+        {phone && !isDemoLead(lead) && (
+          <>
+            <a href={`tel:${phone}`} aria-label={`Llamar a ${lead.name}`}>
+              <Phone size={14} /> Llamar
+            </a>
+            <a
+              href={`https://wa.me/${whatsapp}`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Enviar WhatsApp a ${lead.name}`}
+            >
+              <MessageCircle size={14} /> WhatsApp
+            </a>
+          </>
+        )}
+        {lead.stage === "prelead" && (
+          <button type="button" onClick={() => open(lead.id, "contacted")}>
+            Registrar contacto
+          </button>
+        )}
+      </div>
+    </article>
   );
 }

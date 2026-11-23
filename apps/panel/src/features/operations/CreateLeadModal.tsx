@@ -1,5 +1,6 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useRef, useState, type FormEvent } from "react";
-import { REQUEST_TYPES } from "@veca/content";
+import { publicLeadSchema, REQUEST_TYPES } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { Modal } from "../../components/Modal";
 import { Button, Field, Notice } from "../../components/ui";
@@ -20,19 +21,15 @@ export function CreateLeadModal({
   onCreated: (id: string) => void;
 }) {
   const id = useId();
-  const form = useRef<HTMLFormElement>(null);
   const submissionId = useRef<string | null>(null);
-  const [requestType, setRequestType] = useState("repair");
+  const [requestType, setRequestType] = useState("");
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const clearGuard = useUnsavedChanges(dirty, busy);
   function close() {
-    if (busy) return;
-    const dirty =
-      requestType !== "repair" ||
-      (form.current &&
-        Array.from(new FormData(form.current).values()).some(Boolean));
-    if (!dirty || window.confirm("¿Cerrar sin guardar el lead?")) onClose();
+    if (confirmDiscard(dirty, busy)) onClose();
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -40,18 +37,28 @@ export function CreateLeadModal({
     if (busy) return;
     const fields = Object.fromEntries(new FormData(event.currentTarget));
     submissionId.current ??= crypto.randomUUID();
+    const input = publicLeadSchema.safeParse({
+      ...fields,
+      requestType,
+      submissionId: submissionId.current,
+      website: "",
+    });
+    if (!input.success) {
+      setError(input.error.issues[0].message);
+      const field = event.currentTarget.elements.namedItem(
+        String(input.error.issues[0].path[0]),
+      );
+      if (field instanceof HTMLElement) field.focus();
+      return;
+    }
     setError("");
     setBusy(true);
     try {
       const { reference } = await post<{ reference: string }>(
         "/admin/crm/leads",
-        {
-          ...fields,
-          requestType,
-          submissionId: submissionId.current,
-          website: "",
-        },
+        input.data,
       );
+      clearGuard();
       onCreated(reference);
     } catch (e) {
       setError((e as Error).message);
@@ -64,7 +71,7 @@ export function CreateLeadModal({
     <Modal
       className="ops-create-lead"
       title="Registrar lead"
-      description="Ingresa los datos de contacto y el trabajo que necesita."
+      description="Indica un teléfono o correo. Puedes completar el trabajo y el distrito después."
       busy={busy}
       onClose={close}
       footer={
@@ -73,12 +80,12 @@ export function CreateLeadModal({
             Cancelar
           </Button>
           <Button type="submit" form={id} disabled={busy}>
-            {busy ? "Guardando…" : "Crear prelead"}
+            {busy ? "Guardando…" : "Guardar lead"}
           </Button>
         </footer>
       }
     >
-      <form id={id} ref={form} onSubmit={submit}>
+      <form id={id} onSubmit={submit} onChange={() => setDirty(true)}>
         <fieldset className="ops-form-grid" disabled={busy}>
           {contactFields.map(([name, label, type, autoComplete]) => (
             <Field key={name} label={label}>
@@ -86,8 +93,16 @@ export function CreateLeadModal({
                 name={name}
                 type={type}
                 autoComplete={autoComplete}
-                required
-                maxLength={180}
+                required={name === "name"}
+                maxLength={
+                  name === "name"
+                    ? 100
+                    : name === "phone"
+                      ? 30
+                      : name === "district"
+                        ? 120
+                        : 180
+                }
               />
             </Field>
           ))}
@@ -96,21 +111,22 @@ export function CreateLeadModal({
               id={id + "-type"}
               label="Tipo de trabajo"
               value={requestType}
-              options={REQUEST_TYPES.map((type) => ({
-                value: type.id,
-                label: type.name,
-              }))}
-              onChange={setRequestType}
+              options={[
+                { value: "", label: "Por definir" },
+                ...REQUEST_TYPES.map((type) => ({
+                  value: type.id,
+                  label: type.name,
+                })),
+              ]}
+              placeholder="Por definir"
+              onChange={(value) => {
+                setRequestType(value);
+                setDirty(true);
+              }}
             />
           </Field>
           <Field label="Idea o necesidad">
-            <textarea
-              name="idea"
-              required
-              minLength={10}
-              maxLength={4000}
-              rows={3}
-            />
+            <textarea name="idea" maxLength={4000} rows={3} />
           </Field>
         </fieldset>
         {error && <Notice error>{error}</Notice>}

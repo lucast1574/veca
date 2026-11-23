@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -83,18 +84,13 @@ class UsersController {
     const data = parse(
       z
         .object({
-          role: roleSchema,
+          role: roleSchema.nullable().optional(),
           status: accountStatusSchema,
           revision: z.number().int().positive(),
         })
         .strict(),
       body,
     );
-    const role = (await this.auth.roles.list()).find((r) => r.id === data.role);
-    if (!role)
-      throw new NotFoundException(
-        "El rol ya no está disponible. Actualiza la lista.",
-      );
     if (id === req.session.user.id)
       throw new ForbiddenException(
         "Otro administrador debe modificar tu acceso. Así evitamos que pierdas el control del panel.",
@@ -102,6 +98,20 @@ class UsersController {
     if (!ObjectId.isValid(id)) throw new NotFoundException();
     const user = await this.auth.users.findOne({ _id: new ObjectId(id) });
     if (!user) throw new NotFoundException();
+    const roleId =
+      data.role ?? (data.status === "active" ? null : (user.role ?? null));
+    const role = roleId
+      ? (await this.auth.roles.list()).find((entry) => entry.id === roleId)
+      : undefined;
+    if (data.role && !role)
+      throw new NotFoundException(
+        "El rol ya no está disponible. Actualiza la lista.",
+      );
+    if (data.status === "active" && !role)
+      throw new BadRequestException(
+        "Selecciona un rol para aprobar el acceso.",
+      );
+
     if (!(await this.auth.view(user)).emailVerified && data.status === "active")
       throw new ForbiddenException(
         "La persona debe verificar su correo antes de recibir acceso.",
@@ -120,7 +130,7 @@ class UsersController {
       },
       {
         $set: {
-          role: data.role,
+          role: roleId,
           status: data.status,
           updatedAt: new Date(),
           approvedBy: req.session.user.id,
@@ -132,7 +142,7 @@ class UsersController {
             actor: req.session.user.id,
             at: new Date(),
             from: { role: user.role, status: user.status },
-            to: { role: data.role, status: data.status },
+            to: { role: roleId, status: data.status },
           },
         },
       },
@@ -163,7 +173,7 @@ class UsersController {
             name: saved.name,
             paragraphs: [
               saved.status === "active"
-                ? `Tu acceso fue aprobado con el rol ${role.name}. Encontrarás las secciones disponibles al entrar al panel.`
+                ? `Tu acceso fue aprobado con el rol ${role?.name}. Encontrarás las secciones disponibles al entrar al panel.`
                 : "Un administrador actualizó el estado de tu acceso. Si necesitas ayuda, comunícate con el equipo de VECA.",
             ],
             action: panelAction("Ir al panel"),
@@ -192,6 +202,8 @@ class DashboardController {
       projects,
       pending,
       mailPending,
+      accounting,
+      returnedDispatches,
     ] = await Promise.all([
       p.includes("leads")
         ? db
@@ -252,6 +264,33 @@ class DashboardController {
             .collection("mail_deliveries")
             .countDocuments({ status: { $ne: "sent" } })
         : null,
+      p.includes("accounting")
+        ? Promise.all([
+            db
+              .collection("dispatches")
+              .countDocuments({
+                status: { $in: ["review", "sending", "pending", "rejected"] },
+              }),
+            db
+              .collection("accounting_invoices")
+              .countDocuments({ status: "requested" }),
+            db
+              .collection("accounting_invoices")
+              .countDocuments({
+                status: { $in: ["accepted", "observed"] },
+                $expr: { $gt: ["$totalCents", "$paidCents"] },
+              }),
+          ])
+        : null,
+      p.includes("leads") && p.includes("dispatches")
+        ? db
+            .collection("dispatches")
+            .find({ status: "returned" })
+            .sort({ updatedAt: -1 })
+            .limit(8)
+            .project({ leadId: 1, workName: 1, observation: 1 })
+            .toArray()
+        : [],
     ]);
     return {
       stages: Object.fromEntries(stages.map((s) => [s._id, s.count])),
@@ -268,6 +307,17 @@ class DashboardController {
           minimum: minimumMilli / 1000,
         }),
       ),
+      accounting: accounting
+        ? {
+            guides: accounting[0],
+            requests: accounting[1],
+            collect: accounting[2],
+          }
+        : null,
+      returnedDispatches: returnedDispatches.map(({ _id, ...rest }) => ({
+        ...rest,
+        id: String(_id),
+      })),
       publishedProjects: projects,
       pendingUsers: pending,
       ...(p.includes("users")

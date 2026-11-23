@@ -78,14 +78,21 @@ export function Team({ currentId }: { currentId: string }) {
     );
     setError("");
   }
-  async function save() {
-    if (!selected || !role) return;
+  async function save(nextStatus = status) {
+    if (!selected || busy || (nextStatus === "active" && !role)) return;
     setBusy(true);
     setError("");
     try {
       await api(`/admin/users/${selected.id}`, {
         method: "PUT",
-        body: JSON.stringify({ role, status, revision: selected.revision }),
+        body: JSON.stringify({
+          role:
+            selected.status === "pending" && nextStatus === "rejected"
+              ? null
+              : role || null,
+          status: nextStatus,
+          revision: selected.revision,
+        }),
       });
       setSelected(null);
       setNotice(
@@ -201,7 +208,7 @@ export function Team({ currentId }: { currentId: string }) {
         <Modal
           title={
             selected.status === "pending"
-              ? "Dale un lugar en el equipo"
+              ? "Revisar solicitud de acceso"
               : "Editar acceso"
           }
           description={`${selected.name} · ${selected.email || selected.username}`}
@@ -212,7 +219,19 @@ export function Team({ currentId }: { currentId: string }) {
               <Button variant="ghost" onClick={close} disabled={busy}>
                 Cancelar
               </Button>
-              <Button onClick={() => void save()} disabled={busy || !role}>
+              {selected.status === "pending" && (
+                <Button
+                  variant="danger"
+                  disabled={busy}
+                  onClick={() => void save("rejected")}
+                >
+                  No aprobar
+                </Button>
+              )}
+              <Button
+                onClick={() => void save()}
+                disabled={busy || (status === "active" && !role)}
+              >
                 {status === "active" ? (
                   <ShieldCheck size={16} />
                 ) : (
@@ -270,30 +289,33 @@ export function Team({ currentId }: { currentId: string }) {
               )
               .join(" · ")}
           </p>
-          <div className="role-status">
-            <Select
-              label="Estado del acceso"
-              value={status}
-              onChange={setStatus}
-              options={[
-                {
-                  value: "active",
-                  label: "Aprobar acceso",
-                  description: "Puede entrar con el rol seleccionado",
-                },
-                {
-                  value: "suspended",
-                  label: "Suspender acceso",
-                  description: "Conserva la cuenta, sin acceso a la operación",
-                },
-                {
-                  value: "rejected",
-                  label: "No aprobar",
-                  description: "La solicitud no recibirá acceso",
-                },
-              ]}
-            />
-          </div>
+          {selected.status !== "pending" && (
+            <div className="role-status">
+              <Select
+                label="Estado del acceso"
+                value={status}
+                onChange={setStatus}
+                options={[
+                  {
+                    value: "active",
+                    label: "Aprobar acceso",
+                    description: "Puede entrar con el rol seleccionado",
+                  },
+                  {
+                    value: "suspended",
+                    label: "Suspender acceso",
+                    description:
+                      "Conserva la cuenta, sin acceso a la operación",
+                  },
+                  {
+                    value: "rejected",
+                    label: "No aprobar",
+                    description: "La solicitud no recibirá acceso",
+                  },
+                ]}
+              />
+            </div>
+          )}
         </Modal>
       )}
     </main>

@@ -11,6 +11,7 @@ import { api } from "../../lib/api";
 import { Button, Field, Notice } from "../../components/ui";
 export function ImageLibrary({
   images,
+  initialPhoto,
   coverId,
   onChange,
   onCover,
@@ -19,6 +20,7 @@ export function ImageLibrary({
 }: {
   onBusyChange?: (busy: boolean) => void;
   images: Media[];
+  initialPhoto?: string;
   coverId: string | null;
   onChange: Dispatch<SetStateAction<Media[]>>;
   onCover: (id: string | null) => void;
@@ -27,7 +29,7 @@ export function ImageLibrary({
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [active, setActive] = useState<string | null>(null);
+  const [active, setActive] = useState<string | null>(initialPhoto ?? null);
   const update = (id: string, patch: Partial<Media>) =>
     onChange((current) =>
       current.map((i) => (i.id === id ? { ...i, ...patch } : i)),
@@ -77,6 +79,7 @@ export function ImageLibrary({
           variant="ghost"
           type="button"
           disabled={busy}
+          id="add-project-photos"
           onClick={() => input.current?.click()}
         >
           <ImagePlus size={17} />
@@ -204,6 +207,7 @@ export function ImageLibrary({
               <Button
                 variant="ghost"
                 type="button"
+                id="choose-cover"
                 onClick={() => onCover(selected.id)}
               >
                 {coverId === selected.id

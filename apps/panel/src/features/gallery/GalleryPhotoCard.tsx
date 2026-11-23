@@ -32,7 +32,7 @@ export function GalleryPhotoCard({
       ? "Para clientes"
       : "Uso interno"
     : published
-      ? "Publicada"
+      ? "En la web"
       : "En borrador";
   const title =
     photo.caption ||
@@ -57,7 +57,7 @@ export function GalleryPhotoCard({
       </div>
       <div className="gallery-card-copy">
         <p>
-          {[isLead ? "Lead" : "Publicación", category, location]
+          {[isLead ? "Obra" : "Sitio web", category, location]
             .filter(Boolean)
             .join(" · ")}
         </p>

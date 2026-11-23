@@ -49,8 +49,8 @@ export function GalleryControls({
         >
           {[
             ["", "Todas las fotos"],
-            ["lead", "Leads"],
-            ["publication", "Publicaciones"],
+            ["lead", "Fotos de obra"],
+            ["publication", "Fotos del sitio web"],
           ].map(([value, label]) => (
             <button
               type="button"
@@ -152,10 +152,10 @@ export function GalleryControls({
               onChange={(value) => change("stage", value)}
             />
             <Select
-              label="Segmento"
+              label="Grupo comercial"
               value={filters.segment}
               options={[
-                { value: "", label: "Todos los segmentos" },
+                { value: "", label: "Todos los grupos" },
                 ...LEAD_SEGMENTS.map((item) => ({
                   value: item.id,
                   label: item.name,

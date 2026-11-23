@@ -5,6 +5,9 @@ import {
   formatPeruLocation,
   matchPeruLocation,
   projectInputSchema,
+  publicLeadSchema,
+  leadWorkSchema,
+  publicationRequirements,
   seoFor,
   slugify,
   validBody,
@@ -165,4 +168,69 @@ test("article safely renders text, canonical media and selected positions withou
   assert.match(html, /image-left/);
   assert.match(html, /25% 70%/);
   assert.match(html, /Texto de la historia/);
+});
+
+test("lead intake accepts one contact and leaves work details for coordination", () => {
+  const base = {
+    name: "Cliente QA",
+    submissionId: "cf6896d3-df16-4166-acc6-274c789fff05",
+  };
+  const fromPhone = publicLeadSchema.parse({ ...base, phone: "900000019" });
+  const fromEmail = publicLeadSchema.parse({
+    ...base,
+    email: "persona@example.test",
+  });
+  assert.equal(fromPhone.email, "");
+  assert.equal(fromEmail.phone, "");
+  assert.equal(fromPhone.requestType, "");
+  assert.equal(publicLeadSchema.safeParse(base).success, false);
+  assert.equal(
+    publicLeadSchema.safeParse({ ...base, phone: "-------" }).success,
+    false,
+  );
+  assert.equal(
+    leadWorkSchema.safeParse({
+      district: "L",
+      requestType: "home",
+      idea: "Breve",
+    }).success,
+    false,
+  );
+});
+
+test("publication requirements point to the actual field and photo", () => {
+  const project = {
+    ...emptyProject(),
+    images: [
+      {
+        id: "cover",
+        url: "/media/cover",
+        width: 800,
+        height: 600,
+        alt: "",
+        caption: "",
+        positionX: 50,
+        positionY: 50,
+      },
+      {
+        id: "other",
+        url: "/media/other",
+        width: 800,
+        height: 600,
+        alt: "",
+        caption: "",
+        positionX: 50,
+        positionY: 50,
+      },
+    ],
+    coverId: "cover",
+  };
+  const issues = publicationRequirements(project);
+  assert.ok(issues.some(({ target }) => target === "title"));
+  assert.deepEqual(
+    issues
+      .filter(({ target }) => target === "image-alt")
+      .map(({ photoId }) => photoId),
+    ["cover", "other"],
+  );
 });

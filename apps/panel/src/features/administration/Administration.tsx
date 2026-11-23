@@ -9,6 +9,12 @@ import {
   type SocialCheckGroup,
 } from "@veca/content";
 import { api } from "../../lib/api";
+import { Modal } from "../../components/Modal";
+import {
+  Pagination,
+  QueryState,
+  useAccountingQuery,
+} from "../accounting/accounting-shared";
 import { Button, Notice } from "../../components/ui";
 import { DemoWorkspace } from "./DemoWorkspace";
 import "./administration.css";
@@ -63,6 +69,7 @@ export function Administration() {
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
   }, []);
+  const [review, setReview] = useState<SocialChannel>();
   const [data, setData] = useState<AdministrationOverview | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -126,6 +133,9 @@ export function Administration() {
         </div>
       </header>
       {error && <Notice error>{error}</Notice>}
+      {review && (
+        <DeliveryReview channel={review} onClose={() => setReview(undefined)} />
+      )}
       {!data && busy && <p role="status">Cargando administración…</p>}
       {data && (
         <>
@@ -183,8 +193,20 @@ export function Administration() {
                     </dl>
                     <p className="administration-card-detail">
                       Confirmados <strong>{delivery.published}</strong> ·{" "}
-                      Pendientes <strong>{delivery.pending}</strong> · Por
-                      revisar <strong>{delivery.review}</strong>
+                      Pendientes <strong>{delivery.pending}</strong>
+                      {delivery.review > 0 && (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            onClick={() => setReview(channel)}
+                          >
+                            Por revisar ({delivery.review})
+                          </button>
+                        </>
+                      )}
                     </p>
                     <p className="administration-card-detail">
                       Leads en 30 días{" "}
@@ -275,5 +297,52 @@ export function Administration() {
         </>
       )}
     </main>
+  );
+}
+
+function DeliveryReview({
+  channel,
+  onClose,
+}: {
+  channel: SocialChannel;
+  onClose: () => void;
+}) {
+  const [page, setPage] = useState(1);
+  const query = useAccountingQuery<{
+    items: { id: string; slug: string; title: string; at?: string }[];
+    hasMore: boolean;
+  }>(`/admin/administration/deliveries/${channel}/review?page=${page}`);
+  return (
+    <Modal
+      title={`Publicaciones por revisar en ${LEAD_SOURCE_LABELS[channel]}`}
+      onClose={onClose}
+    >
+      <QueryState
+        {...query}
+        empty="No hay publicaciones pendientes de revisión."
+      >
+        {query.data?.items.length ? (
+          <ul className="warehouse-list">
+            {query.data.items.map((row) => (
+              <li key={row.id}>
+                <a
+                  href={`https://veca.com.pe/proyectos/${encodeURIComponent(row.slug)}/`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <strong>{row.title}</strong>
+                </a>
+                {row.at && <small>{timestamp.format(new Date(row.at))}</small>}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </QueryState>
+      <Pagination
+        page={page}
+        change={setPage}
+        hasMore={Boolean(query.data?.hasMore)}
+      />
+    </Modal>
   );
 }

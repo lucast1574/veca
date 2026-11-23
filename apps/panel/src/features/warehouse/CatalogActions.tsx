@@ -63,7 +63,8 @@ async function readCatalog(file: File) {
   if (!records.length || records.length > 500)
     throw new Error("Carga de 1 a 500 materiales por archivo.");
   const codes = new Set<string>();
-  return records.map((cells, index) => {
+  const issues: string[] = [];
+  const rows = records.flatMap((cells, index) => {
     const get = (key: string) => (cells[columns.indexOf(key)] || "").trim();
     const family = MATERIAL_CATEGORIES.find(
       (value) => normalize(value) === normalize(get("familia")),
@@ -82,17 +83,22 @@ async function readCatalog(file: File) {
       description: get("descripcion"),
       minimum: Number(get("minimo").replace(",", ".")),
     });
-    if (!parsed.success)
-      throw new Error(
+    if (!parsed.success) {
+      issues.push(
         `Fila ${index + 2}. Revisa el nombre, código, familia, unidad y mínimo.`,
       );
-    if (codes.has(parsed.data.sku))
-      throw new Error(
+      return [];
+    }
+    if (codes.has(parsed.data.sku)) {
+      issues.push(
         `Fila ${index + 2}. El código ${parsed.data.sku} está repetido.`,
       );
+      return [];
+    }
     codes.add(parsed.data.sku);
-    return parsed.data;
+    return [parsed.data];
   });
+  return { rows, issues };
 }
 
 export function CatalogImport({
@@ -102,20 +108,43 @@ export function CatalogImport({
   close: () => void;
   done: (message: string) => void;
 }) {
-  const [preview, setPreview] =
-    useState<Awaited<ReturnType<typeof readCatalog>>>();
+  const [preview, setPreview] = useState<{
+    rows: Awaited<ReturnType<typeof readCatalog>>["rows"];
+    existing: Map<string, Material | null>;
+  }>();
+  const [rowIssues, setRowIssues] = useState<string[]>([]);
   const [issue, setIssue] = useState("");
   const [reading, setReading] = useState(false);
   const readingVersion = useRef(0);
   async function inspect(file?: File) {
     const version = ++readingVersion.current;
     setIssue("");
+    setRowIssues([]);
     setPreview(undefined);
     setReading(Boolean(file));
     if (!file) return;
     try {
-      const rows = await readCatalog(file);
-      if (version === readingVersion.current) setPreview(rows);
+      const { rows, issues } = await readCatalog(file);
+      if (version !== readingVersion.current) return;
+      setRowIssues(issues);
+      if (!rows.length) return;
+      const matches = await postWarehouse<
+        { sku: string; current: Material | null }[]
+      >(warehousePath + "/materials/import/preview", { materials: rows });
+      if (version !== readingVersion.current) return;
+      const existing = new Map(
+        matches.map(({ sku, current }) => [sku, current]),
+      );
+      const conflicts = rows
+        .filter(
+          (row) =>
+            existing.get(row.sku) && existing.get(row.sku)?.unit !== row.unit,
+        )
+        .map(
+          (row) => `${row.sku}. La unidad debe coincidir con la del catálogo.`,
+        );
+      setRowIssues([...issues, ...conflicts]);
+      setPreview({ rows, existing });
     } catch (error) {
       if (version === readingVersion.current)
         setIssue((error as Error).message);
@@ -127,16 +156,17 @@ export function CatalogImport({
     <WarehouseForm
       title="Importar catálogo"
       action="Confirmar carga"
+      canSubmit={Boolean(preview) && !reading && rowIssues.length === 0}
       onClose={close}
       save={async () => {
-        if (!preview || reading)
+        if (!preview || reading || rowIssues.length)
           throw new Error(
             "Selecciona un archivo válido y revisa la vista previa.",
           );
         const result = await postWarehouse<{
           created: number;
           updated: number;
-        }>(warehousePath + "/materials/import", { materials: preview });
+        }>(warehousePath + "/materials/import", { materials: preview.rows });
         done(`${result.created} creados · ${result.updated} actualizados.`);
       }}
     >
@@ -160,16 +190,74 @@ export function CatalogImport({
         />
       </Field>
       {issue && <Notice error>{issue}</Notice>}
+      {rowIssues.length > 0 && (
+        <div role="alert" className="warehouse-preview">
+          <strong>Corrige el archivo antes de importar.</strong>
+          <ul>
+            {rowIssues.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {reading && <p role="status">Leyendo archivo…</p>}
       {preview && (
         <div className="warehouse-preview">
-          <strong>{preview.length} materiales listos para revisar</strong>
+          <strong>
+            {preview.rows.length} filas ·{" "}
+            {
+              preview.rows.filter((row) => !preview.existing.get(row.sku))
+                .length
+            }{" "}
+            nuevas
+          </strong>
           <ul>
-            {preview.slice(0, 5).map((row) => (
-              <li key={row.sku}>
-                {row.sku} · {row.name}
-              </li>
-            ))}
+            {preview.rows.map((row) => {
+              const previous = preview.existing.get(row.sku);
+              const fields = [
+                ["name", "Nombre"],
+                ["category", "Familia"],
+                ["location", "Ubicación"],
+                ["description", "Descripción"],
+                ["minimum", "Mínimo"],
+                ["unit", "Unidad"],
+              ] as const;
+              const changes = previous
+                ? fields.filter(([key]) => previous[key] !== row[key])
+                : [];
+              return (
+                <li key={row.sku}>
+                  <strong>
+                    {row.sku} · {row.name}
+                  </strong>{" "}
+                  {previous
+                    ? changes.length
+                      ? "Actualizar"
+                      : "Sin cambios de datos"
+                    : "Crear"}
+                  {previous && changes.length > 0 && (
+                    <ul>
+                      {changes.map(([key, label]) => (
+                        <li key={key}>
+                          {label} ·{" "}
+                          {String(
+                            previous[key] === "" ? "Sin valor" : previous[key],
+                          )}{" "}
+                          → {String(row[key] === "" ? "Sin valor" : row[key])}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {!previous && (
+                    <p>
+                      {row.category} · {unitName(row.unit)} · Mínimo{" "}
+                      {amount(row.minimum)}
+                      {row.location && ` · ${row.location}`}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

@@ -11,6 +11,14 @@ let csrf = "";
 export const setCsrf = (value: string) => {
   csrf = value;
 };
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -24,7 +32,8 @@ export async function api<T>(
     ...options,
     headers,
     credentials: "include",
-  }).catch(() => {
+  }).catch((error: unknown) => {
+    if (options.signal?.aborted) throw error;
     throw new Error(
       "No pudimos conectar con el servidor. Inténtalo nuevamente en unos momentos.",
     );
@@ -33,10 +42,11 @@ export async function api<T>(
     message: "El servidor no respondió. Inténtalo nuevamente.",
   }));
   if (!res.ok)
-    throw new Error(
+    throw new ApiError(
       Array.isArray(body.message)
         ? body.message.join(" ")
         : body.message || "No pudimos completar la acción.",
+      res.status,
     );
   return body;
 }

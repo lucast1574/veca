@@ -24,6 +24,9 @@ const routes = [
   ["POST", "/account/avatar/google"],
   ["GET", "/admin/system"],
   ["GET", "/admin/dashboard"],
+  ["GET", "/admin/administration/deliveries/facebook/review"],
+  ["GET", "/admin/accounting/invoices?queue=collect"],
+  ["GET", "/admin/accounting/guides?status=review"],
   ["GET", "/admin/users"],
   ["PUT", "/admin/users/" + id],
   ["GET", "/admin/projects"],
@@ -41,6 +44,8 @@ const routes = [
   ["POST", `/admin/crm/leads/${id}/files`],
   ["GET", "/admin/crm/files/" + id],
   ["GET", "/admin/crm/materials"],
+  ["GET", "/admin/crm/materials/" + id],
+  ["POST", "/admin/warehouse/materials/import/preview"],
   ["POST", "/admin/crm/materials"],
   ["GET", "/admin/crm/movements"],
   ["POST", `/admin/crm/materials/${id}/movements`],
@@ -182,23 +187,37 @@ const server = spawn(process.execPath, ["apps/api/dist/main.js"], {
     PORT: "4403",
     MONGODB_URI: "mongodb://127.0.0.1:27099",
     MONGODB_DATABASE: "veca_qa",
+    PUBLIC_API_URL: "http://127.0.0.1:4403",
+    PANEL_ORIGIN: "http://localhost:3300",
+    RESEND_API_KEY: "",
+    SMTP_HOST: "",
     ADMIN_BOOTSTRAP_KEY: "local-qa-bootstrap-key-only-at-least-32",
   },
   stdio: ["ignore", "ignore", "inherit"],
 });
 try {
   let ready = false;
-  for (let i = 0; i < 30; i++) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && server.exitCode === null) {
     try {
-      if ((await fetch("http://localhost:4403/health")).ok) {
+      if (
+        (
+          await fetch("http://127.0.0.1:4403/health", {
+            signal: AbortSignal.timeout(1000),
+          })
+        ).ok
+      ) {
         ready = true;
         break;
       }
     } catch {}
     await new Promise((r) => setTimeout(r, 200));
   }
-  assert.ok(ready);
-  const r = await fetch("http://localhost:4403/auth/bootstrap", {
+  assert.ok(
+    ready,
+    "La instancia local con NODE_ENV=production no inició en el puerto 4403.",
+  );
+  const r = await fetch("http://127.0.0.1:4403/auth/bootstrap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: "local-qa-bootstrap-key-only-at-least-32" }),

@@ -129,9 +129,18 @@ export class AccountingService {
     return work;
   }
 
-  async listInvoices(page: number) {
+  async listInvoices(page: number, queue?: "requested" | "collect") {
+    const filter =
+      queue === "requested"
+        ? { status: "requested" as const }
+        : queue === "collect"
+          ? {
+              status: { $in: issued },
+              $expr: { $gt: ["$totalCents", "$paidCents"] },
+            }
+          : {};
     const rows = await this.invoices
-      .find()
+      .find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize + 1)
@@ -424,9 +433,12 @@ export class AccountingService {
     };
   }
 
-  async listCosts(page: number, month?: string) {
+  async listCosts(page: number, month?: string, purchaseId?: string) {
     const rows = await this.costs
-      .find(month ? { date: monthBounds(month) } : {})
+      .find({
+        ...(month ? { date: monthBounds(month) } : {}),
+        ...(purchaseId ? { purchaseId } : {}),
+      })
       .sort({ date: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize + 1)

@@ -4,19 +4,20 @@ import {
   currentView,
   type WorkspaceView as View,
 } from "./components/workspace/navigation";
-import { UserProfile } from "./features/profile/UserProfile";
 import { AuthScreen } from "./features/access/AuthScreen";
-import { PendingAccess } from "./features/access/PendingAccess";
-import { Team } from "./features/access/Team";
-import { Dashboard } from "./features/dashboard/Dashboard";
-import { Administration } from "./features/administration/Administration";
 import { type AuthSession } from "@veca/content";
 
-import { PrivateGallery } from "./features/gallery/PrivateGallery";
-import { AccountingWorkspace } from "./features/accounting/AccountingWorkspace";
-import { Operations } from "./features/operations/Operations";
-
-import { useEffect, useMemo, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowUpRight,
   FileText,
@@ -28,85 +29,258 @@ import {
   Star,
 } from "lucide-react";
 import { CATEGORIES, type Project } from "@veca/content";
-import { api, post, setCsrf } from "./lib/api";
+import { api, ApiError, post, setCsrf } from "./lib/api";
 import { Button, Notice, Status } from "./components/ui";
-import { ProjectEditor } from "./features/editor/ProjectEditor";
+import { canLeaveWorkspace } from "./lib/unsaved";
+
+const UserProfile = lazy(() =>
+  import("./features/profile/UserProfile").then((module) => ({
+    default: module.UserProfile,
+  })),
+);
+const PendingAccess = lazy(() =>
+  import("./features/access/PendingAccess").then((module) => ({
+    default: module.PendingAccess,
+  })),
+);
+const Team = lazy(() =>
+  import("./features/access/Team").then((module) => ({ default: module.Team })),
+);
+const Dashboard = lazy(() =>
+  import("./features/dashboard/Dashboard").then((module) => ({
+    default: module.Dashboard,
+  })),
+);
+const Administration = lazy(() =>
+  import("./features/administration/Administration").then((module) => ({
+    default: module.Administration,
+  })),
+);
+const PrivateGallery = lazy(() =>
+  import("./features/gallery/PrivateGallery").then((module) => ({
+    default: module.PrivateGallery,
+  })),
+);
+const AccountingWorkspace = lazy(() =>
+  import("./features/accounting/AccountingWorkspace").then((module) => ({
+    default: module.AccountingWorkspace,
+  })),
+);
+const Operations = lazy(() =>
+  import("./features/operations/Operations").then((module) => ({
+    default: module.Operations,
+  })),
+);
+const ProjectEditor = lazy(() =>
+  import("./features/editor/ProjectEditor").then((module) => ({
+    default: module.ProjectEditor,
+  })),
+);
+
+class SectionBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? (
+      <main className="ops-page">
+        <h1>No pudimos abrir la sección</h1>
+        <p>Actualiza el panel para volver a cargarla.</p>
+        <Button type="button" onClick={() => window.location.reload()}>
+          Actualizar panel
+        </Button>
+      </main>
+    ) : (
+      this.props.children
+    );
+  }
+}
+
 type Session = AuthSession;
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const workspaceAccount = useRef<string | null>(null);
   const [view, setView] = useState<View>(currentView);
+  const appliedHash = useRef(location.hash);
+  const approvedHash = useRef<string | null>(null);
+  const historyIndex = useRef<number>(history.state?.vecaWorkspaceIndex ?? 0);
   useEffect(() => {
-    const change = () => {
-      setView(currentView());
+    history.replaceState(
+      { ...history.state, vecaWorkspaceIndex: historyIndex.current },
+      "",
+    );
+    const change = (event: HashChangeEvent) => {
+      const next = location.hash;
+      if (next === appliedHash.current) return;
+      const approved = next === approvedHash.current;
+      approvedHash.current = null;
+      if (!approved && !canLeaveWorkspace()) {
+        event.stopImmediatePropagation();
+        const destinationIndex =
+          history.state?.vecaWorkspaceIndex ?? historyIndex.current + 1;
+        const distance = historyIndex.current - destinationIndex;
+        if (distance) history.go(distance);
+        else
+          history.replaceState(
+            history.state,
+            "",
+            appliedHash.current || location.pathname + location.search,
+          );
+        return;
+      }
+      const previousView = appliedHash.current.slice(1).split("/")[0];
+      appliedHash.current = next;
+      historyIndex.current =
+        history.state?.vecaWorkspaceIndex ?? historyIndex.current + 1;
+      history.replaceState(
+        { ...history.state, vecaWorkspaceIndex: historyIndex.current },
+        "",
+      );
+      const nextView = currentView();
+      if (previousView === "projects" && nextView !== "projects")
+        setEditing(undefined);
+      setView(nextView);
       window.scrollTo({ top: 0, behavior: "instant" });
     };
-    window.addEventListener("hashchange", change);
-    return () => window.removeEventListener("hashchange", change);
+    window.addEventListener("hashchange", change, true);
+    return () => window.removeEventListener("hashchange", change, true);
   }, []);
   function navigate(next: View) {
-    if (
-      !window.dispatchEvent(
-        new Event("veca-before-navigate", { cancelable: true }),
-      )
-    )
-      return false;
-    if (
-      editing !== undefined &&
-      view === "projects" &&
-      !confirm(
-        "Guarda los cambios del proyecto antes de cambiar de sección. ¿Continuar?",
-      )
-    )
-      return false;
+    if (location.hash === "#" + next && editing === undefined) return true;
+    if (!canLeaveWorkspace()) return false;
     setEditing(undefined);
-    location.hash = next;
-    setView(next);
+    if (location.hash !== "#" + next) {
+      approvedHash.current = "#" + next;
+      location.hash = next;
+    }
     return true;
   }
 
   const [loading, setLoading] = useState(true);
+  const [connectionLost, setConnectionLost] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState("");
   const [storageConfigured, setStorageConfigured] = useState(true);
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const login = (s: Session) => {
+  const login = useCallback((s: Session) => {
+    if (workspaceAccount.current !== s.user.id) {
+      workspaceAccount.current = s.user.id;
+      setEditing(undefined);
+      setProjects([]);
+      setError("");
+      setStorageConfigured(true);
+      setSearch("");
+      setFilter("all");
+    }
+    if (appliedHash.current !== location.hash) {
+      appliedHash.current = location.hash;
+      setView(currentView());
+    }
     setCsrf(s.csrf);
     setSession(s);
-  };
-  async function refresh() {
+    setConnectionLost(false);
+    setExpired(false);
+  }, []);
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    const account = workspaceAccount.current;
     try {
-      setProjects(await api<Project[]>("/admin/projects"));
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
+      const rows = await api<Project[]>("/admin/projects", { signal });
+      if (!signal?.aborted && workspaceAccount.current === account) {
+        setProjects(rows);
+        setError("");
+      }
+    } catch (error) {
+      if (!signal?.aborted && workspaceAccount.current === account)
+        setError((error as Error).message);
     }
-  }
+  }, []);
   useEffect(() => {
     api<Session>("/auth/me")
       .then(login)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [login]);
+  const canEditProjects =
+    !!session && canOpenWorkspace("projects", session.user);
+  const userId = session?.user.id;
   useEffect(() => {
-    if (session?.user.status === "active") {
-      if (session.user.permissions.includes("projects")) void refresh();
-      void api<{ storageConfigured: boolean }>("/admin/system")
-        .then((x) => setStorageConfigured(x.storageConfigured))
-        .catch(() => {});
+    if (view !== "projects" || !canEditProjects || expired) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    void refresh(signal);
+    void api<{ storageConfigured: boolean }>("/admin/system", { signal })
+      .then((result) => {
+        if (!signal.aborted && workspaceAccount.current === userId)
+          setStorageConfigured(result.storageConfigured);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [view, canEditProjects, userId, expired, refresh]);
+  const userStatus = session?.user.status;
+  const sessionCheck = useRef<AbortController | null>(null);
+  const checkSession = useCallback(async () => {
+    if (sessionCheck.current) return;
+    const controller = new AbortController();
+    sessionCheck.current = controller;
+    try {
+      const current = await api<Session>("/auth/me", {
+        signal: AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(10_000),
+        ]),
+      });
+      if (controller.signal.aborted) return;
+      if (current.user.id !== workspaceAccount.current) {
+        setExpired(true);
+        setConnectionLost(false);
+        return;
+      }
+      login(current);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403)
+      ) {
+        setExpired(true);
+        setConnectionLost(false);
+      } else {
+        setConnectionLost(true);
+      }
+    } finally {
+      if (sessionCheck.current === controller) sessionCheck.current = null;
     }
-  }, [session]);
+  }, [login]);
   useEffect(() => {
-    if (!session || session.user.status !== "active") return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible")
-        void api<Session>("/auth/me")
-          .then(login)
-          .catch(() => setSession(null));
-    }, 60000);
-    return () => clearInterval(timer);
-  }, [session?.user.id, session?.user.status]);
+    if (!userId || userStatus !== "active" || expired) return;
+    const check = () => {
+      if (document.visibilityState === "visible") void checkSession();
+    };
+    const offline = () => setConnectionLost(true);
+    const timer = window.setInterval(check, 60000);
+    window.addEventListener("online", check);
+    window.addEventListener("offline", offline);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", check);
+      window.removeEventListener("offline", offline);
+      sessionCheck.current?.abort();
+      sessionCheck.current = null;
+    };
+  }, [userId, userStatus, expired, checkSession]);
+  useEffect(() => {
+    document.body.classList.toggle("veca-reauthenticating", expired);
+    return () => document.body.classList.remove("veca-reauthenticating");
+  }, [expired]);
   const filtered = useMemo(
     () =>
       projects.filter(
@@ -127,265 +301,310 @@ export default function App() {
   const can = (view: View) => canOpenWorkspace(view, session.user);
   async function logout() {
     await post("/auth/logout", {});
+    sessionCheck.current?.abort();
+    sessionCheck.current = null;
     setCsrf("");
+    workspaceAccount.current = null;
     setSession(null);
     setEditing(undefined);
   }
   return (
-    <WorkspaceShell
-      user={session.user}
-      view={view}
-      projectCount={projects.length}
-      onNavigate={navigate}
-      detail={
-        view === "projects" && editing !== undefined
-          ? editing
-            ? "Editar proyecto"
-            : "Nuevo proyecto"
-          : undefined
-      }
-    >
-      {!storageConfigured && view === "projects" && (
-        <Notice>
-          El almacenamiento de fotografías está pendiente de activación en
-          Nexode. Puedes preparar y guardar los textos; la publicación se
-          habilita con una portada.
-        </Notice>
-      )}
-      {view === "profile" ? (
-        <UserProfile
-          user={session.user}
-          onLogout={logout}
-          onNavigate={navigate}
-          onUpdate={(user) =>
-            setSession((current) => (current ? { ...current, user } : null))
-          }
-        />
-      ) : !active ? (
-        <PendingAccess
-          session={session}
-          onUpdate={login}
-          onProfile={() => navigate("profile")}
-        />
-      ) : !can(view) ? (
-        <main className="ops-page">
-          <h1>Este espacio no está disponible para tu rol.</h1>
-          <p>Solicita al administrador que revise tus permisos.</p>
-          <Button onClick={() => navigate("profile")}>Revisar mi perfil</Button>
-        </main>
-      ) : view === "dashboard" ? (
-        <Dashboard user={session.user} />
-      ) : view === "users" ? (
-        <Team currentId={session.user.id} />
-      ) : view === "administration" ? (
-        <Administration />
-      ) : view === "gallery" ? (
-        <PrivateGallery
-          canOpenLead={can("leads")}
-          canOpenProjects={can("projects")}
-        />
-      ) : view === "accounting" ? (
-        <AccountingWorkspace />
-      ) : view === "leads" || view === "inventory" ? (
-        <Operations
-          view={view}
-          inventoryAccess={can("inventory")}
-          dispatchAccess={session.user.permissions.includes("dispatches")}
-        />
-      ) : editing !== undefined ? (
-        <ProjectEditor
-          key={editing?.id || "new"}
-          initial={editing}
-          onBack={() => {
-            setEditing(undefined);
-            void refresh();
-          }}
-          onSaved={(project) =>
-            setProjects((old) => [
-              project,
-              ...old.filter((p) => p.id !== project.id),
-            ])
-          }
-        />
-      ) : (
-        <main className="dashboard">
-          <div className="dashboard-heading">
-            <div>
-              <p className="overline">EL TRABAJO HABLA POR NOSOTROS</p>
-              <h1>
-                Proyectos con perspectiva<span>.</span>
-              </h1>
-              <p>
-                Publica historias reales. Cuida cada imagen. Comparte lo que
-                hace diferente a VECA.
-              </p>
-            </div>
-            <Button onClick={() => setEditing(null)}>
-              <Plus size={18} />
-              Nuevo proyecto
-            </Button>
-          </div>
-          <div className="stats-grid">
-            {[
-              {
-                label: "Total de proyectos",
-                value: projects.length,
-                Icon: LayoutGrid,
-              },
-              {
-                label: "En la web",
-                value: projects.filter((p) => p.status === "published").length,
-                Icon: Globe,
-              },
-              {
-                label: "En preparación",
-                value: projects.filter((p) => p.status === "draft").length,
-                Icon: FileText,
-              },
-              {
-                label: "Destacados",
-                value: projects.filter(
-                  (p) => p.featured && p.status === "published",
-                ).length,
-                Icon: Star,
-              },
-            ].map(({ label, value, Icon }) => (
-              <div className="stat-card" key={label}>
-                <div>
-                  <span>{label}</span>
-                  <strong>{String(value).padStart(2, "0")}</strong>
-                </div>
-                <Icon size={23} />
-              </div>
-            ))}
-          </div>
-          <div className="project-tools">
-            <div className="project-tabs">
-              {[
-                ["all", "Todos"],
-                ["published", "Publicados"],
-                ["draft", "Borradores"],
-                ["featured", "Destacados"],
-              ].map(([value, label]) => (
-                <button
-                  key={value}
-                  aria-pressed={filter === value}
-                  onClick={() => setFilter(value)}
-                >
-                  {label}
+    <>
+      {expired && <AuthScreen onLogin={login} sessionExpired />}
+      <div hidden={expired} inert={expired}>
+        <div id="workspace-surface">
+          <WorkspaceShell
+            key={session.user.id}
+            user={session.user}
+            view={view}
+            projectCount={projects.length}
+            onNavigate={navigate}
+            detail={
+              view === "projects" && editing !== undefined
+                ? editing
+                  ? "Editar proyecto"
+                  : "Nuevo proyecto"
+                : undefined
+            }
+          >
+            {connectionLost && (
+              <Notice>
+                No pudimos comprobar la conexión. Tu trabajo sigue abierto.{" "}
+                <button type="button" onClick={() => void checkSession()}>
+                  Comprobar conexión
                 </button>
-              ))}
-            </div>
-            <label className="search-input">
-              <Search size={17} />
-              <input
-                aria-label="Buscar proyectos"
-                placeholder="Buscar un proyecto…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </label>
-          </div>
-          {error && (
-            <Notice error>
-              {error}
-              <button onClick={() => void refresh()}>Reintentar</button>
-            </Notice>
-          )}
-          {!projects.length ? (
-            <section className="projects-empty">
-              <div className="empty-art" aria-hidden="true">
-                <Images size={42} />
-              </div>
-              <p className="overline">
-                UNA NUEVA FORMA DE MOSTRAR LO QUE HACEMOS
-              </p>
-              <h2>La primera historia empieza aquí.</h2>
-              <p>
-                Sube las fotos de un trabajo, cuenta cómo transformó el espacio
-                y revísalo antes de compartirlo con el mundo.
-              </p>
-              <Button onClick={() => setEditing(null)}>
-                <Plus size={17} />
-                Crear mi primer proyecto
-              </Button>
-            </section>
-          ) : !filtered.length ? (
-            <div className="empty-search">
-              <Search size={28} />
-              <h2>No encontramos proyectos</h2>
-              <p>Prueba con otro título o cambia el filtro.</p>
-            </div>
-          ) : (
-            <div className="admin-project-grid">
-              {filtered.map((project) => {
-                const cover = project.images.find(
-                  (i) => i.id === project.coverId,
-                );
-                return (
-                  <button
-                    className="admin-project"
-                    key={project.id}
-                    onClick={() => setEditing(project)}
-                  >
-                    <div className="admin-project-image">
-                      {cover ? (
-                        <img
-                          src={cover.url}
-                          alt={cover.alt}
-                          style={{
-                            objectPosition: `${cover.positionX}% ${cover.positionY}%`,
-                          }}
-                        />
-                      ) : (
-                        <Images size={35} />
-                      )}
-                      <Status
-                        published={project.status === "published"}
-                        changed={project.hasUnpublishedChanges}
-                      />
-                      {project.featured && (
-                        <span className="featured-star">
-                          <Star size={16} />
-                        </span>
-                      )}
-                    </div>
-                    <div className="admin-project-copy">
-                      <p>
-                        {
-                          CATEGORIES.find((c) => c.id === project.category)
-                            ?.name
-                        }
-                      </p>
-                      <h2>{project.title}</h2>
+              </Notice>
+            )}
+            <SectionBoundary key={view}>
+              <Suspense
+                fallback={
+                  <p className="ops-page" role="status">
+                    Cargando sección…
+                  </p>
+                }
+              >
+                {!storageConfigured && view === "projects" && (
+                  <Notice>
+                    El almacenamiento de fotografías está pendiente de
+                    activación en Nexode. Puedes preparar y guardar los textos;
+                    la publicación se habilita con una portada.
+                  </Notice>
+                )}
+                {view === "profile" ? (
+                  <UserProfile
+                    user={session.user}
+                    onLogout={logout}
+                    onNavigate={navigate}
+                    onUpdate={(user) =>
+                      setSession((current) =>
+                        current ? { ...current, user } : null,
+                      )
+                    }
+                  />
+                ) : !active ? (
+                  <PendingAccess
+                    session={session}
+                    onUpdate={login}
+                    onProfile={() => navigate("profile")}
+                  />
+                ) : !can(view) ? (
+                  <main className="ops-page">
+                    <h1>Este espacio no está disponible para tu rol.</h1>
+                    <p>Solicita al administrador que revise tus permisos.</p>
+                    <Button onClick={() => navigate("profile")}>
+                      Revisar mi perfil
+                    </Button>
+                  </main>
+                ) : view === "dashboard" ? (
+                  <Dashboard user={session.user} />
+                ) : view === "users" ? (
+                  <Team currentId={session.user.id} />
+                ) : view === "administration" ? (
+                  <Administration />
+                ) : view === "gallery" ? (
+                  <PrivateGallery
+                    canOpenLead={can("leads")}
+                    canOpenProjects={can("projects")}
+                  />
+                ) : view === "accounting" ? (
+                  <AccountingWorkspace inventoryAccess={can("inventory")} />
+                ) : view === "leads" || view === "inventory" ? (
+                  <Operations
+                    view={view}
+                    inventoryAccess={can("inventory")}
+                    dispatchAccess={session.user.permissions.includes(
+                      "dispatches",
+                    )}
+                    accountingAccess={can("accounting")}
+                  />
+                ) : editing !== undefined ? (
+                  <ProjectEditor
+                    key={editing?.id || "new"}
+                    initial={editing}
+                    onBack={() => {
+                      setEditing(undefined);
+                      void refresh();
+                    }}
+                    onSaved={(project) =>
+                      setProjects((old) => [
+                        project,
+                        ...old.filter((p) => p.id !== project.id),
+                      ])
+                    }
+                  />
+                ) : (
+                  <main className="dashboard">
+                    <div className="dashboard-heading">
                       <div>
-                        <span>
-                          {new Date(project.updatedAt).toLocaleDateString(
-                            "es-PE",
-                            {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            },
-                          )}
-                        </span>
-                        <span>
-                          Editar proyecto
-                          <ArrowUpRight size={15} />
-                        </span>
+                        <p className="overline">
+                          EL TRABAJO HABLA POR NOSOTROS
+                        </p>
+                        <h1>
+                          Proyectos con perspectiva<span>.</span>
+                        </h1>
+                        <p>
+                          Publica historias reales. Cuida cada imagen. Comparte
+                          lo que hace diferente a VECA.
+                        </p>
                       </div>
+                      <Button onClick={() => setEditing(null)}>
+                        <Plus size={18} />
+                        Nuevo proyecto
+                      </Button>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <footer className="studio-footer">
-            <span>VIDRIOS VECA / ESTUDIO EDITORIAL</span>
-            <span>Diseñado para dar espacio a tus proyectos.</span>
-          </footer>
-        </main>
-      )}
-    </WorkspaceShell>
+                    <div className="stats-grid">
+                      {[
+                        {
+                          label: "Total de proyectos",
+                          value: projects.length,
+                          Icon: LayoutGrid,
+                        },
+                        {
+                          label: "En la web",
+                          value: projects.filter(
+                            (p) => p.status === "published",
+                          ).length,
+                          Icon: Globe,
+                        },
+                        {
+                          label: "En preparación",
+                          value: projects.filter((p) => p.status === "draft")
+                            .length,
+                          Icon: FileText,
+                        },
+                        {
+                          label: "Destacados",
+                          value: projects.filter(
+                            (p) => p.featured && p.status === "published",
+                          ).length,
+                          Icon: Star,
+                        },
+                      ].map(({ label, value, Icon }) => (
+                        <div className="stat-card" key={label}>
+                          <div>
+                            <span>{label}</span>
+                            <strong>{String(value).padStart(2, "0")}</strong>
+                          </div>
+                          <Icon size={23} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="project-tools">
+                      <div className="project-tabs">
+                        {[
+                          ["all", "Todos"],
+                          ["published", "Publicados"],
+                          ["draft", "Borradores"],
+                          ["featured", "Destacados"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            aria-pressed={filter === value}
+                            onClick={() => setFilter(value)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="search-input">
+                        <Search size={17} />
+                        <input
+                          aria-label="Buscar proyectos"
+                          placeholder="Buscar un proyecto…"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    {error && (
+                      <Notice error>
+                        {error}
+                        <button onClick={() => void refresh()}>
+                          Reintentar
+                        </button>
+                      </Notice>
+                    )}
+                    {!projects.length ? (
+                      <section className="projects-empty">
+                        <div className="empty-art" aria-hidden="true">
+                          <Images size={42} />
+                        </div>
+                        <p className="overline">
+                          UNA NUEVA FORMA DE MOSTRAR LO QUE HACEMOS
+                        </p>
+                        <h2>La primera historia empieza aquí.</h2>
+                        <p>
+                          Sube las fotos de un trabajo, cuenta cómo transformó
+                          el espacio y revísalo antes de compartirlo con el
+                          mundo.
+                        </p>
+                        <Button onClick={() => setEditing(null)}>
+                          <Plus size={17} />
+                          Crear mi primer proyecto
+                        </Button>
+                      </section>
+                    ) : !filtered.length ? (
+                      <div className="empty-search">
+                        <Search size={28} />
+                        <h2>No encontramos proyectos</h2>
+                        <p>Prueba con otro título o cambia el filtro.</p>
+                      </div>
+                    ) : (
+                      <div className="admin-project-grid">
+                        {filtered.map((project) => {
+                          const cover = project.images.find(
+                            (i) => i.id === project.coverId,
+                          );
+                          return (
+                            <button
+                              className="admin-project"
+                              key={project.id}
+                              onClick={() => setEditing(project)}
+                            >
+                              <div className="admin-project-image">
+                                {cover ? (
+                                  <img
+                                    src={cover.url}
+                                    alt={cover.alt}
+                                    style={{
+                                      objectPosition: `${cover.positionX}% ${cover.positionY}%`,
+                                    }}
+                                  />
+                                ) : (
+                                  <Images size={35} />
+                                )}
+                                <Status
+                                  published={project.status === "published"}
+                                  changed={project.hasUnpublishedChanges}
+                                />
+                                {project.featured && (
+                                  <span className="featured-star">
+                                    <Star size={16} />
+                                  </span>
+                                )}
+                              </div>
+                              <div className="admin-project-copy">
+                                <p>
+                                  {
+                                    CATEGORIES.find(
+                                      (c) => c.id === project.category,
+                                    )?.name
+                                  }
+                                </p>
+                                <h2>{project.title}</h2>
+                                <div>
+                                  <span>
+                                    {new Date(
+                                      project.updatedAt,
+                                    ).toLocaleDateString("es-PE", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })}
+                                  </span>
+                                  <span>
+                                    Editar proyecto
+                                    <ArrowUpRight size={15} />
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <footer className="studio-footer">
+                      <span>VIDRIOS VECA / ESTUDIO EDITORIAL</span>
+                      <span>Diseñado para dar espacio a tus proyectos.</span>
+                    </footer>
+                  </main>
+                )}
+              </Suspense>
+            </SectionBoundary>
+          </WorkspaceShell>
+        </div>
+        <div id="workspace-overlays" />
+      </div>
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
 import {
@@ -28,11 +29,17 @@ import {
 const path = accountingPath + "/costs";
 type CostPage = { items: AccountingCost[]; hasMore: boolean };
 
-export function AccountingCosts() {
+export function AccountingCosts({
+  purchaseId,
+  inventoryAccess,
+}: {
+  purchaseId?: string;
+  inventoryAccess: boolean;
+}) {
   const [page, setPage] = useState(1);
   const [month, setMonth] = useState("");
   const query = useAccountingQuery<CostPage>(
-    `${path}?page=${page}${month ? `&month=${month}` : ""}`,
+    `${path}?page=${page}${month ? `&month=${month}` : ""}${purchaseId ? `&purchase=${encodeURIComponent(purchaseId)}` : ""}`,
   );
   const [entry, setEntry] = useState<"new" | AccountingCost>();
   const [active, setActive] = useState<AccountingCost>();
@@ -78,6 +85,30 @@ export function AccountingCosts() {
           </Button>
         </div>
       </div>
+      <p className="hint">
+        Registra y revisa los comprobantes. Las solicitudes y recepciones se
+        gestionan desde Inventario.
+      </p>
+      {purchaseId && (
+        <p className="hint">
+          Mostrando el sustento de la compra seleccionada.{" "}
+          <a className="accounting-inline" href="#accounting/gastos">
+            Ver todos los gastos
+          </a>
+          {inventoryAccess && (
+            <>
+              {" "}
+              ·{" "}
+              <a
+                className="accounting-inline"
+                href={`#inventory/compras/${purchaseId}`}
+              >
+                Ver compra en Inventario
+              </a>
+            </>
+          )}
+        </p>
+      )}
       <div className="accounting-filters">
         <Field label="Filtrar por periodo">
           <input
@@ -133,6 +164,7 @@ export function AccountingCosts() {
       {entry && (
         <CostForm
           current={entry === "new" ? undefined : entry}
+          initialPurchase={purchaseId}
           onClose={() => setEntry(undefined)}
           onSaved={(row) => {
             setEntry(undefined);
@@ -164,6 +196,14 @@ export function AccountingCosts() {
               ? `Asignado a ${active.allocations.length} obra(s)`
               : "Gasto general"}
           </p>
+          {active.purchaseId && inventoryAccess && (
+            <a
+              className="accounting-inline"
+              href={`#inventory/compras/${active.purchaseId}`}
+            >
+              Ver compra en Inventario
+            </a>
+          )}
           {active.purchaseId && (
             <RelatedCost
               label="Compra asociada"
@@ -254,11 +294,13 @@ function RelatedCost({
 }
 
 function CostForm({
+  initialPurchase,
   current,
   onClose,
   onSaved,
 }: {
   current?: AccountingCost;
+  initialPurchase?: string;
   onClose: () => void;
   onSaved: (row: AccountingCost) => void;
 }) {
@@ -269,7 +311,9 @@ function CostForm({
   const origins = useAccountingQuery<OriginList>(
     accountingPath + "/cost-origins",
   );
-  const [purchaseId, setPurchase] = useState(current?.purchaseId || "");
+  const [purchaseId, setPurchase] = useState(
+    current?.purchaseId || initialPurchase || "",
+  );
   const [dispatchId, setDispatch] = useState(current?.dispatchId || "");
   const [net, setNet] = useState(current ? String(current.netCents / 100) : "");
   const [splits, setSplits] = useState(() =>
@@ -280,6 +324,11 @@ function CostForm({
     })),
   );
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty, busy);
+  const close = () => {
+    if (confirmDiscard(dirty, busy)) onClose();
+  };
   const [error, setError] = useState("");
   const id = useRef(recordId());
 
@@ -333,9 +382,9 @@ function CostForm({
       title={current ? "Editar gasto o compra" : "Registrar gasto o compra"}
       size="wide"
       busy={busy}
-      onClose={onClose}
+      onClose={close}
     >
-      <form onSubmit={save}>
+      <form onSubmit={save} onChange={() => setDirty(true)}>
         <fieldset disabled={busy} className="accounting-form-fields">
           <div className="accounting-grid">
             <Field label="Concepto">
@@ -354,7 +403,10 @@ function CostForm({
                   value,
                   label: COST_KIND_LABELS[value],
                 }))}
-                onChange={(value) => setKind(value as CostInput["kind"])}
+                onChange={(value) => {
+                  setKind(value as CostInput["kind"]);
+                  setDirty(true);
+                }}
               />
             </Field>
             <Field label="Fecha">
@@ -418,7 +470,10 @@ function CostForm({
                   <Select
                     label="Compra asociada"
                     value={purchaseId}
-                    onChange={setPurchase}
+                    onChange={(value) => {
+                      setPurchase(value);
+                      setDirty(true);
+                    }}
                     options={[
                       { value: "", label: "Sin compra asociada" },
                       ...(origins.data?.purchases || []),
@@ -430,7 +485,10 @@ function CostForm({
                 <Select
                   label="Despacho asociado"
                   value={dispatchId}
-                  onChange={setDispatch}
+                  onChange={(value) => {
+                    setDispatch(value);
+                    setDirty(true);
+                  }}
                   options={[
                     { value: "", label: "Sin despacho asociado" },
                     ...(origins.data?.dispatches || []),
@@ -511,12 +569,7 @@ function CostForm({
         </fieldset>
         {error && <Notice error>{error}</Notice>}
         <div className="accounting-form-actions">
-          <Button
-            variant="ghost"
-            type="button"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <Button variant="ghost" type="button" disabled={busy} onClick={close}>
             Cancelar
           </Button>
           <Button disabled={busy}>

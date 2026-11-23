@@ -1,4 +1,11 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { Select } from "@veca/ui/src/Select";
 import type { Material } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
@@ -53,6 +60,7 @@ export function WarehouseForm({
   save,
   children,
   wide = false,
+  canSubmit = true,
 }: {
   title: string;
   action: string;
@@ -60,17 +68,49 @@ export function WarehouseForm({
   save: (form: FormData) => Promise<void>;
   children: ReactNode;
   wide?: boolean;
+  canSubmit?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const form = useRef<HTMLFormElement>(null);
+  const [dirty, setDirty] = useState(false);
+  const baseline = useRef("");
+  const snapshot = () =>
+    JSON.stringify(
+      Array.from(
+        form.current?.querySelectorAll<HTMLElement>(
+          "input, textarea, [role=combobox]",
+        ) || [],
+      ).map((field) =>
+        field instanceof HTMLInputElement
+          ? [field.value, field.checked]
+          : field instanceof HTMLTextAreaElement
+            ? field.value
+            : field.textContent,
+      ),
+    );
+  useEffect(() => {
+    baseline.current = snapshot();
+  }, []);
+  const clearGuard = useUnsavedChanges(dirty, busy);
+  function close() {
+    if (confirmDiscard(dirty, busy)) onClose();
+  }
+  function track() {
+    queueMicrotask(() => {
+      if (form.current && snapshot() !== baseline.current) setDirty(true);
+    });
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !canSubmit) return;
     const values = new FormData(event.currentTarget);
     setBusy(true);
     setError("");
     try {
       await save(values);
+      clearGuard();
+      setDirty(false);
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -81,24 +121,27 @@ export function WarehouseForm({
     <Modal
       title={title}
       size={wide ? "wide" : undefined}
-      onClose={onClose}
+      onClose={close}
       busy={busy}
     >
-      <form onSubmit={submit}>
+      <form
+        ref={form}
+        onSubmit={submit}
+        onChange={() => setDirty(true)}
+        onClick={track}
+        onKeyUp={track}
+      >
         <fieldset className="warehouse-fields" disabled={busy}>
           {children}
         </fieldset>
         {error && <Notice error>{error}</Notice>}
         <footer className="ve-modal-actions">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy}
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button disabled={busy}>{busy ? "Guardando…" : action}</Button>
+          <Button disabled={busy || !canSubmit}>
+            {busy ? "Guardando…" : action}
+          </Button>
         </footer>
       </form>
     </Modal>

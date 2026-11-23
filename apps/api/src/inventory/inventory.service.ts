@@ -166,6 +166,11 @@ export class InventoryService
       .toArray();
     return docs.map((d) => this.view(d));
   }
+  async detail(id: string) {
+    const row = await this.materials.findOne({ _id: this.id(id) });
+    if (!row) throw new NotFoundException("Material no encontrado.");
+    return this.view(row);
+  }
   async create(input: unknown) {
     const data = parse(materialSchema, input);
     const { minimum, ...fields } = data;
@@ -189,7 +194,7 @@ export class InventoryService
     this.events.emit("inventory");
     return this.view(doc);
   }
-  async importMaterials(input: unknown) {
+  private async readImport(input: unknown) {
     const { materials } = parse(inventoryImport, input);
     const codes = materials.map((row) => row.sku);
     if (new Set(codes).size !== codes.length)
@@ -198,6 +203,17 @@ export class InventoryService
       .find({ sku: { $in: codes } })
       .toArray();
     const byCode = new Map(existing.map((row) => [row.sku, row]));
+    return { materials, byCode };
+  }
+  async previewImport(input: unknown) {
+    const { materials, byCode } = await this.readImport(input);
+    return materials.map((row) => {
+      const current = byCode.get(row.sku);
+      return { sku: row.sku, current: current ? this.view(current) : null };
+    });
+  }
+  async importMaterials(input: unknown) {
+    const { materials, byCode } = await this.readImport(input);
     for (const row of materials) {
       const current = byCode.get(row.sku);
       if (current && current.unit !== row.unit)

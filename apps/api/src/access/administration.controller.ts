@@ -1,12 +1,22 @@
-import { Controller, ForbiddenException, Get, Req } from "@nestjs/common";
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Query,
+  Req,
+} from "@nestjs/common";
 import {
   canViewAdministration,
   SOCIAL_CHANNELS,
+  socialChannelSchema,
   type AdministrationOverview,
   type ConnectionSnapshot,
   type SocialChannel,
   type SocialCheckGroup,
 } from "@veca/content";
+import { z } from "zod";
+import { parse } from "../common/validation";
 import { config } from "../common/config";
 import { Database } from "../database/database.module";
 import { AuthService } from "../auth/auth.service";
@@ -22,6 +32,38 @@ export class AdministrationController {
     private readonly database: Database,
     private readonly auth: AuthService,
   ) {}
+
+  @Get("deliveries/:channel/review")
+  async reviewDeliveries(
+    @Req() request: AuthenticatedRequest,
+    @Param("channel") value: string,
+    @Query("page") rawPage = "1",
+  ) {
+    if (!canViewAdministration(request.session.user))
+      throw new ForbiddenException(
+        "Esta sección es exclusiva de administradores.",
+      );
+    const channel = parse(socialChannelSchema, value);
+    const page = parse(z.coerce.number().int().min(1).max(10000), rawPage);
+    const delivery = `socialShare.channels.${channel}`;
+    const rows = await this.database.db
+      .collection("projects")
+      .find({ published: { $ne: null }, [delivery + ".state"]: "review" })
+      .project({ slug: 1, "published.title": 1, [delivery + ".at"]: 1 })
+      .sort({ [delivery + ".at"]: -1, _id: -1 })
+      .skip((page - 1) * 20)
+      .limit(21)
+      .toArray();
+    return {
+      hasMore: rows.length > 20,
+      items: rows.slice(0, 20).map((row) => ({
+        id: String(row._id),
+        slug: row.slug,
+        title: row.published?.title,
+        at: row.socialShare?.channels?.[channel]?.at,
+      })),
+    };
+  }
 
   @Get()
   async overview(

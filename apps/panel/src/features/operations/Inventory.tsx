@@ -1,10 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
+import { useAccountingQuery } from "../accounting/accounting-shared";
+import { useCallback, useRef, useState, type FormEvent } from "react";
 import {
   MATERIAL_CATEGORIES,
   MATERIAL_UNITS,
@@ -13,7 +9,7 @@ import {
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { Plus, Package, Search, RefreshCw, X } from "lucide-react";
-import { api, post } from "../../lib/api";
+import { post } from "../../lib/api";
 import {
   CatalogImport,
   CountStock,
@@ -32,31 +28,39 @@ export function MaterialMovement({
   leadId,
   onSaved,
   onCancel,
+  initialMaterial = "",
 }: {
   materials: Material[];
   leadId: string | null;
-  onSaved: () => void;
+  onSaved: (movement: Movement) => void;
+  initialMaterial?: string;
   onCancel: () => void;
 }) {
-  const [material, setMaterial] = useState(materials[0]?.id || ""),
+  const [material, setMaterial] = useState(initialMaterial),
     [kind, setKind] = useState(leadId ? "consumption" : "receipt"),
     [busy, setBusy] = useState(false);
   const operation = useRef(crypto.randomUUID());
+  const [dirty, setDirty] = useState(false);
+  useUnsavedChanges(dirty, busy);
   const { error, setError, fail } = useMessage();
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy || !material) return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError("");
     try {
-      await post(`/admin/crm/materials/${material}/movements`, {
-        operationId: operation.current,
-        kind,
-        quantity: Number(form.get("quantity")),
-        reason: form.get("reason"),
-        leadId,
-      });
-      onSaved();
+      const movement = await post<Movement>(
+        `/admin/crm/materials/${material}/movements`,
+        {
+          operationId: operation.current,
+          kind,
+          quantity: Number(form.get("quantity")),
+          reason: form.get("reason"),
+          leadId,
+        },
+      );
+      onSaved(movement);
     } catch (e) {
       fail(e);
     } finally {
@@ -65,7 +69,11 @@ export function MaterialMovement({
   }
   const selected = materials.find((m) => m.id === material);
   return (
-    <form className="ops-card ops-movement-form" onSubmit={save}>
+    <form
+      className="ops-card ops-movement-form"
+      onSubmit={save}
+      onChange={() => setDirty(true)}
+    >
       <div className="ops-card-heading">
         <h3>
           {leadId ? "Registrar materiales de la obra" : "Registrar una entrada"}
@@ -73,7 +81,10 @@ export function MaterialMovement({
         <button
           type="button"
           className="ops-icon-button"
-          onClick={onCancel}
+          disabled={busy}
+          onClick={() => {
+            if (confirmDiscard(dirty, busy)) onCancel();
+          }}
           aria-label="Cerrar movimiento"
         >
           <X size={18} />
@@ -85,7 +96,11 @@ export function MaterialMovement({
           <Select
             label="Material"
             value={material}
-            onChange={setMaterial}
+            placeholder="Selecciona un material"
+            onChange={(value) => {
+              setMaterial(value);
+              setDirty(true);
+            }}
             options={materials.map((m) => ({
               value: m.id,
               label: m.name,
@@ -98,7 +113,10 @@ export function MaterialMovement({
             <Select
               label="Movimiento"
               value={kind}
-              onChange={setKind}
+              onChange={(value) => {
+                setKind(value);
+                setDirty(true);
+              }}
               options={[
                 {
                   value: "consumption",
@@ -149,34 +167,39 @@ export function MaterialMovement({
     </form>
   );
 }
-export function Inventory() {
+export function Inventory({ materialId }: { materialId?: string }) {
   const [importing, setImporting] = useState(false);
   const [count, setCount] = useState<Material>();
   const [message, setMessage] = useState("");
-  const [items, setItems] = useState<Material[]>([]),
-    [moves, setMoves] = useState<Movement[]>([]),
-    [search, setSearch] = useState(""),
-    [create, setCreate] = useState(false),
-    [movement, setMovement] = useState(false),
-    [unit, setUnit] = useState("unit"),
-    [category, setCategory] = useState("Vidrio"),
-    [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [create, setCreate] = useState(false);
+  const [createDirty, setCreateDirty] = useState(false);
+  const [movement, setMovement] = useState<string | null>(null);
+  const [unit, setUnit] = useState("unit");
+  const [category, setCategory] = useState("Vidrio");
+  const [busy, setBusy] = useState(false);
   const { error, setError, fail } = useMessage();
+  const catalog = useAccountingQuery<Material[]>("/admin/crm/materials");
+  const selected = useAccountingQuery<Material>(
+    materialId ? `/admin/crm/materials/${encodeURIComponent(materialId)}` : "",
+  );
+  const history = useAccountingQuery<Movement[]>(
+    `/admin/crm/movements${materialId ? `?materialId=${encodeURIComponent(materialId)}` : ""}`,
+  );
+  const { refresh: reloadCatalog } = catalog;
+  const { refresh: reloadSelected } = selected;
+  const { refresh: reloadHistory } = history;
   const refresh = useCallback(() => {
-    void Promise.all([
-      api<Material[]>("/admin/crm/materials"),
-      api<Movement[]>("/admin/crm/movements"),
-    ])
-      .then(([m, h]) => {
-        setItems(m);
-        setMoves(h);
-      })
-      .catch(fail);
-  }, []);
-  useEffect(refresh, [refresh]);
-  useLiveRefresh(refresh);
+    reloadCatalog();
+    reloadSelected();
+    reloadHistory();
+  }, [reloadCatalog, reloadSelected, reloadHistory]);
+  const items = catalog.data || [];
+  useLiveRefresh(refresh, false);
+  useUnsavedChanges(create && createDirty, busy);
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     const data = Object.fromEntries(new FormData(event.currentTarget));
     setBusy(true);
     setError("");
@@ -188,6 +211,8 @@ export function Inventory() {
         minimum: Number(data.minimum),
       });
       setCreate(false);
+      setCreateDirty(false);
+      setMessage("Material registrado.");
       refresh();
     } catch (e) {
       fail(e);
@@ -195,7 +220,9 @@ export function Inventory() {
       setBusy(false);
     }
   }
-  const filtered = items.filter((m) =>
+  const filtered = (
+    materialId ? (selected.data ? [selected.data] : []) : items
+  ).filter((m) =>
     `${m.name} ${m.sku} ${m.category}`
       .toLowerCase()
       .includes(search.toLowerCase()),
@@ -204,34 +231,70 @@ export function Inventory() {
     <main className="ops-page">
       <div className="ops-heading">
         <div>
-          <h2>Materiales</h2>
+          {materialId && (
+            <a className="warehouse-link" href="#inventory/materiales">
+              Volver a materiales
+            </a>
+          )}
+          <h2>{selected.data?.name || "Materiales"}</h2>
         </div>
         <div className="ops-heading-actions">
           <ImportCatalogButton onClick={() => setImporting(true)} />
-          <Button variant="ghost" onClick={() => setCreate(!create)}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (!create || confirmDiscard(createDirty, busy)) {
+                setCreate(!create);
+                setCreateDirty(false);
+              }
+            }}
+          >
             <Plus size={16} />
             Nuevo material
           </Button>
-          <Button disabled={!items.length} onClick={() => setMovement(true)}>
+          <Button
+            disabled={!items.length && !selected.data}
+            onClick={() => setMovement(materialId || "")}
+          >
             <Package size={17} />
             Registrar entrada
           </Button>
         </div>
       </div>
-      <div className="ops-summary">
-        <div>
-          <span>Materiales</span>
-          <strong>{items.length}</strong>
+      {catalog.data && !materialId && (
+        <div className="ops-summary">
+          <div>
+            <span>Materiales</span>
+            <strong>{items.length}</strong>
+          </div>
+          <div>
+            <span>Por reponer</span>
+            <strong>
+              {items.filter((m) => m.balance <= m.minimum).length}
+            </strong>
+          </div>
+          <div>
+            <span>Sin existencias</span>
+            <strong>{items.filter((m) => m.balance === 0).length}</strong>
+          </div>
         </div>
-        <div>
-          <span>Por reponer</span>
-          <strong>{items.filter((m) => m.balance <= m.minimum).length}</strong>
-        </div>
-        <div>
-          <span>Sin existencias</span>
-          <strong>{items.filter((m) => m.balance === 0).length}</strong>
-        </div>
-      </div>
+      )}
+      {(materialId
+        ? selected.loading && !selected.data
+        : catalog.loading && !catalog.data) && (
+        <p role="status">Cargando materiales…</p>
+      )}
+      {(materialId ? selected.error : catalog.error) && (
+        <Notice error>
+          {materialId ? selected.error : catalog.error}{" "}
+          <button
+            type="button"
+            onClick={materialId ? reloadSelected : reloadCatalog}
+          >
+            Reintentar
+          </button>
+        </Notice>
+      )}
       {error && <Notice error>{error}</Notice>}
       {message && (
         <p className="warehouse-message" role="status">
@@ -260,7 +323,11 @@ export function Inventory() {
         />
       )}
       {create && (
-        <form className="ops-card" onSubmit={add}>
+        <form
+          className="ops-card"
+          onSubmit={add}
+          onChange={() => setCreateDirty(true)}
+        >
           <h2>Nuevo material</h2>
           <p className="hint">
             Se crea con saldo cero. Registra después la recepción para conservar
@@ -285,7 +352,10 @@ export function Inventory() {
               <Select
                 label="Unidad de medida"
                 value={unit}
-                onChange={setUnit}
+                onChange={(value) => {
+                  setUnit(value);
+                  setCreateDirty(true);
+                }}
                 options={MATERIAL_UNITS.map((u) => ({
                   value: u.id,
                   label: u.name,
@@ -296,7 +366,10 @@ export function Inventory() {
               <Select
                 label="Familia"
                 value={category}
-                onChange={setCategory}
+                onChange={(value) => {
+                  setCategory(value);
+                  setCreateDirty(true);
+                }}
                 options={MATERIAL_CATEGORIES.map((c) => ({
                   value: c,
                   label: c,
@@ -320,109 +393,156 @@ export function Inventory() {
           </Button>
         </form>
       )}
-      {movement && (
+      {movement !== null && (
         <MaterialMovement
-          materials={items}
+          key={movement}
+          materials={
+            selected.data &&
+            !items.some((item) => item.id === selected.data?.id)
+              ? [selected.data, ...items]
+              : items
+          }
           leadId={null}
-          onCancel={() => setMovement(false)}
-          onSaved={() => {
-            setMovement(false);
+          initialMaterial={movement}
+          onCancel={() => setMovement(null)}
+          onSaved={(entry) => {
+            setMovement(null);
+            setMessage(
+              `Entrada registrada para ${entry.materialName}: ${amount(entry.quantity)} ${unitName(entry.unit)}. Saldo: ${amount(entry.balanceAfter)} ${unitName(entry.unit)}.`,
+            );
             refresh();
           }}
         />
       )}
-      <div className="ops-toolbar">
-        <label className="search-input">
-          <Search size={17} />
-          <input
-            aria-label="Buscar materiales"
-            placeholder="Nombre, código o familia…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-        <button
-          className="ops-icon-button"
-          aria-label="Actualizar inventario"
-          onClick={refresh}
-        >
-          <RefreshCw size={18} />
-        </button>
-      </div>
-      <div className="ops-table-wrap">
-        <table className="ops-material-table">
-          <thead>
-            <tr>
-              <th>Material</th>
-              <th>Familia</th>
-              <th>Ubicación</th>
-              <th>Disponible</th>
-              <th>Mínimo</th>
-              <th>Estado</th>
-              <th>Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  <strong>{m.name}</strong>
-                  <small>
-                    {m.sku} · {m.description}
-                  </small>
-                </td>
-                <td>{m.category}</td>
-                <td>{m.location || "Sin ubicación"}</td>
-                <td>
-                  <strong>{amount(m.balance)}</strong> {unitName(m.unit)}
-                </td>
-                <td>{amount(m.minimum)}</td>
-                <td>
-                  <span
-                    className={`ops-stock-status ${m.balance <= m.minimum ? "low" : ""}`}
-                  >
-                    {m.balance === 0
-                      ? "Sin stock"
-                      : m.balance <= m.minimum
-                        ? "Reponer"
-                        : "Disponible"}
-                  </span>
-                </td>
-                <td>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCount(m)}
-                    aria-label={`Contar ${m.name}`}
-                  >
-                    Contar
-                  </Button>
-                </td>
+      {!materialId && (
+        <div className="ops-toolbar">
+          <label className="search-input">
+            <Search size={17} />
+            <input
+              aria-label="Buscar materiales"
+              placeholder="Nombre, código o familia…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
+          <button
+            className="ops-icon-button"
+            aria-label="Actualizar inventario"
+            onClick={refresh}
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
+      )}
+      {(materialId ? selected.data : catalog.data) && (
+        <div className="ops-table-wrap">
+          <table className="ops-material-table">
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Familia</th>
+                <th>Ubicación</th>
+                <th>Disponible</th>
+                <th>Mínimo</th>
+                <th>Estado</th>
+                <th>Acción</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {!filtered.length && (
-          <div className="ops-empty">
-            <Package size={32} />
-            <h2>
-              {items.length
-                ? "No hay coincidencias"
-                : "El almacén empieza con tu primer material"}
-            </h2>
-            <p>
-              Registra vidrios, perfiles, herrajes y consumibles con sus
-              unidades reales.
-            </p>
-          </div>
-        )}
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <a
+                      className="warehouse-link"
+                      href={`#inventory/materiales/${m.id}`}
+                    >
+                      <strong>{m.name}</strong>
+                    </a>
+                    <small>
+                      {m.sku} · {m.description}
+                    </small>
+                  </td>
+                  <td>{m.category}</td>
+                  <td>{m.location || "Sin ubicación"}</td>
+                  <td>
+                    <strong>{amount(m.balance)}</strong> {unitName(m.unit)}
+                  </td>
+                  <td>{amount(m.minimum)}</td>
+                  <td>
+                    <span
+                      className={`ops-stock-status ${m.balance <= m.minimum ? "low" : ""}`}
+                    >
+                      {m.balance === 0
+                        ? "Sin stock"
+                        : m.balance <= m.minimum
+                          ? "Reponer"
+                          : "Disponible"}
+                    </span>
+                  </td>
+                  <td>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setCount(m)}
+                      aria-label={`Contar ${m.name}`}
+                    >
+                      Contar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      aria-label={`Registrar entrada de ${m.name}`}
+                      onClick={() => setMovement(m.id)}
+                    >
+                      Entrada
+                    </Button>
+                    {!materialId && (
+                      <a
+                        className="warehouse-link"
+                        href={`#inventory/materiales/${m.id}`}
+                      >
+                        Historial
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!filtered.length && (
+            <div className="ops-empty">
+              <Package size={32} />
+              <h2>
+                {items.length
+                  ? "No hay coincidencias"
+                  : "El almacén empieza con tu primer material"}
+              </h2>
+              <p>
+                {items.length
+                  ? "Prueba otro nombre, código o familia."
+                  : "Registra vidrios, perfiles, herrajes y consumibles con sus unidades reales."}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
       <section className="ops-card">
         <div className="ops-card-heading">
           <h2>Últimos movimientos</h2>
           <span>Hasta 100 registros recientes</span>
         </div>
-        <Movements items={moves} />
+        {history.loading && !history.data && (
+          <p role="status">Cargando movimientos…</p>
+        )}
+        {history.error && (
+          <Notice error>
+            {history.error}{" "}
+            <button type="button" onClick={reloadHistory}>
+              Reintentar
+            </button>
+          </Notice>
+        )}
+        {history.data && <Movements items={history.data} />}
       </section>
     </main>
   );

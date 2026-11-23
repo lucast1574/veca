@@ -10,12 +10,16 @@ import {
 import {
   CATEGORIES,
   PAGE_LAYOUTS,
-  publicationIssues,
+  publicationRequirements,
+  LEAD_SOURCE_LABELS,
+  SOCIAL_CHANNELS,
+  type PublicationRequirement,
   seoFor,
   type Project,
   type ProjectInput,
 } from "@veca/content";
-import { Button } from "../../components/ui";
+import { api } from "../../lib/api";
+import { Button, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 export function PublishReview({
   draft,
@@ -25,19 +29,19 @@ export function PublishReview({
   onEdit,
   updating,
   hasBeenPublished,
-  socialShareQueued,
+  saved,
 }: {
   draft: ProjectInput;
   slug: string;
   busy: boolean;
   onPublish: () => void;
-  onEdit: () => void;
+  onEdit: (issue: PublicationRequirement) => void;
   updating: boolean;
   hasBeenPublished: boolean;
-  socialShareQueued: boolean;
+  saved: Project | null;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const issues = publicationIssues(draft),
+  const issues = publicationRequirements(draft),
     cover = draft.images.find((image) => image.id === draft.coverId),
     seo = seoFor(draft, slug);
   return (
@@ -107,16 +111,18 @@ export function PublishReview({
                 aria-label="Pendientes para publicar"
               >
                 {issues.map((issue) => (
-                  <li key={issue}>
-                    <span>•</span>
-                    {issue}
+                  <li key={issue.message}>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onEdit(issue)}
+                    >
+                      <ArrowLeft size={16} /> {issue.message}
+                    </Button>
                   </li>
                 ))}
               </ul>
-              <Button variant="ghost" onClick={onEdit} disabled={busy}>
-                <ArrowLeft size={16} />
-                Completar contenido
-              </Button>
             </>
           ) : (
             <ul className="publish-checks">
@@ -135,7 +141,9 @@ export function PublishReview({
             </ul>
           )}
           <div className="publish-final-action">
-            {socialShareQueued && <small>Envío a redes registrado.</small>}
+            {saved?.socialShareQueuedAt && (
+              <SocialDelivery project={saved} key={saved.version} />
+            )}
             <Button
               disabled={busy || !!issues.length}
               onClick={() => {
@@ -163,7 +171,7 @@ export function PublishReview({
       {confirming && (
         <Modal
           title="¿Publicar esta obra?"
-          description="La obra quedará visible en veca.com.pe. Su portada y descripción también se compartirán automáticamente en Instagram, Facebook y LinkedIn."
+          description="La obra quedará visible en veca.com.pe. Su portada y descripción entrarán a la cola para Instagram, Facebook y LinkedIn. Puedes consultar el resultado de cada red después."
           onClose={() => setConfirming(false)}
           footer={
             <footer className="ve-modal-actions">
@@ -210,9 +218,7 @@ export function PublishSuccess({
         La historia ya tiene su lugar en la web. Puedes compartirla o volver
         cuando quieras para seguir editando.
       </span>
-      {project.socialShareQueuedAt && (
-        <span>Envío de la portada y el texto a redes registrado.</span>
-      )}
+      {project.socialShareQueuedAt && <SocialDelivery project={project} />}
       <div className="publication-success-actions">
         <a
           className="btn btn-primary"
@@ -230,5 +236,53 @@ export function PublishSuccess({
         Seguir editando este proyecto
       </button>
     </section>
+  );
+}
+
+function SocialDelivery({ project }: { project: Project }) {
+  const [states, setStates] = useState(project.socialDelivery);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const labels = {
+    pending: "Pendiente de envío",
+    processing: "En proceso",
+    published: "Publicada",
+    review: "Requiere revisión",
+    retry: "Pendiente de reintento",
+  };
+  async function refresh() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const current = await api<Project>(`/admin/projects/${project.id}`);
+      setStates(current.socialDelivery);
+    } catch (issue) {
+      setError((issue as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="publication-social">
+      <strong>Publicación en redes</strong>
+      <ul aria-live="polite">
+        {SOCIAL_CHANNELS.map((channel) => (
+          <li key={channel}>
+            {LEAD_SOURCE_LABELS[channel]} ·{" "}
+            {labels[states?.[channel] || "pending"]}
+          </li>
+        ))}
+      </ul>
+      {error && <Notice error>{error}</Notice>}
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={busy}
+        onClick={() => void refresh()}
+      >
+        {busy ? "Consultando…" : "Actualizar estado de redes"}
+      </Button>
+    </div>
   );
 }

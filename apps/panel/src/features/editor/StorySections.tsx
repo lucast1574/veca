@@ -14,16 +14,18 @@ import { RichEditor } from "./RichEditor";
 import { moveSection, newSection } from "./sections";
 export function StorySections({
   sections,
+  initialSection,
   images,
   onChange,
   disabled = false,
 }: {
   sections: ProjectSection[];
+  initialSection?: string;
   images: Media[];
   onChange: (sections: ProjectSection[]) => void;
   disabled?: boolean;
 }) {
-  const [active, setActive] = useState(sections[0]?.id || "");
+  const [active, setActive] = useState(initialSection || sections[0]?.id || "");
   const [removing, setRemoving] = useState<string | null>(null);
   const patch = (id: string, change: Partial<ProjectSection>) =>
     onChange(
@@ -142,7 +144,11 @@ export function StorySections({
                     Elige una foto o varias para crear un collage. Puedes usar
                     una foto en más de una sección.
                   </p>
-                  <div className="section-photo-options">
+                  <div
+                    className="section-photo-options"
+                    id="story-photo-options"
+                    tabIndex={-1}
+                  >
                     {images.map((image, photoIndex) => (
                       <button
                         type="button"

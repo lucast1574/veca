@@ -1,3 +1,4 @@
+import { literalSearch } from "../common/literal-search";
 import { MailService } from "../mail/mail.service";
 import { panelAction } from "../mail/templates";
 import { config } from "../common/config";
@@ -15,6 +16,7 @@ import {
   REQUEST_TYPES,
   leadUpdateSchema,
   publicLeadSchema,
+  leadWorkSchema,
   type LeadInput,
 } from "@veca/content";
 import { parse } from "../common/validation";
@@ -98,26 +100,27 @@ export class CrmService {
     }
     this.events.emit("leads");
     if (source === "web") {
-      await this.mail
-        .queue(
-          doc.email,
-          "Recibimos tu proyecto · Vidrios VECA",
-          {
-            title: "Tu proyecto ya está en nuestras manos",
-            preview: "Recibimos tu consulta",
-            name: doc.name,
-            paragraphs: [
-              "Gracias por contarnos lo que tienes en mente. Nuestro equipo revisará tu consulta para contactarte y coordinar el siguiente paso.",
-              `Referencia: ${String(doc._id).slice(-8).toUpperCase()}. Atención en toda Lima.`,
-            ],
-            action: {
-              label: "Conversa por WhatsApp",
-              url: "https://wa.me/51908917621",
+      if (doc.email)
+        await this.mail
+          .queue(
+            doc.email,
+            "Recibimos tu proyecto · Vidrios VECA",
+            {
+              title: "Tu proyecto ya está en nuestras manos",
+              preview: "Recibimos tu consulta",
+              name: doc.name,
+              paragraphs: [
+                "Gracias por contarnos lo que tienes en mente. Nuestro equipo revisará tu consulta para contactarte y coordinar el siguiente paso.",
+                `Referencia: ${String(doc._id).slice(-8).toUpperCase()}. Atención en toda Lima.`,
+              ],
+              action: {
+                label: "Conversa por WhatsApp",
+                url: "https://wa.me/51908917621",
+              },
             },
-          },
-          `lead-received:${doc._id}`,
-        )
-        .catch(() => {});
+            `lead-received:${doc._id}`,
+          )
+          .catch(() => {});
       await this.mail
         .queue(
           config.MAIL_NOTIFY_TO,
@@ -126,7 +129,7 @@ export class CrmService {
             title: "Una nueva oportunidad para VECA",
             preview: "Consulta recibida desde la web",
             paragraphs: [
-              `${doc.name} envió una consulta desde ${doc.district}. Abre la ficha para revisar los detalles y dar seguimiento.`,
+              `${doc.name} envió una consulta${doc.district ? " desde " + doc.district : ""}. Abre la ficha para revisar los detalles y dar seguimiento.`,
             ],
             action: panelAction("Ver oportunidad", `#leads/${doc._id}`),
           },
@@ -139,10 +142,7 @@ export class CrmService {
   async list(search: string, page: number, stage?: string, segment?: string) {
     if (!Number.isInteger(page) || page < 1 || page > 10000)
       throw new BadRequestException("Página inválida.");
-    const safe = search
-      .trim()
-      .slice(0, 100)
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const safe = literalSearch(search);
     const filter: Filter<LeadDocument> = {
       ...(["high", "low", "large"].includes(segment || "")
         ? { segment: segment as LeadDocument["segment"] }
@@ -192,23 +192,12 @@ export class CrmService {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.appointment))
       data.appointment += ":00-05:00";
     const old = await this.repository.get(id);
-    if (
-      old.source === "web" ||
-      old.source === "manual" ||
-      ["coordination", "execution", "completed"].includes(data.stage)
-    ) {
-      parse(
-        publicLeadSchema.pick({
-          district: true,
-          requestType: true,
-          idea: true,
-        }),
-        {
-          district: data.district,
-          requestType: data.requestType,
-          idea: data.idea,
-        },
-      );
+    if (["coordination", "execution", "completed"].includes(data.stage)) {
+      parse(leadWorkSchema, {
+        district: data.district,
+        requestType: data.requestType,
+        idea: data.idea,
+      });
       if (!data.segment)
         throw new BadRequestException("Selecciona el tipo de lead.");
     }
@@ -294,6 +283,7 @@ export class CrmService {
     this.events.emit("leads");
     if (
       changed &&
+      saved.email &&
       !isDemoLead(saved) &&
       !["prelead", "discarded"].includes(saved.stage)
     )

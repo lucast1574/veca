@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { ProjectInput } from "./index.js";
 export const LEAD_STAGES = [
-  { id: "prelead", name: "Prelead" },
-  { id: "contacted", name: "Lead contactado" },
+  { id: "prelead", name: "Por contactar" },
+  { id: "contacted", name: "Contacto registrado" },
   { id: "coordination", name: "Coordinación" },
   { id: "execution", name: "Obra en ejecución" },
   { id: "completed", name: "Obra realizada" },
@@ -11,12 +11,12 @@ export const LEAD_STAGES = [
 export const LEAD_SEGMENTS = [
   {
     id: "high",
-    name: "High ticket",
+    name: "Proyectos residenciales",
     description: "Viviendas de lujo y remodelaciones de mayor valor",
   },
   {
     id: "low",
-    name: "Low ticket",
+    name: "Arreglos y mejoras del hogar",
     description: "Arreglos y viviendas pequeñas",
   },
   {
@@ -62,13 +62,38 @@ export const stageSchema = z.enum([
 export const segmentSchema = z.enum(["high", "low", "large"]);
 export const requestSchema = z.enum(["repair", "home", "premium", "building"]);
 const text = (max: number) => z.string().trim().max(max);
-export const contactFields = {
+const contactFields = {
   name: text(100).min(2, "Escribe tu nombre."),
-  email: text(180).email("Escribe un correo válido."),
-  phone: text(30).regex(/^\+?[\d ()-]{7,30}$/, "Escribe un teléfono válido."),
+  email: text(180)
+    .email("Escribe un correo válido.")
+    .or(z.literal(""))
+    .default(""),
+  phone: text(30)
+    .regex(/^\+?[\d ()-]{7,30}$/, "Escribe un teléfono válido.")
+    .refine(
+      (value) => value.replace(/\D/g, "").length >= 7,
+      "Escribe un teléfono válido.",
+    )
+    .or(z.literal(""))
+    .default(""),
+};
+export const leadWorkSchema = z.object({
   district: text(120).min(2, "Indica el distrito."),
   requestType: requestSchema,
   idea: text(4000).min(10, "Cuéntanos un poco más de tu proyecto."),
+});
+const intakeFields = {
+  ...contactFields,
+  requestType: requestSchema.or(z.literal("")).default(""),
+  idea: text(4000).default(""),
+  submissionId: z.string().uuid(),
+  website: text(200).optional().default(""),
+};
+const hasContact = ({ phone, email }: { phone: string; email: string }) =>
+  Boolean(phone || email);
+const contactError = {
+  message: "Indica un teléfono o un correo electrónico.",
+  path: ["phone"],
 };
 export const SOCIAL_CHANNELS = ["facebook", "instagram", "linkedin"] as const;
 export const socialChannelSchema = z.enum(SOCIAL_CHANNELS);
@@ -82,33 +107,27 @@ export const LEAD_SOURCE_LABELS = {
 } as const;
 export const socialLeadSchema = z
   .object({
-    name: contactFields.name,
-    phone: contactFields.phone,
-    email: contactFields.email,
+    ...intakeFields,
+    idea: leadWorkSchema.shape.idea.or(z.literal("")).default(""),
     source: socialChannelSchema,
-    requestType: contactFields.requestType.optional(),
-    idea: contactFields.idea.optional(),
-    submissionId: z.string().uuid(),
-    website: text(200).optional().default(""),
   })
   .strict()
-  .refine(
-    ({ requestType, idea }) => Boolean(requestType) === Boolean(idea),
-    "Elige el tipo de trabajo y describe tu proyecto.",
-  );
+  .refine(hasContact, contactError)
+  .refine(({ requestType, idea }) => Boolean(requestType) === Boolean(idea), {
+    message:
+      "Indica el tipo de trabajo y la descripción, o deja ambos pendientes.",
+    path: ["idea"],
+  });
 export const publicLeadSchema = z
-  .object({
-    ...contactFields,
-    submissionId: z.string().uuid(),
-    website: text(200).optional().default(""),
-  })
-  .strict();
+  .object({ ...intakeFields, district: text(120).default("") })
+  .strict()
+  .refine(hasContact, contactError);
 export const leadUpdateSchema = z
   .object({
     ...contactFields,
-    district: contactFields.district.or(z.literal("")),
+    district: text(120),
     requestType: requestSchema.or(z.literal("")),
-    idea: contactFields.idea.or(z.literal("")),
+    idea: text(4000),
     version: z.number().int().positive(),
     segment: segmentSchema.or(z.literal("")),
     stage: stageSchema,
@@ -128,7 +147,8 @@ export const leadUpdateSchema = z
     completionNote: text(3000),
     discardReason: text(1000),
   })
-  .strict();
+  .strict()
+  .refine(hasContact, contactError);
 export type LeadStage = z.infer<typeof stageSchema>;
 export type LeadInput = z.infer<typeof leadUpdateSchema>;
 export type LeadEvent = {

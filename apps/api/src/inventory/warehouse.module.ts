@@ -25,6 +25,11 @@ class WarehouseController {
     private readonly inventory: InventoryService,
   ) {}
 
+  @Post("materials/import/preview")
+  previewMaterials(@Body() raw: unknown) {
+    return this.inventory.previewImport(raw);
+  }
+
   @Post("materials/import")
   importMaterials(@Body() raw: unknown) {
     return this.inventory.importMaterials(raw);
@@ -55,9 +60,20 @@ class WarehouseController {
   }
 
   @Get("purchases")
-  purchases(@Query("page") page = "1") {
+  purchases(
+    @Query("page") page = "1",
+    @Query("search") search = "",
+    @Query("status") status?: string,
+  ) {
     return this.warehouse.listPurchases(
       parse(z.coerce.number().int().min(1).max(10000), page),
+      parse(z.string(), search),
+      status
+        ? parse(
+            z.enum(["requested", "open", "partial", "received", "cancelled"]),
+            status,
+          )
+        : undefined,
     );
   }
 

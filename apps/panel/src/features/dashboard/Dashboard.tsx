@@ -9,6 +9,9 @@ import {
   Kanban,
   CheckCircle2,
   RefreshCw,
+  FileText,
+  ReceiptText,
+  Wallet,
 } from "lucide-react";
 import { LEAD_STAGES, type SessionUser } from "@veca/content";
 import { api } from "../../lib/api";
@@ -37,6 +40,13 @@ type Summary = {
     balance: number;
     minimum: number;
   }[];
+  accounting?: { guides: number; requests: number; collect: number } | null;
+  returnedDispatches?: {
+    id: string;
+    leadId: string;
+    workName: string;
+    observation: string;
+  }[];
   publishedProjects: number | null;
   pendingUsers: number | null;
   mail?: { configured: boolean; pending: number };
@@ -53,7 +63,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
       .catch((e) => setError(e.message));
   }, []);
   useEffect(refresh, [refresh]);
-  useLiveRefresh(refresh);
+  useLiveRefresh(refresh, false);
   if (!data)
     return (
       <main className="ops-page">
@@ -64,20 +74,45 @@ export function Dashboard({ user }: { user: SessionUser }) {
   const can = (permission: string) =>
     user.permissions.some((p) => p === permission);
   const cards = [
+    ...(can("accounting") && data.accounting
+      ? [
+          {
+            label: "Guías por revisar",
+            value: data.accounting.guides,
+            detail: "Revisar traslados y envíos",
+            href: "#accounting/guias/revision",
+            Icon: FileText,
+          },
+          {
+            label: "Facturas solicitadas",
+            value: data.accounting.requests,
+            detail: "Completar solicitudes de obra",
+            href: "#accounting/facturas/solicitadas",
+            Icon: ReceiptText,
+          },
+          {
+            label: "Facturas por cobrar",
+            value: data.accounting.collect,
+            detail: "Revisar saldos pendientes",
+            href: "#accounting/facturas/por-cobrar",
+            Icon: Wallet,
+          },
+        ]
+      : []),
     ...(can("leads")
       ? [
           {
             label: "Por contactar",
             value: data?.stages.prelead || 0,
             detail: "Primeras conversaciones pendientes",
-            href: "#leads",
+            href: "#leads/etapa/prelead",
             Icon: Kanban,
           },
           {
             label: "Obras en ejecución",
             value: data?.stages.execution || 0,
             detail: "Proyectos que están tomando forma",
-            href: "#leads",
+            href: "#leads/etapa/execution",
             Icon: Layers3,
           },
         ]
@@ -159,7 +194,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
           </div>
           <div>
             {LEAD_STAGES.slice(0, 5).map((stage, i) => (
-              <a key={stage.id} href="#leads">
+              <a key={stage.id} href={`#leads/etapa/${stage.id}`}>
                 <span>{stage.name}</span>
                 <strong>{data?.stages[stage.id] || 0}</strong>
                 <div className="workspace-stage-bar">
@@ -223,7 +258,11 @@ export function Dashboard({ user }: { user: SessionUser }) {
             </div>
             {data?.lowStock.length ? (
               data.lowStock.map((m) => (
-                <a className="workspace-row" href="#inventory" key={m.id}>
+                <a
+                  className="workspace-row"
+                  href={`#inventory/materiales/${m.id}`}
+                  key={m.id}
+                >
                   <span>
                     <strong>{m.name}</strong>
                     <small>
@@ -249,7 +288,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
         {can("leads") && (
           <section className="workspace-section">
             <div className="workspace-section-head">
-              <h2>Últimas leads</h2>
+              <h2>Consultas recientes</h2>
               <Kanban size={19} />
             </div>
             {data?.recent.length ? (
@@ -275,7 +314,27 @@ export function Dashboard({ user }: { user: SessionUser }) {
             )}
           </section>
         )}
-        {!can("leads") && !can("inventory") && (
+        {!!data.returnedDispatches?.length && (
+          <section className="workspace-section">
+            <h2>Despachos devueltos</h2>
+            {data.returnedDispatches.map((item) => (
+              <a
+                className="workspace-row"
+                href={`#leads/${item.leadId}/despacho/${item.id}`}
+                key={item.id}
+              >
+                <span>
+                  <strong>{item.workName}</strong>
+                  <small>
+                    {item.observation || "Revisa los datos del despacho"}
+                  </small>
+                </span>
+                <ArrowUpRight size={16} />
+              </a>
+            ))}
+          </section>
+        )}
+        {!can("leads") && !can("inventory") && !can("accounting") && (
           <section className="workspace-section">
             <h2>Tu espacio en el equipo</h2>
             <p>

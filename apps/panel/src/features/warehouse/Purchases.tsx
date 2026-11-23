@@ -1,3 +1,4 @@
+import { Select } from "@veca/ui/src/Select";
 import { useRef, useState } from "react";
 import { ClipboardList, Plus, Trash2 } from "lucide-react";
 import {
@@ -38,15 +39,22 @@ type Receipt = Purchase["receipts"][number];
 export function Purchases({
   selected,
   workId = "",
+  accountingAccess = false,
 }: {
   selected?: string;
   workId?: string;
+  accountingAccess?: boolean;
 }) {
   const [create, setCreate] = useState(false);
   const [requesting, setRequesting] = useState(Boolean(workId));
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const params = new URLSearchParams({ page: String(page) });
+  if (search.trim()) params.set("search", search.trim());
+  if (status) params.set("status", status);
   const list = useAccountingQuery<{ items: Purchase[]; hasMore: boolean }>(
-    selected ? "" : `${path}?page=${page}`,
+    selected ? "" : `${path}?${params}`,
   );
   const materials = useWarehouseMaterials();
   const works = useWarehouseWorks();
@@ -57,7 +65,11 @@ export function Purchases({
     return (
       <QueryState {...query}>
         {query.data && (
-          <PurchaseDetail row={query.data} refresh={query.refresh} />
+          <PurchaseDetail
+            row={query.data}
+            refresh={query.refresh}
+            accountingAccess={accountingAccess}
+          />
         )}
       </QueryState>
     );
@@ -72,7 +84,47 @@ export function Purchases({
           </Button>
         </div>
       </header>
-      <QueryState {...list} empty="Todavía no se han registrado compras.">
+      <p className="hint">
+        Registra solicitudes, compras y recepciones aquí. Contabilidad revisa
+        los comprobantes en Compras y gastos.
+      </p>
+      <div className="accounting-filters">
+        <Field label="Buscar compras">
+          <input
+            type="search"
+            placeholder="Proveedor, obra o material"
+            maxLength={100}
+            value={search}
+            onChange={(event) => {
+              setPage(1);
+              setSearch(event.target.value);
+            }}
+          />
+        </Field>
+        <Select
+          label="Estado de la compra"
+          value={status}
+          onChange={(value) => {
+            setPage(1);
+            setStatus(value);
+          }}
+          options={[
+            { value: "", label: "Todos los estados" },
+            ...Object.entries(purchaseStatus).map(([value, label]) => ({
+              value,
+              label,
+            })),
+          ]}
+        />
+      </div>
+      <QueryState
+        {...list}
+        empty={
+          search || status
+            ? "No hay compras con estos filtros."
+            : "Todavía no se han registrado compras."
+        }
+      >
         {Boolean(list.data?.items.length) && (
           <ul className="warehouse-list">
             {list.data?.items.map((row) => (
@@ -419,9 +471,11 @@ function PurchaseRequestForm({
 function PurchaseDetail({
   row,
   refresh,
+  accountingAccess,
 }: {
   row: Purchase;
   refresh: () => void;
+  accountingAccess: boolean;
 }) {
   const [receiving, setReceiving] = useState<{
     item: Item;
@@ -463,6 +517,16 @@ function PurchaseDetail({
           </small>
         )}
         <p>{row.reason}</p>
+        {["open", "partial", "received"].includes(row.status) &&
+          (accountingAccess ? (
+            <a className="warehouse-link" href={`#accounting/gastos/${row.id}`}>
+              Ver o registrar sustento en Contabilidad
+            </a>
+          ) : (
+            <p className="hint">
+              Contabilidad registra y revisa el sustento de la compra.
+            </p>
+          ))}
       </div>
       <ul className="warehouse-list warehouse-detail-list">
         {row.items.map((item) => {

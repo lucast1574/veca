@@ -17,14 +17,17 @@ import "./dispatch.css";
 export function LeadDispatches({
   lead,
   inventoryAccess,
+  dispatchId,
 }: {
   lead: Lead;
   inventoryAccess: boolean;
+  dispatchId?: string;
 }) {
   const path = `/admin/crm/leads/${lead.id}/dispatches`;
   const [rows, setRows] = useState<Dispatch[] | null>(null);
   const [departing, setDeparting] = useState<Dispatch>();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [initial, setInitial] = useState<DispatchInput | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const editing = useRef<Dispatch | null>(null);
@@ -62,23 +65,59 @@ export function LeadDispatches({
         .catch(() => {});
   }
 
-  async function save(data: DispatchInput, submit: boolean) {
+  async function save(
+    data: DispatchInput,
+    submit: boolean,
+    unchanged: boolean,
+  ) {
+    setNotice("");
     const current = editing.current;
     const draft = current
-      ? await api<Dispatch>(`${path}/${current.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ version: current.version, data }),
-        })
+      ? unchanged
+        ? current
+        : await api<Dispatch>(`${path}/${current.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ version: current.version, data }),
+          })
       : await post<Dispatch>(path, data);
     editing.current = draft;
     if (submit) {
-      await post<Dispatch>(`${path}/${draft.id}/submit`, {
-        version: draft.version,
-      });
+      try {
+        await post<Dispatch>(`${path}/${draft.id}/submit`, {
+          version: draft.version,
+        });
+      } catch (error) {
+        const rows = await api<Dispatch[]>(path).catch(() => null);
+        const updated = rows?.find((row) => row.id === draft.id);
+        if (rows) setRows(rows);
+        if (!updated || updated.version === draft.version)
+          return { sendError: (error as Error).message };
+        setInitial(null);
+        if (updated.status === "review") {
+          setNotice("El despacho está en revisión de Contabilidad.");
+        } else {
+          setError(
+            "El despacho cambió en otra sesión. Revisa la versión actual antes de enviarlo.",
+          );
+        }
+        return;
+      }
     }
     setInitial(null);
+    setNotice(
+      submit
+        ? "Despacho enviado a Contabilidad para revisión."
+        : "Borrador de despacho guardado.",
+    );
     await load();
   }
+
+  useEffect(() => {
+    if (!dispatchId || !rows?.some((row) => row.id === dispatchId)) return;
+    const row = document.getElementById(`dispatch-${dispatchId}`);
+    row?.scrollIntoView({ block: "center" });
+    row?.focus({ preventScroll: true });
+  }, [dispatchId, rows]);
 
   return (
     <section className="ops-card dispatch-lead">
@@ -96,6 +135,7 @@ export function LeadDispatches({
         </div>
       </div>
       {error && <Notice error>{error}</Notice>}
+      {notice && <Notice>{notice}</Notice>}
       {!error && !rows && <p role="status">Cargando despachos…</p>}
       {rows?.length === 0 && (
         <p className="hint">
@@ -107,7 +147,11 @@ export function LeadDispatches({
       {rows && rows.length > 0 && (
         <ul className="dispatch-list">
           {rows.map((row) => (
-            <li key={row.id}>
+            <li
+              id={`dispatch-${row.id}`}
+              key={row.id}
+              tabIndex={dispatchId === row.id ? -1 : undefined}
+            >
               <div>
                 <strong>{transferLabel(row.transferAt)}</strong>
                 <small>

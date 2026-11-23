@@ -24,6 +24,7 @@ export const date = (s: string) =>
   new Date(s).toLocaleString("es-PE", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "America/Lima",
   });
 export const amount = (n: number) =>
   n.toLocaleString("es-PE", { maximumFractionDigits: 3 });
@@ -81,8 +82,13 @@ export function leadInput(lead: Lead): LeadInput {
     discardReason,
   };
 }
-export function useLiveRefresh(refresh: () => void) {
+export function useLiveRefresh(
+  refresh: () => void,
+  refreshOnOpen = true,
+  enabled = true,
+) {
   useEffect(() => {
+    if (!enabled) return;
     const stream = new EventSource(API_BASE + "/admin/crm/events", {
       withCredentials: true,
     });
@@ -92,7 +98,7 @@ export function useLiveRefresh(refresh: () => void) {
       } catch {}
     };
     stream.onmessage = update;
-    stream.onopen = refresh;
+    if (refreshOnOpen) stream.onopen = refresh;
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, 15000);
@@ -100,7 +106,7 @@ export function useLiveRefresh(refresh: () => void) {
       stream.close();
       clearInterval(timer);
     };
-  }, [refresh]);
+  }, [enabled, refresh, refreshOnOpen]);
 }
 export function Movements({ items }: { items: Movement[] }) {
   return items.length ? (

@@ -1,3 +1,4 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   slugify,
   type Project,
   type ProjectInput,
+  type PublicationRequirement,
   type RichNode,
   type Media,
   type PageLayout,
@@ -103,8 +105,28 @@ export function ProjectEditor({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [requirement, setRequirement] = useState<PublicationRequirement | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!requirement || step !== 0) return;
+    const frame = requestAnimationFrame(() => {
+      const region = document.getElementById(requirement.target);
+      if (!region) return;
+      const field = region.matches("button, input, [contenteditable]")
+        ? region
+        : (requirement.target === "project-story" &&
+            region.querySelector<HTMLElement>("[contenteditable]")) ||
+          region.querySelector<HTMLElement>("input, button, [contenteditable]");
+      (field || region).scrollIntoView({ block: "center" });
+      (field || region).focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [requirement, step]);
+
   const [publishedResult, setPublishedResult] = useState<Project | null>(null);
   function goToStep(next: 0 | 1 | 2) {
+    if (next !== 0) setRequirement(null);
     setStep(next);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
@@ -132,24 +154,7 @@ export function ProjectEditor({
   const ready = useCallback((fn: (image: Media, layout: string) => void) => {
     insert.current = fn;
   }, []);
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (dirty) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
-    };
-    addEventListener("beforeunload", handler);
-    return () => removeEventListener("beforeunload", handler);
-  }, [dirty]);
-  useEffect(() => {
-    const preventWhileBusy = (event: Event) => {
-      if (busy) event.preventDefault();
-    };
-    window.addEventListener("veca-before-navigate", preventWhileBusy);
-    return () =>
-      window.removeEventListener("veca-before-navigate", preventWhileBusy);
-  }, [busy]);
+  useUnsavedChanges(dirty, busy);
   function accept(project: Project) {
     setSaved(project);
     setDraft(toInput(project));
@@ -233,11 +238,7 @@ export function ProjectEditor({
           className="back-button"
           disabled={busy}
           onClick={() => {
-            if (
-              !dirty ||
-              confirm("Tienes cambios sin guardar. ¿Salir del editor?")
-            )
-              onBack();
+            if (confirmDiscard(dirty, busy)) onBack();
           }}
         >
           <ArrowLeft size={18} />
@@ -312,11 +313,14 @@ export function ProjectEditor({
             slug={saved?.slug || slugify(draft.title) || "tu-proyecto"}
             busy={busy}
             updating={saved?.status === "published"}
-            onEdit={() => goToStep(0)}
+            onEdit={(issue) => {
+              setRequirement(issue);
+              goToStep(0);
+            }}
             hasBeenPublished={Boolean(
               saved?.hasBeenPublished || saved?.status === "published",
             )}
-            socialShareQueued={Boolean(saved?.socialShareQueuedAt)}
+            saved={saved}
             onPublish={() => void action("publish")}
           />
         ) : (
@@ -361,6 +365,7 @@ export function ProjectEditor({
               </section>
               <section className="editor-card">
                 <ImageLibrary
+                  initialPhoto={requirement?.photoId}
                   images={draft.images}
                   onBusyChange={setUploading}
                   coverId={draft.coverId}
@@ -406,7 +411,7 @@ export function ProjectEditor({
                   }
                 />
               </section>
-              <section className="editor-card">
+              <section className="editor-card" id="project-story" tabIndex={-1}>
                 {draft.pageLayout === "legacy" ? (
                   <>
                     <div className="section-row">
@@ -430,6 +435,7 @@ export function ProjectEditor({
                   </>
                 ) : (
                   <StorySections
+                    initialSection={requirement?.sectionId}
                     sections={draft.sections}
                     images={draft.images}
                     disabled={busy}

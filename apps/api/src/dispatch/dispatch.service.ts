@@ -1,3 +1,4 @@
+import { literalSearch } from "../common/literal-search";
 import {
   BadRequestException,
   ConflictException,
@@ -225,7 +226,7 @@ export class DispatchService {
     return fixtureId;
   }
 
-  async queue(page: number, filter: "all" | "review" | "issued") {
+  async queue(page: number, filter: "all" | "review" | "issued", search = "") {
     const statuses: Record<typeof filter, DispatchStatus[]> = {
       all: [
         "review",
@@ -239,10 +240,27 @@ export class DispatchService {
       review: ["review", "sending", "pending", "rejected"],
       issued: ["accepted", "observed"],
     };
+    const safe = literalSearch(search);
     const size = 30;
     const docs = await this.collection
       .aggregate<DispatchRecord>([
-        { $match: { status: { $in: statuses[filter] } } },
+        {
+          $match: {
+            status: { $in: statuses[filter] },
+            ...(safe
+              ? {
+                  $or: [
+                    "workName",
+                    "guideNumber",
+                    "data.recipientName",
+                    "data.recipientNumber",
+                  ].map((field) => ({
+                    [field]: { $regex: safe, $options: "i" },
+                  })),
+                }
+              : {}),
+          },
+        },
         {
           $addFields: {
             priority: {

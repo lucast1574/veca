@@ -1,3 +1,4 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
@@ -48,14 +49,21 @@ type Props = {
   initial: DispatchInput;
   materials: Material[];
   onClose: () => void;
-  onSave: (data: DispatchInput, submit: boolean) => Promise<void>;
+  onSave: (
+    data: DispatchInput,
+    submit: boolean,
+    unchanged: boolean,
+  ) => Promise<{ sendError: string } | void>;
 };
 
 export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
   const formId = useId();
   const [draft, setDraft] = useState(initial);
+  const [savedDraft, setSavedDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sendError, setSendError] = useState("");
+  useUnsavedChanges(draft !== savedDraft, busy);
   const patch = <Key extends keyof DispatchInput>(
     key: Key,
     value: DispatchInput[Key],
@@ -104,11 +112,7 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
   }
 
   function close() {
-    if (
-      !busy &&
-      (draft === initial || window.confirm("¿Cerrar sin guardar el despacho?"))
-    )
-      onClose();
+    if (confirmDiscard(draft !== savedDraft, busy)) onClose();
   }
 
   async function save(submit: boolean) {
@@ -129,7 +133,11 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
     }
     setBusy(true);
     try {
-      await onSave(draft, submit);
+      const outcome = await onSave(draft, submit, draft === savedDraft);
+      if (outcome) {
+        setSavedDraft(draft);
+        setSendError(outcome.sendError);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -155,7 +163,11 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
             Guardar borrador
           </Button>
           <Button type="submit" form={formId} disabled={busy}>
-            {busy ? "Guardando…" : "Enviar a Contabilidad"}
+            {busy
+              ? "Guardando…"
+              : sendError && draft === savedDraft
+                ? "Reintentar envío"
+                : "Enviar a Contabilidad"}
           </Button>
         </footer>
       }
@@ -168,6 +180,11 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
         }}
         className="dispatch-stack"
       >
+        {sendError && (
+          <Notice error>
+            Borrador guardado. Falta enviarlo a Contabilidad. {sendError}
+          </Notice>
+        )}
         {error && <Notice error>{error}</Notice>}
         <fieldset disabled={busy} className="dispatch-fields">
           <legend>Traslado</legend>

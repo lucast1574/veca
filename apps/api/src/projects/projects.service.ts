@@ -11,6 +11,7 @@ import {
   seoFor,
   slugify,
   publicationIssues,
+  SOCIAL_CHANNELS,
   type ProjectInput,
   type RichNode,
 } from "@veca/content";
@@ -42,6 +43,16 @@ export class ProjectsService {
       hasUnpublishedChanges: !!d.published && d.publishedVersion !== d.version,
       hasBeenPublished: Boolean(d.firstPublishedAt || d.published),
       socialShareQueuedAt: d.socialShare?.queuedAt,
+      ...(d.socialShare
+        ? {
+            socialDelivery: Object.fromEntries(
+              SOCIAL_CHANNELS.map((channel) => [
+                channel,
+                d.socialShare?.channels?.[channel]?.state ?? "pending",
+              ]),
+            ),
+          }
+        : {}),
     };
   }
   async list() {

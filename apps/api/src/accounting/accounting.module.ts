@@ -60,8 +60,11 @@ class AccountingController {
   }
 
   @Get("invoices")
-  async invoices(@Query("page") page = "1") {
-    const list = await this.accounts.listInvoices(parse(pageIndex, page));
+  async invoices(@Query("page") page = "1", @Query("queue") queue?: string) {
+    const list = await this.accounts.listInvoices(
+      parse(pageIndex, page),
+      queue ? parse(z.enum(["requested", "collect"]), queue) : undefined,
+    );
     return { ...list, enabled: this.accounts.enabled };
   }
 
@@ -138,10 +141,15 @@ class AccountingController {
   }
 
   @Get("costs")
-  costs(@Query("page") page = "1", @Query("month") month?: string) {
+  costs(
+    @Query("page") page = "1",
+    @Query("month") month?: string,
+    @Query("purchase") purchase?: string,
+  ) {
     return this.accounts.listCosts(
       parse(pageIndex, page),
       month ? parse(accountingMonth, month) : undefined,
+      purchase ? parse(accountingId, purchase) : undefined,
     );
   }
 

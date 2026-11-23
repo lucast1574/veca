@@ -1,10 +1,11 @@
+import { literalSearch } from "../common/literal-search";
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ObjectId } from "mongodb";
+import { ObjectId, type Filter } from "mongodb";
 import {
   equipmentInput,
   equipmentAction,
@@ -113,9 +114,69 @@ export class WarehouseService {
     }));
   }
 
-  async listPurchases(page: number) {
+  async listPurchases(page: number, search = "", status?: Purchase["status"]) {
+    const safe = literalSearch(search);
+    const query: Filter<PurchaseRecord> = safe
+      ? {
+          $or: [
+            "supplier",
+            "supplierRuc",
+            "workName",
+            "items.sku",
+            "items.name",
+            "receipts.reference",
+          ].map((field) => ({
+            [field]: { $regex: safe, $options: "i" },
+          })),
+        }
+      : {};
+    if (status === "cancelled") query.cancelled = true;
+    if (status === "requested") {
+      query.cancelled = { $ne: true };
+      query.requestedOnly = true;
+    }
+    if (status === "open" || status === "partial" || status === "received") {
+      query.cancelled = { $ne: true };
+      query.requestedOnly = { $ne: true };
+      const everyReceived = {
+        $allElementsTrue: [
+          {
+            $map: {
+              input: "$items",
+              as: "item",
+              in: {
+                $eq: [
+                  { $round: [{ $multiply: ["$$item.received", 1000] }, 0] },
+                  { $round: [{ $multiply: ["$$item.ordered", 1000] }, 0] },
+                ],
+              },
+            },
+          },
+        ],
+      };
+      const anyReceived = {
+        $anyElementTrue: [
+          {
+            $map: {
+              input: "$items",
+              as: "item",
+              in: { $gt: ["$$item.received", 0] },
+            },
+          },
+        ],
+      };
+      query.$expr =
+        status === "received"
+          ? everyReceived
+          : {
+              $and: [
+                { $not: [everyReceived] },
+                status === "partial" ? anyReceived : { $not: [anyReceived] },
+              ],
+            };
+    }
     const rows = await this.orders
-      .find()
+      .find(query)
       .sort({ _id: -1 })
       .skip((page - 1) * 30)
       .limit(31)

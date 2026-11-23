@@ -792,3 +792,121 @@
     font-size: 11px;
   }
 }
+
+.leads-page .ops-heading h1 {
+  font-size: clamp(32px, 4vw, 48px);
+}
+.lead-tools {
+  display: flex;
+  flex-wrap: wrap;
+}
+.lead-tools .search-input {
+  flex: 1 1 230px;
+}
+.lead-view-actions,
+.lead-layout,
+.lead-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lead-layout button,
+.lead-card-actions :is(a, button),
+.lead-card-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--panel-soft);
+  color: var(--panel-ink);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.lead-layout button[aria-pressed="true"],
+.lead-layout button:is(:focus-visible, :hover),
+.lead-card-actions :is(a, button):is(:focus-visible, :hover),
+.lead-card-open:is(:focus-visible, :hover) {
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+  outline: none;
+}
+.lead-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.lead-card-open {
+  justify-content: space-between;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  font-size: 16px;
+}
+.lead-list .ops-lead-card {
+  height: 100%;
+}
+.ops-lead-card .lead-card-actions {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+.lead-card-context,
+.lead-card-actions {
+  font-size: 13px;
+}
+.leads-page .lead-card-context {
+  color: var(--panel-secondary);
+}
+.leads-page .ops-column-empty,
+.leads-page .ops-board-bottom :is(p, span) {
+  color: var(--panel-secondary);
+  font-size: 13px;
+}
+@media (max-width: 720px) {
+  .lead-tools {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .lead-tools .search-input {
+    grid-column: 1 / -1;
+  }
+  .lead-tools > .veca-select {
+    min-width: 0;
+  }
+  .lead-tools > .veca-select .veca-select-trigger {
+    gap: 8px;
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .lead-view-actions {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+  .lead-layout button,
+  .lead-card-actions :is(a, button),
+  .lead-card-open {
+    min-height: 44px;
+  }
+}
+
+.leads-page .ops-lead-card {
+  position: relative;
+}
+.lead-card-open::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+}
+.ops-lead-card .lead-card-actions :is(a, button) {
+  position: relative;
+  z-index: 1;
+}

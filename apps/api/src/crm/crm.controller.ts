@@ -155,6 +155,11 @@ class CrmController {
     return this.inventory.list(search);
   }
   @RequirePermission("inventory")
+  @Get("materials/:id")
+  material(@Param("id") id: string) {
+    return this.inventory.detail(id);
+  }
+  @RequirePermission("inventory")
   @Post("materials")
   createMaterial(@Body() body: unknown) {
     return this.inventory.create(body);

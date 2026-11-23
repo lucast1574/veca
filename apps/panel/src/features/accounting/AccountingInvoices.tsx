@@ -1,3 +1,4 @@
+import { useUnsavedChanges } from "../../lib/unsaved";
 import { useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import {
@@ -43,10 +44,16 @@ type InvoicePage = {
   enabled: boolean;
 };
 
-export function AccountingInvoices({ selected }: { selected: string }) {
+export function AccountingInvoices({
+  selected,
+  queue = "",
+}: {
+  selected: string;
+  queue?: "" | "requested" | "collect";
+}) {
   const [page, setPage] = useState(1);
   const query = useAccountingQuery<InvoicePage>(
-    selected ? "" : `${root}?page=${page}`,
+    selected ? "" : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
   );
   if (selected === "nueva") return <InvoiceForm />;
   if (selected) return <InvoiceDetail id={selected} />;
@@ -65,13 +72,43 @@ export function AccountingInvoices({ selected }: { selected: string }) {
           </a>
         </div>
       </header>
+      <nav className="accounting-tabs" aria-label="Filtrar facturas">
+        <a
+          className="accounting-inline"
+          href={baseHash}
+          aria-current={!queue ? "page" : undefined}
+        >
+          Todas
+        </a>
+        <a
+          className="accounting-inline"
+          href={baseHash + "/solicitadas"}
+          aria-current={queue === "requested" ? "page" : undefined}
+        >
+          Solicitadas
+        </a>
+        <a
+          className="accounting-inline"
+          href={baseHash + "/por-cobrar"}
+          aria-current={queue === "collect" ? "page" : undefined}
+        >
+          Por cobrar
+        </a>
+      </nav>
       {query.data && !query.data.enabled && (
         <Notice>
           Emisión electrónica pendiente de configuración. Puedes preparar
           borradores.
         </Notice>
       )}
-      <QueryState {...query} empty="Todavía no hay facturas registradas.">
+      <QueryState
+        {...query}
+        empty={
+          queue
+            ? "No hay facturas en esta bandeja."
+            : "Todavía no hay facturas registradas."
+        }
+      >
         {rows.length > 0 && (
           <ul className="dispatch-list dispatch-queue">
             {rows.map((row) => (
@@ -135,6 +172,8 @@ function InvoiceForm({
     })),
   );
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const clearGuard = useUnsavedChanges(dirty, busy);
   const [error, setError] = useState("");
   const id = useRef(recordId());
   const items = draft.map((item) => ({
@@ -183,6 +222,8 @@ function InvoiceForm({
             id: id.current,
             data: parsed.data,
           });
+      clearGuard();
+      setDirty(false);
       if (onSaved) onSaved(saved);
       else location.hash = `${baseHash}/${saved.id}`;
     } catch (e) {
@@ -199,7 +240,11 @@ function InvoiceForm({
           <ArrowLeft size={16} /> Facturas y cobros
         </a>
       )}
-      <form className="accounting-form accounting-group" onSubmit={save}>
+      <form
+        className="accounting-form accounting-group"
+        onSubmit={save}
+        onChange={() => setDirty(true)}
+      >
         <h2>{current ? "Editar borrador" : "Nueva factura"}</h2>
         <fieldset disabled={busy}>
           <div className="accounting-grid">
@@ -226,7 +271,10 @@ function InvoiceForm({
                 label="Origen"
                 value={work}
                 options={workOptions}
-                onChange={setWork}
+                onChange={(value) => {
+                  setWork(value);
+                  setDirty(true);
+                }}
               />
             </Field>
             <Field label="Forma de pago">
@@ -237,7 +285,10 @@ function InvoiceForm({
                   { value: "cash", label: "Contado" },
                   { value: "credit", label: "Crédito" },
                 ]}
-                onChange={(value) => setMethod(value as InvoiceInput["method"])}
+                onChange={(value) => {
+                  setMethod(value as InvoiceInput["method"]);
+                  setDirty(true);
+                }}
               />
             </Field>
             {method === "credit" && (

@@ -1,3 +1,4 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useCallback,
   useEffect,
@@ -69,19 +70,21 @@ const phases = [
 export function LeadDetail({
   id,
   proposal,
+  dispatchId,
   inventoryAccess = true,
   dispatchAccess = false,
   back,
 }: {
   id: string;
   proposal?: string;
+  dispatchId?: string;
   inventoryAccess?: boolean;
   dispatchAccess?: boolean;
   back: () => void;
 }) {
   const [data, setData] = useState<LeadDetailData | null>(null),
     [draft, setDraft] = useState<LeadInput | null>(null),
-    [tab, setTab] = useState("overview"),
+    [tab, setTab] = useState(dispatchId ? "work" : "overview"),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState(false),
     [transition, setTransition] = useState<LeadInput["stage"] | null>(null),
@@ -152,24 +155,7 @@ export function LeadDetail({
     !!data &&
     !!draft &&
     JSON.stringify(draft) !== JSON.stringify(leadInput(data.lead));
-  useEffect(() => {
-    const protect = (event: BeforeUnloadEvent) => {
-      if (dirty) {
-        event.preventDefault();
-        event.returnValue = "";
-      }
-    };
-    const navigate = (event: Event) => {
-      if (dirty && !confirm("Hay cambios sin guardar. ¿Salir de la ficha?"))
-        event.preventDefault();
-    };
-    window.addEventListener("veca-before-navigate", navigate);
-    window.addEventListener("beforeunload", protect);
-    return () => {
-      window.removeEventListener("beforeunload", protect);
-      window.removeEventListener("veca-before-navigate", navigate);
-    };
-  }, [dirty]);
+  useUnsavedChanges(dirty || Boolean(note.trim()), busy);
   function patch<K extends keyof LeadInput>(key: K, value: LeadInput[K]) {
     setDraft((old) => (old ? { ...old, [key]: value } : old));
     setNotice("");
@@ -245,16 +231,7 @@ export function LeadDetail({
     return (
       <main className="ops-page">
         {error ? <Notice error>{error}</Notice> : <p>Cargando ficha…</p>}
-        <Button
-          variant="ghost"
-          onClick={() => {
-            if (
-              !dirty ||
-              confirm("Hay cambios sin guardar. ¿Salir de la ficha?")
-            )
-              back();
-          }}
-        >
+        <Button variant="ghost" onClick={back}>
           Volver al tablero
         </Button>
       </main>
@@ -307,16 +284,7 @@ export function LeadDetail({
   return (
     <main className="ops-page ops-detail">
       <div className="lead-detail-top">
-        <button
-          className="ops-back"
-          onClick={() => {
-            if (
-              !dirty ||
-              confirm("Hay cambios sin guardar. ¿Salir de la ficha?")
-            )
-              back();
-          }}
-        >
+        <button className="ops-back" onClick={back}>
           <ArrowLeft size={17} /> Leads
         </button>
         <button
@@ -442,7 +410,7 @@ export function LeadDetail({
                   <dt>Cita</dt>
                   <dd>
                     {lead.appointment
-                      ? date(lead.appointment)
+                      ? date(lead.appointment) + " (hora de Lima)"
                       : "Por programar"}
                   </dd>
                 </div>
@@ -485,14 +453,18 @@ export function LeadDetail({
                   <span>Contacto ficticio</span>
                 ) : (
                   <>
-                    <a href={`tel:${lead.phone}`}>
-                      <Phone size={16} />
-                      {lead.phone}
-                    </a>
-                    <a href={`mailto:${lead.email}`}>
-                      <Mail size={16} />
-                      {lead.email}
-                    </a>
+                    {lead.phone && (
+                      <a href={`tel:${lead.phone}`}>
+                        <Phone size={16} />
+                        {lead.phone}
+                      </a>
+                    )}
+                    {lead.email && (
+                      <a href={`mailto:${lead.email}`}>
+                        <Mail size={16} />
+                        {lead.email}
+                      </a>
+                    )}
                   </>
                 )}
                 <span>
@@ -713,7 +685,11 @@ export function LeadDetail({
       )}
       {tab === "work" && dispatchAccess && (
         <div id="lead-dispatches">
-          <LeadDispatches lead={lead} inventoryAccess={inventoryAccess} />
+          <LeadDispatches
+            lead={lead}
+            inventoryAccess={inventoryAccess}
+            dispatchId={dispatchId}
+          />
         </div>
       )}
       {tab === "materials" && inventoryAccess && (

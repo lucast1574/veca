@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SocialChannel } from "./crm.js";
 import { locationKey, matchPeruLocation } from "./locations.js";
 export * from "./locations.js";
 
@@ -230,40 +231,86 @@ export type Project = ProjectInput & {
   hasUnpublishedChanges?: boolean;
   hasBeenPublished?: boolean;
   socialShareQueuedAt?: string;
+  socialDelivery?: Record<
+    SocialChannel,
+    "pending" | "processing" | "published" | "review" | "retry"
+  >;
 };
-export function publicationIssues(project: ProjectInput): string[] {
-  const issues: string[] = [];
+export type PublicationRequirement = {
+  message: string;
+  target: string;
+  photoId?: string;
+  sectionId?: string;
+};
+export function publicationRequirements(
+  project: ProjectInput,
+): PublicationRequirement[] {
+  const requirements: PublicationRequirement[] = [];
+  const cover = project.images.find((image) => image.id === project.coverId);
+  const firstUndescribed = project.images.find(
+    (image) => !image.alt.trim() && image.id !== cover?.id,
+  );
+  const firstSection = project.sections[0]?.id;
+  const emptySection = project.sections.find(
+    (section) =>
+      !section.imageIds.length &&
+      !plainText(section.body).trim() &&
+      !section.title.trim(),
+  );
   if (project.title.trim().length < 4)
-    issues.push("Escribe un título de al menos 4 caracteres.");
+    requirements.push({
+      message: "Escribe un título de al menos 4 caracteres.",
+      target: "title",
+    });
   if (!project.location?.trim())
-    issues.push("Selecciona la ubicación del proyecto.");
-  if (
-    !project.coverId ||
-    !project.images.find((image) => image.id === project.coverId)?.alt.trim()
-  )
-    issues.push("Selecciona una portada y escribe su descripción.");
+    requirements.push({
+      message: "Selecciona la ubicación del proyecto.",
+      target: "location-region",
+    });
+  if (!cover || !cover.alt.trim())
+    requirements.push({
+      message: "Selecciona una portada y escribe su descripción.",
+      target: cover
+        ? "image-alt"
+        : project.images.length
+          ? "choose-cover"
+          : "add-project-photos",
+      photoId: cover?.id || project.images[0]?.id,
+    });
   if (projectText(project).trim().length < 60)
-    issues.push(
-      "Describe el proyecto con al menos 60 caracteres antes de publicarlo.",
-    );
-  if (project.images.some((image) => !image.alt.trim()))
-    issues.push("Describe todas las fotos para accesibilidad y SEO.");
-  if (
-    project.pageLayout !== "legacy" &&
-    project.sections.some(
-      (section) =>
-        !section.imageIds.length &&
-        !plainText(section.body).trim() &&
-        !section.title.trim(),
-    )
-  )
-    issues.push("Completa o quita las secciones vacías antes de publicar.");
+    requirements.push({
+      message:
+        "Describe el proyecto con al menos 60 caracteres antes de publicarlo.",
+      target: "project-story",
+      sectionId: firstSection,
+    });
+  if (firstUndescribed)
+    requirements.push({
+      message: "Describe las fotos que faltan para que sean accesibles.",
+      target: "image-alt",
+      photoId: firstUndescribed.id,
+    });
+  if (project.pageLayout !== "legacy" && emptySection)
+    requirements.push({
+      message: "Completa o quita las secciones vacías antes de publicar.",
+      target: `section-${emptySection.id}`,
+      sectionId: emptySection.id,
+    });
   if (
     project.pageLayout !== "legacy" &&
     !project.sections.some((section) => section.imageIds.length)
   )
-    issues.push("Elige al menos una foto para las secciones de la página.");
-  return issues;
+    requirements.push({
+      message: "Elige al menos una foto para las secciones de la página.",
+      target: !project.images.length
+        ? "add-project-photos"
+        : "story-photo-options",
+      sectionId: firstSection,
+    });
+  return requirements;
+}
+export function publicationIssues(project: ProjectInput): string[] {
+  return publicationRequirements(project).map(({ message }) => message);
 }
 
 export function seoFor(project: ProjectInput, slug: string) {

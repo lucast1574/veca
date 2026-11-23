@@ -116,10 +116,14 @@ class AccountingGuideController {
   constructor(private readonly dispatches: DispatchService) {}
 
   @Get()
-  queue(@Query("page") rawPage = "1", @Query("status") rawStatus = "all") {
+  queue(
+    @Query("page") rawPage = "1",
+    @Query("status") rawStatus = "all",
+    @Query("search") search = "",
+  ) {
     const page = parse(z.coerce.number().int().min(1).max(10_000), rawPage);
     const status = parse(z.enum(["all", "review", "issued"]), rawStatus);
-    return this.dispatches.queue(page, status);
+    return this.dispatches.queue(page, status, parse(z.string(), search));
   }
 
   @Get(":id")

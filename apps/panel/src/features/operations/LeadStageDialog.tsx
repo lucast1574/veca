@@ -1,3 +1,4 @@
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useState } from "react";
 import { LEAD_STAGES, REQUEST_TYPES, type LeadInput } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
@@ -89,14 +90,10 @@ export function LeadStageDialog({
       draft.idea.trim().length >= 10,
     );
   const ready = completeFields && completeWork;
+  useUnsavedChanges(draft !== initial, busy);
 
   function close() {
-    if (
-      !busy &&
-      (draft === initial ||
-        window.confirm("¿Cerrar sin guardar el cambio de etapa?"))
-    )
-      onClose();
+    if (confirmDiscard(draft !== initial, busy)) onClose();
   }
 
   return (
@@ -110,7 +107,7 @@ export function LeadStageDialog({
           <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button type="submit" form={id} disabled={busy || !ready}>
+          <Button type="submit" form={id} disabled={busy}>
             {busy ? "Guardando…" : "Confirmar cambio"}
           </Button>
         </footer>
@@ -120,7 +117,14 @@ export function LeadStageDialog({
         id={id}
         onSubmit={async (event) => {
           event.preventDefault();
-          if (busy || !ready) return;
+          if (busy) return;
+          if (!ready) {
+            setError("Completa los campos de esta etapa para continuar.");
+            event.currentTarget
+              .querySelector<HTMLElement>('[aria-required="true"]')
+              ?.focus();
+            return;
+          }
           setBusy(true);
           setError("");
           try {
@@ -139,10 +143,11 @@ export function LeadStageDialog({
       >
         {phase >= 2 && stage !== "discarded" && (
           <>
-            {!initial.district && (
-              <Field label="Distrito">
+            {initial.district.trim().length < 2 && (
+              <Field label="Distrito" hint="Escribe al menos 2 caracteres.">
                 <input
                   required
+                  minLength={2}
                   maxLength={120}
                   value={draft.district}
                   onChange={(event) =>
@@ -170,8 +175,11 @@ export function LeadStageDialog({
                 />
               </Field>
             )}
-            {!initial.idea && (
-              <Field label="Consulta del cliente">
+            {initial.idea.trim().length < 10 && (
+              <Field
+                label="Consulta del cliente"
+                hint="Describe qué necesita en al menos 10 caracteres."
+              >
                 <textarea
                   required
                   minLength={10}

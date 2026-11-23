@@ -25,12 +25,22 @@ type Verification = {
   email: string;
 };
 type Screen = "login" | "register" | "verify" | "forgot" | "reset" | "activate";
-export function AuthScreen({ onLogin }: { onLogin: (s: AuthSession) => void }) {
+export function AuthScreen({
+  onLogin,
+  sessionExpired = false,
+}: {
+  onLogin: (s: AuthSession) => void;
+  sessionExpired?: boolean;
+}) {
   const activation = new URLSearchParams(location.hash.slice(1)).get(
     "activate",
   );
   const [screen, setScreen] = useState<Screen>(
-      activation ? "activate" : "login",
+      activation
+        ? "activate"
+        : new URLSearchParams(location.search).get("acceso") === "recuperar"
+          ? "forgot"
+          : "login",
     ),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState(""),
@@ -62,7 +72,12 @@ export function AuthScreen({ onLogin }: { onLogin: (s: AuthSession) => void }) {
       );
       return;
     }
-    history.replaceState(null, "", location.pathname);
+    if (activation || new URLSearchParams(location.search).has("acceso")) {
+      const url = new URL(location.href);
+      if (activation) url.hash = "";
+      url.searchParams.delete("acceso");
+      history.replaceState(history.state, "", url);
+    }
     setPassword("");
     onLogin(result);
   }
@@ -158,6 +173,12 @@ export function AuthScreen({ onLogin }: { onLogin: (s: AuthSession) => void }) {
                   ? "Ingresa a tu espacio de trabajo."
                   : "Confirma tu identidad para continuar."}
           </p>
+          {sessionExpired && (
+            <Notice>
+              Tu sesión venció. Vuelve a entrar con la misma cuenta para
+              continuar tu edición.
+            </Notice>
+          )}
           {error && <Notice error>{error}</Notice>}
           {message && <Notice>{message}</Notice>}
           {screen === "login" && settings?.google && (

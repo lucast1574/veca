@@ -38,11 +38,20 @@ type QueueRow = Pick<
 type QueuePage = { items: (QueueRow & { issue: string })[]; hasMore: boolean };
 type GuideDetail = { dispatch: Dispatch; issues: string[] };
 
-export function GuideAccounting({ selected }: { selected: string }) {
-  const [filter, setFilter] = useState("all");
+export function GuideAccounting({
+  selected,
+  initialFilter = "all",
+}: {
+  selected: string;
+  initialFilter?: string;
+}) {
+  const [filter, setFilter] = useState(initialFilter);
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const query = useAccountingQuery<QueuePage>(
-    selected ? "" : `${guidePath}?status=${filter}&page=${page}`,
+    selected
+      ? ""
+      : `${guidePath}?status=${filter}&page=${page}&search=${encodeURIComponent(search.trim())}`,
   );
   const rows = query.data;
   if (selected) return <GuideReview key={selected} id={selected} />;
@@ -67,6 +76,20 @@ export function GuideAccounting({ selected }: { selected: string }) {
           />
           <Refresh loading={query.loading} onClick={query.refresh} />
         </div>
+      </div>
+      <div className="accounting-filters">
+        <Field label="Buscar guías">
+          <input
+            type="search"
+            placeholder="Obra, número de guía o destinatario"
+            value={search}
+            maxLength={100}
+            onChange={(event) => {
+              setPage(1);
+              setSearch(event.target.value);
+            }}
+          />
+        </Field>
       </div>
       <QueryState {...query} empty="No hay guías para este filtro.">
         {rows && rows.items.length > 0 && (
@@ -381,34 +404,6 @@ function GuideReview({ id }: { id: string }) {
                 >
                   Actualizar estado
                 </Button>
-              )}
-              {confirmIssue && (
-                <Modal
-                  title="Confirmar emisión"
-                  onClose={() => setConfirmIssue(false)}
-                  footer={
-                    <footer className="ve-modal-actions">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setConfirmIssue(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => void action("issue")}
-                      >
-                        Confirmar y emitir
-                      </Button>
-                    </footer>
-                  }
-                >
-                  <p>
-                    Se enviará la guía de <strong>{row.workName}</strong> para
-                    el traslado del {transferLabel(row.transferAt)}.
-                  </p>
-                </Modal>
               )}
               {row.status === "sending" && (
                 <Button
