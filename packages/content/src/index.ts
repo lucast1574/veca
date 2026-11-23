@@ -382,3 +382,5 @@ export * from "./demo.js";
 export * from "./accounting.js";
 
 export * from "./warehouse.js";
+
+export * from "./landing-projects.js";

@@ -250,6 +250,41 @@ assert.equal(
   (spotlightGallery.match(/class="public-project-card"/g) || []).length,
   4,
 );
+const landingPath = "/admin/projects/landing";
+const publicLandingPath = "/public/landing-projects";
+const selection = (await request(landingPath)).body;
+const originalIds = selection.items.map(({ id }) => id);
+assert.deepEqual(
+  originalIds,
+  spotlight.map(({ id }) => id),
+);
+const selectedIds = [spotlight[2].id, spotlight[0].id];
+assert.equal(
+  (
+    await request(landingPath, "PUT", {
+      revision: selection.revision,
+      projectIds: selectedIds,
+    })
+  ).status,
+  200,
+);
+assert.equal(
+  (
+    await request(landingPath, "PUT", {
+      revision: selection.revision,
+      projectIds: originalIds,
+    })
+  ).status,
+  409,
+);
+assert.deepEqual(
+  (await request(publicLandingPath)).body.map(({ id }) => id),
+  selectedIds,
+);
+assert.equal(
+  (await request("/public/projects/" + spotlight[1].slug)).status,
+  200,
+);
 for (const item of spotlight)
   assert.equal(
     (
@@ -259,6 +294,10 @@ for (const item of spotlight)
     ).status,
     201,
   );
+assert.deepEqual((await request(publicLandingPath)).body, []);
+assert.ok(
+  (await request(landingPath)).body.items.every(({ published }) => !published),
+);
 console.log(
-  "PASS: canonical section media, mandatory cover, collages, publication snapshots and panel-selected landing solutions.",
+  "PASS: canonical section media, mandatory cover, collages, publication snapshots, landing solutions and managed carousel order.",
 );

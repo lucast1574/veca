@@ -1,0 +1,58 @@
+.project-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.landing-projects-modal .ve-modal > header h2 {
+  color: var(--panel-ink);
+}
+
+.landing-projects-modal .ops-icon-button {
+  color: var(--panel-secondary);
+}
+
+.landing-projects-list {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-projects-list li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.landing-projects-position,
+.landing-projects-title small {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+
+.landing-projects-position {
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-projects-title {
+  overflow-wrap: anywhere;
+  color: var(--panel-ink);
+  font-size: 14px;
+}
+
+.landing-projects-title small {
+  display: block;
+  margin-top: 3px;
+}
+
+.landing-projects-actions {
+  display: flex;
+}
+
+.landing-projects-actions button[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}

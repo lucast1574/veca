@@ -9,12 +9,17 @@ export type ProjectPage = {
   page: number;
   pageSize: number;
 };
+export class ApiError extends Error {
+  constructor(readonly status: number) {
+    super(`API ${status}`);
+  }
+}
 export async function api<T>(path: string): Promise<T> {
   const result = await fetch(API + path, {
     cache: "no-store",
     signal: AbortSignal.timeout(5000),
   });
-  if (!result.ok) throw new Error(`API ${result.status}`);
+  if (!result.ok) throw new ApiError(result.status);
   return result.json();
 }
 export async function projects(

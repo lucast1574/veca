@@ -5,6 +5,7 @@ import {
   PublicProjectsController,
 } from "./projects.controller";
 import { ProjectsService } from "./projects.service";
+import { LandingProjectsService } from "./landing-projects.service";
 import { ProjectsRepository } from "./projects.repository";
 import { SocialDeliveryController } from "./social-delivery.controller";
 @Module({
@@ -14,6 +15,6 @@ import { SocialDeliveryController } from "./social-delivery.controller";
     PublicProjectsController,
     SocialDeliveryController,
   ],
-  providers: [ProjectsService, ProjectsRepository],
+  providers: [ProjectsService, ProjectsRepository, LandingProjectsService],
 })
 export class ProjectsModule {}

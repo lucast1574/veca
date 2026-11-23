@@ -28,9 +28,14 @@ import {
   Search,
   Star,
 } from "lucide-react";
-import { CATEGORIES, type Project } from "@veca/content";
+import {
+  CATEGORIES,
+  type LandingProjectSelection,
+  type Project,
+} from "@veca/content";
 import { api, ApiError, post, setCsrf } from "./lib/api";
 import { Button, Notice, Status } from "./components/ui";
+import { LandingProjects } from "./features/editor/LandingProjects";
 import { canLeaveWorkspace } from "./lib/unsaved";
 
 const UserProfile = lazy(() =>
@@ -143,8 +148,10 @@ export default function App() {
         "",
       );
       const nextView = currentView();
-      if (previousView === "projects" && nextView !== "projects")
+      if (previousView === "projects" && nextView !== "projects") {
         setEditing(undefined);
+        setManagingLanding(false);
+      }
       setView(nextView);
       window.scrollTo({ top: 0, behavior: "instant" });
     };
@@ -166,6 +173,9 @@ export default function App() {
   const [connectionLost, setConnectionLost] = useState(false);
   const [expired, setExpired] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [landingSelection, setLandingSelection] =
+    useState<LandingProjectSelection>();
+  const [managingLanding, setManagingLanding] = useState(false);
   const [error, setError] = useState("");
   const [storageConfigured, setStorageConfigured] = useState(true);
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
@@ -176,6 +186,8 @@ export default function App() {
       workspaceAccount.current = s.user.id;
       setEditing(undefined);
       setProjects([]);
+      setLandingSelection(undefined);
+      setManagingLanding(false);
       setError("");
       setStorageConfigured(true);
       setSearch("");
@@ -192,16 +204,20 @@ export default function App() {
   }, []);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const account = workspaceAccount.current;
-    try {
-      const rows = await api<Project[]>("/admin/projects", { signal });
-      if (!signal?.aborted && workspaceAccount.current === account) {
-        setProjects(rows);
-        setError("");
-      }
-    } catch (error) {
-      if (!signal?.aborted && workspaceAccount.current === account)
-        setError((error as Error).message);
-    }
+    const [rows, landing] = await Promise.allSettled([
+      api<Project[]>("/admin/projects", { signal }),
+      api<LandingProjectSelection>("/admin/projects/landing", { signal }),
+    ]);
+    if (signal?.aborted || workspaceAccount.current !== account) return;
+    if (rows.status === "fulfilled") setProjects(rows.value);
+    if (landing.status === "fulfilled") setLandingSelection(landing.value);
+    setError(
+      rows.status === "rejected"
+        ? (rows.reason as Error).message
+        : landing.status === "rejected"
+          ? "No pudimos cargar los proyectos de la portada."
+          : "",
+    );
   }, []);
   useEffect(() => {
     api<Session>("/auth/me")
@@ -281,19 +297,32 @@ export default function App() {
     document.body.classList.toggle("veca-reauthenticating", expired);
     return () => document.body.classList.remove("veca-reauthenticating");
   }, [expired]);
-  const filtered = useMemo(
+  const landingOrder = useMemo(
     () =>
-      projects.filter(
-        (p) =>
-          (filter === "all" ||
-            (filter === "featured" && p.featured) ||
-            p.status === filter) &&
-          `${p.title} ${p.location} ${p.tags.join(" ")}`
-            .toLowerCase()
-            .includes(search.toLowerCase()),
+      new Map(
+        landingSelection?.items
+          .filter((item) => item.published)
+          .map(({ id }, index) => [id, index]),
       ),
-    [projects, filter, search],
+    [landingSelection],
   );
+  const filtered = useMemo(() => {
+    const matches = projects.filter(
+      (p) =>
+        (filter === "all" ||
+          (filter === "landing" && landingOrder.has(p.id)) ||
+          p.status === filter) &&
+        `${p.title} ${p.location} ${p.tags.join(" ")}`
+          .toLowerCase()
+          .includes(search.toLowerCase()),
+    );
+    return filter === "landing"
+      ? matches.sort(
+          (a, b) =>
+            (landingOrder.get(a.id) ?? 0) - (landingOrder.get(b.id) ?? 0),
+        )
+      : matches;
+  }, [projects, filter, search, landingOrder]);
   if (loading)
     return <div className="loading-screen">Abriendo el estudio de VECA…</div>;
   if (!session) return <AuthScreen onLogin={login} />;
@@ -307,6 +336,7 @@ export default function App() {
     workspaceAccount.current = null;
     setSession(null);
     setEditing(undefined);
+    setManagingLanding(false);
   }
   return (
     <>
@@ -427,10 +457,19 @@ export default function App() {
                           lo que hace diferente a VECA.
                         </p>
                       </div>
-                      <Button onClick={() => setEditing(null)}>
-                        <Plus size={18} />
-                        Nuevo proyecto
-                      </Button>
+                      <div className="project-heading-actions">
+                        <Button
+                          variant="ghost"
+                          onClick={() => setManagingLanding(true)}
+                        >
+                          <Star size={17} />
+                          Gestionar portada
+                        </Button>
+                        <Button onClick={() => setEditing(null)}>
+                          <Plus size={18} />
+                          Nuevo proyecto
+                        </Button>
+                      </div>
                     </div>
                     <div className="stats-grid">
                       {[
@@ -453,17 +492,19 @@ export default function App() {
                           Icon: FileText,
                         },
                         {
-                          label: "Destacados",
-                          value: projects.filter(
-                            (p) => p.featured && p.status === "published",
-                          ).length,
+                          label: "En portada",
+                          value: landingSelection ? landingOrder.size : null,
                           Icon: Star,
                         },
                       ].map(({ label, value, Icon }) => (
                         <div className="stat-card" key={label}>
                           <div>
                             <span>{label}</span>
-                            <strong>{String(value).padStart(2, "0")}</strong>
+                            <strong>
+                              {value === null
+                                ? "—"
+                                : String(value).padStart(2, "0")}
+                            </strong>
                           </div>
                           <Icon size={23} />
                         </div>
@@ -475,7 +516,7 @@ export default function App() {
                           ["all", "Todos"],
                           ["published", "Publicados"],
                           ["draft", "Borradores"],
-                          ["featured", "Destacados"],
+                          ["landing", "En portada"],
                         ].map(([value, label]) => (
                           <button
                             key={value}
@@ -557,9 +598,13 @@ export default function App() {
                                   published={project.status === "published"}
                                   changed={project.hasUnpublishedChanges}
                                 />
-                                {project.featured && (
-                                  <span className="featured-star">
-                                    <Star size={16} />
+                                {landingOrder.has(project.id) && (
+                                  <span
+                                    className="featured-star"
+                                    aria-label="En la portada"
+                                    role="img"
+                                  >
+                                    <Star size={16} aria-hidden="true" />
                                   </span>
                                 )}
                               </div>
@@ -592,6 +637,13 @@ export default function App() {
                           );
                         })}
                       </div>
+                    )}
+                    {managingLanding && (
+                      <LandingProjects
+                        projects={projects}
+                        onClose={() => setManagingLanding(false)}
+                        onSelection={setLandingSelection}
+                      />
                     )}
                     <footer className="studio-footer">
                       <span>VIDRIOS VECA / ESTUDIO EDITORIAL</span>

@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from "@nestjs/common";
 import { z } from "zod";
-import { CATEGORIES, TAGS } from "@veca/content";
+import { CATEGORIES, LANDING_PROJECT_LIMIT, TAGS } from "@veca/content";
 import { PublicEndpoint, RequirePermission } from "../auth/route-access";
 import { ProjectsService } from "./projects.service";
+import { LandingProjectsService } from "./landing-projects.service";
 import { parse } from "../common/validation";
 const versionSchema = z
   .object({ version: z.number().int().positive() })
@@ -11,12 +12,34 @@ const publishSchema = versionSchema.extend({
   // Accept requests from panels opened before automatic sharing was enabled.
   shareOnSocial: z.boolean().optional(),
 });
+const landingSelectionSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    projectIds: z
+      .array(z.string().regex(/^[a-f0-9]{24}$/))
+      .max(LANDING_PROJECT_LIMIT)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Hay proyectos duplicados.",
+      ),
+  })
+  .strict();
 @Controller("admin/projects")
 @RequirePermission("projects")
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly landing: LandingProjectsService,
+  ) {}
   @Get() list() {
     return this.projects.list();
+  }
+  @Get("landing") landingSelection() {
+    return this.landing.getSelection();
+  }
+  @Put("landing") saveLandingSelection(@Body() input: unknown) {
+    const { revision, projectIds } = parse(landingSelectionSchema, input);
+    return this.landing.saveSelection(revision, projectIds);
   }
   @Get(":id") get(@Param("id") id: string) {
     return this.projects.get(id);
@@ -42,7 +65,15 @@ export class ProjectsController {
 }
 @Controller("public")
 export class PublicProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly landing: LandingProjectsService,
+  ) {}
+  @PublicEndpoint()
+  @Get("landing-projects")
+  landingProjects() {
+    return this.landing.publicList();
+  }
   @PublicEndpoint()
   @Get("taxonomy")
   taxonomy() {

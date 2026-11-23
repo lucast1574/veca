@@ -518,38 +518,6 @@ export function ProjectEditor({
                     }
                   />
                 </Field>
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={draft.featured}
-                    onChange={(e) => patch("featured", e.target.checked)}
-                  />
-                  <span>
-                    <strong>Destacar entre los 3 proyectos de portada</strong>
-                    <small>
-                      Elige qué trabajos poner en el foco de la página
-                      principal.
-                    </small>
-                  </span>
-                </label>
-                {draft.featured && (
-                  <Field
-                    label="Orden en portada"
-                    htmlFor="featured-order"
-                    hint="Solo se muestran los tres primeros. Los números más bajos tienen prioridad."
-                  >
-                    <input
-                      id="featured-order"
-                      type="number"
-                      min="0"
-                      max="999"
-                      value={draft.featuredOrder}
-                      onChange={(e) =>
-                        patch("featuredOrder", Number(e.target.value))
-                      }
-                    />
-                  </Field>
-                )}
               </section>
               <section className="editor-card seo-card">
                 <h3>
