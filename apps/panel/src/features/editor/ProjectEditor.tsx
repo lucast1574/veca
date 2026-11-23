@@ -35,6 +35,7 @@ import { PublishReview, PublishSuccess } from "./PublishReview";
 import {
   publicationPlacementInput,
   publicationPlacementSummary,
+  PublicationPlacementEditor,
   type PublicationPlacement,
 } from "./PublicationPlacement";
 import { legacySections, newSection, pruneSections } from "./sections";
@@ -137,14 +138,21 @@ export function ProjectEditor({
     return () => cancelAnimationFrame(frame);
   }, [requirement, step]);
 
+  useEffect(() => {
+    onRefreshLanding();
+  }, [onRefreshLanding]);
+
   const [publishedResult, setPublishedResult] = useState<Project | null>(null);
   const [placement, setPlacement] = useState<PublicationPlacement>();
   const [appliedLocations, setAppliedLocations] = useState<string[]>([]);
   function goToStep(next: 0 | 1 | 2) {
-    if (next === 2) onRefreshLanding();
     if (next !== 0) setRequirement(null);
     setStep(next);
     window.scrollTo({ top: 0, behavior: "instant" });
+  }
+  function editPlacement() {
+    setRequirement({ target: "project-landing-placement", message: "" });
+    goToStep(0);
   }
   function chooseLayout(layout: PageLayout) {
     setDraft((old) => ({
@@ -249,8 +257,8 @@ export function ProjectEditor({
               onRefreshLanding();
               setError(
                 conflict
-                  ? "El proyecto quedó publicado. La portada cambió durante la publicación. Revisa las ubicaciones actuales y guarda la que prefieras."
-                  : "El proyecto quedó publicado. No pudimos confirmar su ubicación en portada. Consulta la selección actual antes de guardar otra vez.",
+                  ? "El proyecto quedó publicado. La portada cambió durante la publicación. Vuelve a Contenido para revisar las ubicaciones y guardar tu selección."
+                  : "El proyecto quedó publicado. No pudimos confirmar su ubicación en portada. Vuelve a Contenido para revisar la selección actual.",
               );
               return;
             }
@@ -314,7 +322,13 @@ export function ProjectEditor({
             }
           />
           <span>
-            {dirty ? "Sin guardar" : saved ? "Todo guardado" : "Nuevo proyecto"}
+            {dirty
+              ? "Sin guardar"
+              : placement
+                ? "Cambios de portada pendientes"
+                : saved
+                  ? "Todo guardado"
+                  : "Nuevo proyecto"}
           </span>
         </div>
         <div className="editor-actions">
@@ -383,17 +397,8 @@ export function ProjectEditor({
             )}
             saved={saved}
             onPublish={() => void action("publish")}
-            landingSelection={landingSelection}
-            landingError={landingError}
             placement={placement}
-            onPlacement={setPlacement}
-            onSavePlacement={
-              saved?.status === "published" &&
-              !saved.hasUnpublishedChanges &&
-              !dirty
-                ? () => void action("placement")
-                : undefined
-            }
+            onEditPlacement={editPlacement}
           />
         ) : (
           <div className="editor-columns">
@@ -435,6 +440,23 @@ export function ProjectEditor({
                   />
                 </Field>
               </section>
+              <PublicationPlacementEditor
+                selection={landingSelection}
+                error={landingError}
+                projectId={saved?.id}
+                value={placement}
+                onChange={setPlacement}
+                initiallyExpanded={
+                  requirement?.target === "project-landing-placement"
+                }
+                onApply={
+                  saved?.status === "published" &&
+                  !saved.hasUnpublishedChanges &&
+                  !dirty
+                    ? () => void action("placement")
+                    : undefined
+                }
+              />
               <section className="editor-card">
                 <ImageLibrary
                   initialPhoto={requirement?.photoId}

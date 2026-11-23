@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   ArrowLeft,
   Check,
   CheckCircle2,
   Globe,
+  House,
+  SendHorizontal,
   Send,
 } from "lucide-react";
 import {
@@ -16,14 +18,12 @@ import {
   type PublicationRequirement,
   seoFor,
   type Project,
-  type LandingProjectSelection,
   type ProjectInput,
 } from "@veca/content";
-import { api } from "../../lib/api";
-import { Button, Notice } from "../../components/ui";
+import { api, ApiError } from "../../lib/api";
+import { Button } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import {
-  PublicationPlacementEditor,
   publicationPlacementSummary,
   type PublicationPlacement,
 } from "./PublicationPlacement";
@@ -36,11 +36,8 @@ export function PublishReview({
   updating,
   hasBeenPublished,
   saved,
-  landingSelection,
-  landingError,
   placement,
-  onPlacement,
-  onSavePlacement,
+  onEditPlacement,
 }: {
   draft: ProjectInput;
   slug: string;
@@ -50,13 +47,13 @@ export function PublishReview({
   updating: boolean;
   hasBeenPublished: boolean;
   saved: Project | null;
-  landingSelection?: LandingProjectSelection;
-  landingError: string;
   placement?: PublicationPlacement;
-  onPlacement: (value?: PublicationPlacement) => void;
-  onSavePlacement?: () => void;
+  onEditPlacement: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const placementChanges = placement
+    ? publicationPlacementSummary(placement)
+    : [];
   const issues = publicationRequirements(draft),
     cover = draft.images.find((image) => image.id === draft.coverId),
     seo = seoFor(draft, slug);
@@ -159,17 +156,36 @@ export function PublishReview({
               </li>
             </ul>
           )}
-          <PublicationPlacementEditor
-            selection={landingSelection}
-            error={landingError}
-            projectId={saved?.id}
-            value={placement}
-            onChange={onPlacement}
-          />
-          <div className="publish-final-action">
-            {saved?.socialShareQueuedAt && (
-              <SocialDelivery project={saved} key={saved.version} />
+          <section
+            className="publication-placement-review"
+            aria-label="Cambios en portada"
+          >
+            <div className="publication-placement-review-heading">
+              <House size={18} aria-hidden="true" />
+              <div>
+                <strong>Portada del sitio</strong>
+                <p>
+                  {placementChanges.length
+                    ? "Se actualizará al publicar."
+                    : "Sin cambios elegidos para la portada."}
+                </p>
+              </div>
+              <Button type="button" variant="ghost" onClick={onEditPlacement}>
+                Editar selección
+              </Button>
+            </div>
+            {placementChanges.length > 0 && (
+              <ul>
+                {placementChanges.map((description) => (
+                  <li key={description}>{description}</li>
+                ))}
+              </ul>
             )}
+          </section>
+          {saved?.socialShareQueuedAt && (
+            <SocialDelivery project={saved} key={saved.version} />
+          )}
+          <div className="publish-final-action">
             <Button
               disabled={busy || !!issues.length}
               onClick={() => {
@@ -186,16 +202,6 @@ export function PublishReview({
             </Button>
             <small>Guardar un borrador lo mantiene privado.</small>
           </div>
-          {placement && onSavePlacement && (
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={onSavePlacement}
-            >
-              Guardar ubicación en portada
-            </Button>
-          )}
           <div className="publication-seo">
             <span>ASÍ APARECERÁ EN BUSCADORES</span>
             <strong>{seo.title}</strong>
@@ -227,11 +233,11 @@ export function PublishReview({
             </footer>
           }
         >
-          {placement && (
+          {placementChanges.length > 0 && (
             <>
               <p>La publicación también aplicará estos cambios en portada.</p>
               <ul>
-                {publicationPlacementSummary(placement).map((location) => (
+                {placementChanges.map((location) => (
                   <li key={location}>{location}</li>
                 ))}
               </ul>
@@ -296,50 +302,76 @@ export function PublishSuccess({
   );
 }
 
+const deliveryLabels = {
+  pending: "Pendiente de envío",
+  processing: "En proceso",
+  published: "Publicada",
+  review: "Requiere revisión",
+  retry: "Pendiente de reintento",
+};
+
 function SocialDelivery({ project }: { project: Project }) {
   const [states, setStates] = useState(project.socialDelivery);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const labels = {
-    pending: "Pendiente de envío",
-    processing: "En proceso",
-    published: "Publicada",
-    review: "Requiere revisión",
-    retry: "Pendiente de reintento",
-  };
-  async function refresh() {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const current = await api<Project>(`/admin/projects/${project.id}`);
-      setStates(current.socialDelivery);
-    } catch (issue) {
-      setError((issue as Error).message);
-    } finally {
-      setBusy(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function refresh() {
+      if (document.visibilityState !== "hidden") {
+        try {
+          const current = await api<Project>(`/admin/projects/${project.id}`, {
+            signal: AbortSignal.any([
+              controller.signal,
+              AbortSignal.timeout(8000),
+            ]),
+          });
+          if (controller.signal.aborted) return;
+          setStates(current.socialDelivery);
+          if (
+            SOCIAL_CHANNELS.every((channel) => {
+              const state = current.socialDelivery?.[channel];
+              return state === "published" || state === "review";
+            })
+          )
+            return;
+        } catch (error) {
+          if (
+            error instanceof ApiError &&
+            [401, 403, 404].includes(error.status)
+          )
+            return;
+        }
+      }
+      if (!controller.signal.aborted) timer = setTimeout(refresh, 15_000);
     }
-  }
+
+    void refresh();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [project.id]);
+
   return (
-    <div className="publication-social">
-      <strong>Publicación en redes</strong>
-      <ul aria-live="polite">
-        {SOCIAL_CHANNELS.map((channel) => (
-          <li key={channel}>
-            {LEAD_SOURCE_LABELS[channel]} ·{" "}
-            {labels[states?.[channel] || "pending"]}
-          </li>
-        ))}
+    <section className="publication-social" aria-label="Publicación en redes">
+      <header>
+        <SendHorizontal size={17} aria-hidden="true" />
+        <strong>Publicación en redes</strong>
+      </header>
+      <ul aria-live="polite" role="list">
+        {SOCIAL_CHANNELS.map((channel) => {
+          const state = states?.[channel] || "pending";
+          return (
+            <li key={channel}>
+              <span>{LEAD_SOURCE_LABELS[channel]}</span>
+              <span className="social-state" data-state={state}>
+                {deliveryLabels[state]}
+              </span>
+            </li>
+          );
+        })}
       </ul>
-      {error && <Notice error>{error}</Notice>}
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={busy}
-        onClick={() => void refresh()}
-      >
-        {busy ? "Consultando…" : "Actualizar estado de redes"}
-      </Button>
-    </div>
+    </section>
   );
 }
