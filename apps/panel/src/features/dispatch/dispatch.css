@@ -9,6 +9,15 @@
 .dispatch-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.guide-work-picker .field,
+.accounting-guide-draft .dispatch-fields .field {
+  margin: 0;
+}
+.guide-work-picker .veca-select-menu {
+  position: static;
+  margin-top: 8px;
+  scrollbar-width: none;
+}
 .dispatch-actions,
 .dispatch-toolbar {
   display: flex;

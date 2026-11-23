@@ -20,11 +20,13 @@ const emptyLine: DispatchInput["items"][number] = {
   unitCode: "NIU",
 };
 
-export function newDispatch(lead: Lead): DispatchInput {
+export function newDispatch(
+  lead: Pick<Lead, "name" | "address">,
+): DispatchInput {
   return {
     startAddress: "",
     startUbigeo: "",
-    arrivalAddress: lead.address || "",
+    arrivalAddress: lead.address?.length <= 250 ? lead.address : "",
     arrivalUbigeo: "",
     transferAt: "",
     motiveCode: "13",
@@ -48,6 +50,7 @@ export function newDispatch(lead: Lead): DispatchInput {
 type Props = {
   initial: DispatchInput;
   materials: Material[];
+  guideWorkName?: string;
   onClose: () => void;
   onSave: (
     data: DispatchInput,
@@ -56,7 +59,13 @@ type Props = {
   ) => Promise<{ sendError: string } | void>;
 };
 
-export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
+export function DispatchForm({
+  initial,
+  materials,
+  guideWorkName,
+  onClose,
+  onSave,
+}: Props) {
   const formId = useId();
   const [draft, setDraft] = useState(initial);
   const [savedDraft, setSavedDraft] = useState(initial);
@@ -147,27 +156,36 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
 
   return (
     <Modal
-      title="Preparar despacho"
+      title={guideWorkName ? "Borrador de guía" : "Preparar despacho"}
+      description={guideWorkName}
       size="wide"
-      className="dispatch-modal"
+      className={
+        guideWorkName
+          ? "dispatch-modal accounting-guide-draft"
+          : "dispatch-modal"
+      }
       busy={busy}
       onClose={close}
       footer={
         <footer className="ve-modal-actions">
-          <Button
-            variant="ghost"
-            type="button"
-            disabled={busy}
-            onClick={() => void save(false)}
-          >
-            Guardar borrador
-          </Button>
+          {!guideWorkName && (
+            <Button
+              variant="ghost"
+              type="button"
+              disabled={busy}
+              onClick={() => void save(false)}
+            >
+              Guardar borrador
+            </Button>
+          )}
           <Button type="submit" form={formId} disabled={busy}>
             {busy
               ? "Guardando…"
-              : sendError && draft === savedDraft
-                ? "Reintentar envío"
-                : "Enviar a Contabilidad"}
+              : guideWorkName
+                ? "Guardar borrador"
+                : sendError && draft === savedDraft
+                  ? "Reintentar envío"
+                  : "Enviar a Contabilidad"}
           </Button>
         </footer>
       }
@@ -176,7 +194,7 @@ export function DispatchForm({ initial, materials, onClose, onSave }: Props) {
         id={formId}
         onSubmit={(event) => {
           event.preventDefault();
-          void save(true);
+          void save(!guideWorkName);
         }}
         className="dispatch-stack"
       >

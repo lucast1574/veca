@@ -31,6 +31,7 @@ export function dispatchInput(dispatch: Dispatch): DispatchInput {
     id,
     leadId,
     workName,
+    createdInAccounting,
     demo,
     version,
     status,

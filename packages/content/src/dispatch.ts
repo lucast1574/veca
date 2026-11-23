@@ -59,6 +59,12 @@ export const dispatchSchema = z
   .strict();
 
 export type DispatchInput = z.infer<typeof dispatchSchema>;
+export type GuideWork = {
+  id: string;
+  name: string;
+  district: string;
+  address: string;
+};
 export type DispatchStatus =
   | "draft"
   | "review"
@@ -73,6 +79,7 @@ export type Dispatch = DispatchInput & {
   id: string;
   leadId: string;
   workName: string;
+  createdInAccounting: boolean;
   demo: boolean;
   version: number;
   status: DispatchStatus;

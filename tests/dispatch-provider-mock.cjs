@@ -4,7 +4,9 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
   const { randomUUID } = require("node:crypto");
   const fetch = globalThis.fetch;
   const url = "https://api.apisunat.net/api/v1/issuer";
-  let id;
+  const guides = new Map();
+  const destinations = new Set();
+  const issuerEnabled = process.env.VECA_GUIDE_QA_ISSUER_DISABLED !== "1";
   const invoices = new Map();
   globalThis.fetch = async (input, options) => {
     if (typeof input !== "string" || !input.startsWith(url + "/"))
@@ -70,7 +72,7 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
         ruc: "20616656156",
         livemode: true,
         active: true,
-        productionEnabled: true,
+        productionEnabled: issuerEnabled,
         credentials: {
           produccion: {
             configured: true,
@@ -106,7 +108,10 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
       return Response.json(issued, { status: 202 });
     }
     if (path === "/guides" && options.method === "POST") {
-      assert.equal(id, undefined, "Se envió la guía más de una vez.");
+      assert.ok(
+        issuerEnabled,
+        "Se intentó emitir con el emisor deshabilitado.",
+      );
       assert.match(options.headers["Idempotency-Key"], /^[\w-]{36}$/);
       const data = JSON.parse(options.body);
       assert.equal(data.ruc, "20616656156");
@@ -114,30 +119,27 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
       assert.equal(data.customer.name, "Cliente de prueba");
       assert.equal(data.items[0].unitCode, "MTK");
       assert.equal(data.vehiclePlate, "ABC123");
-      id = randomUUID();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return Response.json(
-        {
-          id,
-          type: "09",
-          test: false,
-          issuerRuc: data.ruc,
-          fullNumber: "T001-17",
-          status: "processing",
-        },
-        { status: 202 },
+      assert.ok(
+        !destinations.has(data.arrivalAddress),
+        "Se envió la guía más de una vez.",
       );
-    }
-    if (id && path === `/guides/${id}`)
-      return Response.json({
-        id,
+      destinations.add(data.arrivalAddress);
+      const guide = {
+        id: randomUUID(),
         type: "09",
         test: false,
-        issuerRuc: "20616656156",
-        fullNumber: "T001-17",
-        status: "accepted",
-      });
-    if (id && path === `/documents/${id}/pdf`)
+        issuerRuc: data.ruc,
+        fullNumber: "T001-" + (17 + guides.size),
+        status: "processing",
+      };
+      guides.set(guide.id, guide);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return Response.json(guide, { status: 202 });
+    }
+    const id = path.split("/")[2];
+    if (guides.has(id) && path === `/guides/${id}`)
+      return Response.json({ ...guides.get(id), status: "accepted" });
+    if (guides.has(id) && path === `/documents/${id}/pdf`)
       return new Response("%PDF-1.4 QA", {
         headers: { "Content-Type": "application/pdf" },
       });

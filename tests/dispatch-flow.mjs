@@ -127,7 +127,15 @@ try {
   const paths = Object.values(inserted.insertedIds).map(
     (id) => `${crm}/${id}/dispatches`,
   );
+  const newGuidePath = `${fiscal}/works`;
+  const newGuide = {
+    id: new ObjectId().toHexString(),
+    leadId: inserted.insertedIds[2].toHexString(),
+    data: { ...ownTransport, transferAt: "", items: [] },
+  };
   await request(fiscal, 401, "GET", undefined, false);
+  await request(newGuidePath, 401, "GET", undefined, false);
+  await request(fiscal, 401, "POST", newGuide, false);
   csrf = (
     await request("/auth/login", 201, "POST", {
       username: "admin",
@@ -142,11 +150,15 @@ try {
     request(`${path}/${draft.id}/submit`, 201, "POST", {
       version: draft.version,
     });
+  let accountingDraft;
   try {
     await users.updateOne({ _id: admin._id }, { $set: { role: "operations" } });
     await request(fiscal, 403);
+    await request(newGuidePath, 403);
+    await request(fiscal, 403, "POST", newGuide);
     const first = await request(paths[0], 201, "POST", ownTransport);
     const second = await request(paths[1], 201, "POST", carrierTransport);
+    const opsDraft = await request(paths[2], 201, "POST", ownTransport);
     assert.equal(first.status, "draft");
     const alternateId = paths[0].replace(
       String(inserted.insertedIds[0]),
@@ -160,6 +172,69 @@ try {
 
     await users.updateOne({ _id: admin._id }, { $set: { role: "accounting" } });
     await request(paths[0], 403);
+    const works = await request(`${newGuidePath}?search=San%20Borja`, 200);
+    assert.deepEqual(
+      works.map((work) => work.id),
+      [newGuide.leadId],
+    );
+    assert.deepEqual(Object.keys(works[0]).sort(), [
+      "address",
+      "district",
+      "id",
+      "name",
+    ]);
+    await request(fiscal, 409, "POST", {
+      ...newGuide,
+      leadId: inserted.insertedIds[0].toHexString(),
+    });
+    const copies = await Promise.all(
+      Array.from({ length: 2 }, () => request(fiscal, 201, "POST", newGuide)),
+    );
+    const [draft] = copies;
+    assert.ok(
+      copies.every((copy) => copy.id === draft.id && copy.version === 1),
+    );
+    assert.equal(draft.status, "draft");
+    assert.equal(draft.createdInAccounting, true);
+    assert.equal(
+      (await request(`${fiscal}?status=draft`, 200)).items.some(
+        (row) => row.id === opsDraft.id,
+      ),
+      false,
+    );
+    assert.equal(
+      (await request(`${fiscal}?status=draft`, 200)).items.some(
+        (row) => row.id === draft.id,
+      ),
+      true,
+    );
+    await request(`${fiscal}/${opsDraft.id}`, 404);
+    await request(`${fiscal}/${opsDraft.id}`, 404, "PUT", {
+      version: opsDraft.version,
+      data: ownTransport,
+    });
+    const saved = await request(`${fiscal}/${draft.id}`, 200);
+    assert.ok(saved.issues.some((issue) => issue.includes("fecha")));
+    assert.ok(saved.issues.some((issue) => issue.includes("materiales")));
+    await request(`${fiscal}/${draft.id}/issue`, 400, "POST", {
+      version: draft.version,
+    });
+    const changeDraft = {
+      version: draft.version,
+      data: {
+        ...ownTransport,
+        arrivalAddress: "Obra de prueba desde Contabilidad",
+      },
+    };
+    const completed = await request(
+      `${fiscal}/${draft.id}`,
+      200,
+      "PUT",
+      changeDraft,
+    );
+    assert.deepEqual(completed.issues, []);
+    await request(`${fiscal}/${draft.id}`, 409, "PUT", changeDraft);
+    accountingDraft = completed.dispatch;
     const { items: queue } = await request(fiscal, 200);
     assert.ok(
       queue.findIndex((row) => row.id === first.id) <
@@ -184,6 +259,19 @@ try {
     assert.equal(returned.status, "returned");
 
     await users.updateOne({ _id: admin._id }, { $set: { role: "operations" } });
+    assert.equal(
+      (await request(paths[2], 200)).some(
+        (row) => row.id === accountingDraft.id,
+      ),
+      false,
+    );
+    await request(`${paths[2]}/${accountingDraft.id}`, 404, "PUT", {
+      version: accountingDraft.version,
+      data: ownTransport,
+    });
+    await request(`${paths[2]}/${accountingDraft.id}/submit`, 404, "POST", {
+      version: accountingDraft.version,
+    });
     const edited = await request(`${paths[1]}/${second.id}`, 200, "PUT", {
       version: returned.version,
       data: { ...carrierTransport, carrierRuc: "20000000002" },
@@ -195,7 +283,15 @@ try {
 
   // This extra copy omits the demo marker only inside local QA, where outbound fiscal
   // requests are intercepted by the private harness and never reach SUNAT.
-  if (process.env.VECA_GUIDE_QA_MOCK === "1") {
+  if (process.env.VECA_GUIDE_QA_ISSUER_DISABLED === "1") {
+    const path = `${fiscal}/${accountingDraft.id}`;
+    await request(`${path}/issue`, 503, "POST", {
+      version: accountingDraft.version,
+    });
+    const { dispatch } = await request(path, 200);
+    assert.equal(dispatch.status, "draft");
+    assert.equal(dispatch.version, accountingDraft.version);
+  } else if (process.env.VECA_GUIDE_QA_MOCK === "1") {
     const created = await request(paths[2], 201, "POST", ownTransport);
     const reviewed = await go(paths[2], created);
     const outcomes = await Promise.all(
@@ -221,13 +317,28 @@ try {
     assert.equal(accepted.guideNumber, "T001-17");
     assert.match(await request(`${fiscal}/${created.id}/pdf`, 200), /^%PDF/);
     await request(`${paths[0]}/${created.id}/pdf`, 404);
+    const path = `${fiscal}/${accountingDraft.id}`;
+    const sent = await request(`${path}/issue`, 201, "POST", {
+      version: accountingDraft.version,
+    });
+    assert.equal(sent.status, "pending");
+    const confirmed = await request(`${path}/check`, 201, "POST", {
+      version: sent.version,
+    });
+    assert.equal(confirmed.status, "accepted");
+    assert.match(await request(`${path}/pdf`, 200), /^%PDF/);
+    assert.ok(
+      (await request(paths[2], 200)).some(
+        (row) => row.id === accountingDraft.id,
+      ),
+    );
   }
   assert.equal(
     await db.collection("inventory_movements").countDocuments(),
     inventoryBefore,
   );
   console.log(
-    "Guías: roles, dos demos, observación, corrección y saldo de inventario verificados.",
+    "Guías: permisos, borradores contables, revisión, emisión simulada y saldo de inventario verificados.",
   );
 } finally {
   await mongo.close();

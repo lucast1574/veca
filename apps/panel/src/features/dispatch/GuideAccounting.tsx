@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
-import {
-  DISPATCH_STATUS,
-  GUIDE_UNITS,
-  type Dispatch,
-  type DispatchStatus,
-} from "@veca/content";
+import { flushSync } from "react-dom";
+import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { DISPATCH_STATUS, GUIDE_UNITS, type Dispatch } from "@veca/content";
 import { Modal } from "../../components/Modal";
 import { Select } from "@veca/ui/src/Select";
 import { Button, Field, Notice } from "../../components/ui";
 import { API_BASE, api, post } from "../../lib/api";
 import {
+  dispatchInput,
   guidePath,
   motiveLabel,
   transferLabel,
@@ -23,6 +20,7 @@ import {
   Refresh,
   useAccountingQuery,
 } from "../accounting/accounting-shared";
+import { GuideDraftForm, NewGuide } from "./GuideDraftForm";
 import "./dispatch.css";
 
 type QueueRow = Pick<
@@ -41,30 +39,58 @@ type GuideDetail = { dispatch: Dispatch; issues: string[] };
 export function GuideAccounting({
   selected,
   initialFilter = "all",
+  inventoryAccess,
 }: {
   selected: string;
   initialFilter?: string;
+  inventoryAccess: boolean;
 }) {
   const [filter, setFilter] = useState(initialFilter);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [creating, setCreating] = useState(false);
   const query = useAccountingQuery<QueuePage>(
     selected
       ? ""
       : `${guidePath}?status=${filter}&page=${page}&search=${encodeURIComponent(search.trim())}`,
   );
   const rows = query.data;
-  if (selected) return <GuideReview key={selected} id={selected} />;
+  if (selected)
+    return (
+      <GuideReview
+        key={selected}
+        id={selected}
+        inventoryAccess={inventoryAccess}
+      />
+    );
   return (
     <section aria-labelledby="accounting-guides">
       <div className="accounting-section-head">
         <h2 id="accounting-guides">Guías de remisión</h2>
+        <Button type="button" onClick={() => setCreating(true)}>
+          <Plus size={16} aria-hidden="true" /> Nueva guía
+        </Button>
+      </div>
+      <div className="accounting-section-head">
+        <Field label="Buscar guías">
+          <input
+            type="search"
+            placeholder="Obra, número o destinatario"
+            value={search}
+            maxLength={100}
+            onChange={(event) => {
+              setPage(1);
+              setSearch(event.target.value);
+            }}
+          />
+        </Field>
         <div className="accounting-tools">
           <Select
             label="Estado de las guías"
             value={filter}
             options={[
               { value: "all", label: "Todas" },
+              { value: "draft", label: "Borradores" },
               { value: "review", label: "Requieren atención" },
               { value: "issued", label: "Emitidas" },
             ]}
@@ -77,21 +103,14 @@ export function GuideAccounting({
           <Refresh loading={query.loading} onClick={query.refresh} />
         </div>
       </div>
-      <div className="accounting-filters">
-        <Field label="Buscar guías">
-          <input
-            type="search"
-            placeholder="Obra, número de guía o destinatario"
-            value={search}
-            maxLength={100}
-            onChange={(event) => {
-              setPage(1);
-              setSearch(event.target.value);
-            }}
-          />
-        </Field>
-      </div>
-      <QueryState {...query} empty="No hay guías para este filtro.">
+      <QueryState
+        {...query}
+        empty={
+          filter === "all" && !search.trim()
+            ? "Aún no hay guías de remisión."
+            : "No hay guías para este filtro."
+        }
+      >
         {rows && rows.items.length > 0 && (
           <ul className="dispatch-list dispatch-queue">
             {rows.items.map((row) => (
@@ -111,7 +130,11 @@ export function GuideAccounting({
                   className="dispatch-link"
                   href={`#accounting/guias/${row.id}`}
                 >
-                  {row.status === "review" ? "Revisar" : "Ver despacho"}{" "}
+                  {row.status === "draft"
+                    ? "Ver borrador"
+                    : row.status === "review"
+                      ? "Revisar"
+                      : "Ver guía"}{" "}
                   <ChevronRight size={15} />
                 </a>
               </li>
@@ -124,17 +147,35 @@ export function GuideAccounting({
         hasMore={Boolean(rows?.hasMore)}
         change={setPage}
       />
+      {creating && (
+        <NewGuide
+          inventoryAccess={inventoryAccess}
+          onClose={() => setCreating(false)}
+          onCreate={(id) => {
+            // Unmount the saved form and its navigation guard before changing routes.
+            flushSync(() => setCreating(false));
+            location.hash = `#accounting/guias/${id}`;
+          }}
+        />
+      )}
     </section>
   );
 }
 
-function GuideReview({ id }: { id: string }) {
+function GuideReview({
+  id,
+  inventoryAccess,
+}: {
+  id: string;
+  inventoryAccess: boolean;
+}) {
   const path = `${guidePath}/${id}`;
   const [data, setData] = useState<GuideDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [returning, setReturning] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [observation, setObservation] = useState("");
   const load = useCallback(async () => {
     try {
@@ -169,10 +210,17 @@ function GuideReview({ id }: { id: string }) {
   }
 
   const row = data?.dispatch;
-  const reviewable: DispatchStatus[] = ["review", "rejected"];
-  const mayReturn = row && reviewable.includes(row.status);
+  const mayEdit =
+    row?.createdInAccounting && ["draft", "rejected"].includes(row.status);
+  const mayReturn =
+    row &&
+    !row.createdInAccounting &&
+    ["review", "rejected"].includes(row.status);
   const canIssue =
-    row?.status === "review" && !row.demo && !data?.issues.length;
+    row &&
+    row.status === (row.createdInAccounting ? "draft" : "review") &&
+    !row.demo &&
+    !data?.issues.length;
   const external = row?.transportMode === "01";
   return (
     <section className="dispatch-review accounting-guide-review">
@@ -198,7 +246,7 @@ function GuideReview({ id }: { id: string }) {
             </Notice>
           )}
           {row.observation && <Notice>{row.observation}</Notice>}
-          {mayReturn && data.issues.length > 0 && (
+          {(mayReturn || mayEdit) && data.issues.length > 0 && (
             <div className="dispatch-card dispatch-issues">
               <h2>Datos por completar</h2>
               <ul>
@@ -291,6 +339,26 @@ function GuideReview({ id }: { id: string }) {
               </dl>
             </details>
           </section>
+          {editing && mayEdit && (
+            <GuideDraftForm
+              workName={row.workName}
+              inventoryAccess={inventoryAccess}
+              initial={dispatchInput(row)}
+              onClose={() => {
+                setEditing(false);
+                void load();
+              }}
+              onSave={async (values) => {
+                const updated = await api<GuideDetail>(path, {
+                  method: "PUT",
+                  body: JSON.stringify({ data: values, version: row.version }),
+                });
+                setData(updated);
+                setError("");
+                setEditing(false);
+              }}
+            />
+          )}
           <section className="ops-card">
             <h2>Materiales</h2>
             <ul className="dispatch-list">
@@ -377,6 +445,18 @@ function GuideReview({ id }: { id: string }) {
           )}
           {!returning && (
             <div className="dispatch-actions">
+              {mayEdit && (
+                <Button
+                  type="button"
+                  variant={canIssue ? "ghost" : "primary"}
+                  disabled={busy}
+                  onClick={() => setEditing(true)}
+                >
+                  {row.status === "rejected"
+                    ? "Corregir guía"
+                    : "Editar borrador"}
+                </Button>
+              )}
               {mayReturn && (
                 <Button
                   type="button"

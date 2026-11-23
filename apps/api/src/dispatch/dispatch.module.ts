@@ -23,6 +23,10 @@ import { GuideProvider } from "./guide-provider";
 
 const revision = z.object({ version: z.number().int().positive() }).strict();
 const update = revision.extend({ data: z.unknown() });
+const documentId = z.string().regex(/^[0-9a-f]{24}$/i);
+const guideDraft = z
+  .object({ id: documentId, leadId: documentId, data: z.unknown() })
+  .strict();
 const sendBack = revision.extend({
   observation: z.string().trim().min(3).max(500),
 });
@@ -122,13 +126,42 @@ class AccountingGuideController {
     @Query("search") search = "",
   ) {
     const page = parse(z.coerce.number().int().min(1).max(10_000), rawPage);
-    const status = parse(z.enum(["all", "review", "issued"]), rawStatus);
+    const status = parse(
+      z.enum(["all", "draft", "review", "issued"]),
+      rawStatus,
+    );
     return this.dispatches.queue(page, status, parse(z.string(), search));
+  }
+
+  @Get("works")
+  works(@Query("search") search = "") {
+    return this.dispatches.works(parse(z.string(), search));
+  }
+
+  @Post()
+  create(@Body() input: unknown, @Req() req: AuthenticatedRequest) {
+    const { id, leadId, data } = parse(guideDraft, input);
+    return this.dispatches.create(leadId, data, req.session.user.username, id);
   }
 
   @Get(":id")
   detail(@Param("id") id: string) {
     return this.dispatches.detail(id);
+  }
+
+  @Put(":id")
+  updateDraft(
+    @Param("id") id: string,
+    @Body() input: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const { data, version } = parse(update, input);
+    return this.dispatches.updateDraft(
+      id,
+      version,
+      data,
+      req.session.user.username,
+    );
   }
 
   @Post(":id/return")

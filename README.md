@@ -150,7 +150,10 @@ El catálogo se entrega únicamente en la ruta protegida de administración de u
 ## Guías de remisión
 
 Operaciones prepara el despacho desde Leads → Coordinación y obra. Contabilidad
-revisa, devuelve con observación o emite y consulta el resultado. La guía aceptada
+revisa, devuelve con observación o emite y consulta el resultado. Desde
+Contabilidad → Guías de remisión → Nueva guía también se puede elegir una obra
+en coordinación o ejecución, guardar un borrador y emitirlo al completar los
+datos. Guardar el borrador no lo envía a API SUNAT. La guía aceptada
 se puede descargar desde ambas pantallas. Emitir una guía no registra una salida de
 inventario. Los registros de demostración quedan bloqueados para emisión fiscal.
 

@@ -50,6 +50,7 @@ export function AccountingWorkspace({
       {route.tab === "guias" && (
         <GuideAccounting
           selected={route.id === "revision" ? "" : route.id || ""}
+          inventoryAccess={inventoryAccess}
           initialFilter={route.id === "revision" ? "review" : "all"}
           key={route.id === "revision" ? "review" : "default"}
         />

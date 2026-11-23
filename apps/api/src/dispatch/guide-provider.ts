@@ -32,7 +32,7 @@ export class GuideProvider {
     return fiscalLiveKey;
   }
 
-  assertReady() {
+  private assertReady() {
     if (
       !this.key.startsWith("asu_live_") ||
       !/^\d{11}$/.test(fiscalIssuerRuc) ||
@@ -41,6 +41,21 @@ export class GuideProvider {
     )
       throw new ServiceUnavailableException(
         "La emisión de guías aún no está habilitada. Consulta con administración.",
+      );
+  }
+
+  async assertIssuerEnabled() {
+    this.assertReady();
+    const issuer = await this.request(`/issuers/${fiscalIssuerRuc}`)
+      .then((response) => response.json())
+      .catch(() => null);
+    if (issuer?.ruc !== fiscalIssuerRuc || issuer?.livemode !== true)
+      throw new ServiceUnavailableException(
+        "No pudimos verificar el emisor en API SUNAT. Inténtalo nuevamente.",
+      );
+    if (issuer.active !== true || issuer.productionEnabled !== true)
+      throw new ServiceUnavailableException(
+        "El emisor aún no está habilitado en API SUNAT. La guía sigue guardada.",
       );
   }
 

@@ -17,6 +17,8 @@ import {
   type Dispatch,
   type DispatchInput,
   type DispatchStatus,
+  type GuideWork,
+  type Lead,
 } from "@veca/content";
 import { randomUUID, createHash } from "node:crypto";
 import { CrmRepository } from "../crm/crm.repository";
@@ -34,6 +36,7 @@ type DispatchRecord = {
   _id: ObjectId;
   leadId: string;
   workName: string;
+  accountingCreationHash?: string;
   demo: boolean;
   data: DispatchInput;
   status: DispatchStatus;
@@ -51,7 +54,7 @@ type DispatchRecord = {
 const accepted = ["accepted", "observed"];
 const reviewable = ["review", "rejected"] as const;
 const editable = ["draft", "returned"] as const;
-const operationalStages = ["coordination", "execution"];
+const operationalStages: Lead["stage"][] = ["coordination", "execution"];
 
 function idOf(id: string) {
   if (!/^[0-9a-f]{24}$/i.test(id))
@@ -68,6 +71,7 @@ function view(record: DispatchRecord): Dispatch {
     id: String(record._id),
     leadId: record.leadId,
     workName: record.workName,
+    createdInAccounting: Boolean(record.accountingCreationHash),
     demo: record.demo,
     version: record.version,
     status: stalled ? "pending" : record.status,
@@ -82,6 +86,16 @@ function view(record: DispatchRecord): Dispatch {
 
 export function guideIssues(data: DispatchInput): string[] {
   const issues: string[] = [];
+  if (!validTransfer(data.transferAt)) {
+    issues.push("Indica una fecha y hora de salida válida.");
+  } else if (Date.parse(data.transferAt + ":00-05:00") <= Date.now()) {
+    issues.push("La salida prevista debe ser posterior a la emisión.");
+  }
+  if (
+    !data.items.length ||
+    data.items.some((item) => !item.description || item.quantity <= 0)
+  )
+    issues.push("Completa los materiales y sus cantidades.");
   if (!data.startAddress || !data.arrivalAddress)
     issues.push("Completa las direcciones de origen y destino.");
   if (!/^\d{6}$/.test(data.startUbigeo) || !/^\d{6}$/.test(data.arrivalUbigeo))
@@ -150,7 +164,12 @@ export class DispatchService {
     const lead = await this.leads.get(leadId);
     return (
       await this.collection
-        .find({ leadId: lead._id.toHexString() })
+        .find({
+          leadId: lead._id.toHexString(),
+          $nor: [
+            { status: "draft", accountingCreationHash: { $exists: true } },
+          ],
+        })
         .sort({ updatedAt: -1 })
         .toArray()
     ).map(view);
@@ -226,9 +245,44 @@ export class DispatchService {
     return fixtureId;
   }
 
-  async queue(page: number, filter: "all" | "review" | "issued", search = "") {
+  async works(search: string): Promise<GuideWork[]> {
+    const safe = literalSearch(search);
+    const rows = await this.leads.collection
+      .find({
+        stage: { $in: operationalStages },
+        name: { $not: /^\[demo\]/i },
+        email: { $not: /\.invalid$/i },
+        ...(safe && {
+          $or: [
+            { name: { $regex: safe, $options: "i" } },
+            { district: { $regex: safe, $options: "i" } },
+          ],
+        }),
+      })
+      .project<Omit<GuideWork, "id"> & { _id: ObjectId }>({
+        name: 1,
+        district: 1,
+        address: 1,
+      })
+      .sort({ updatedAt: -1, _id: -1 })
+      .limit(40)
+      .toArray();
+    return rows.map(({ _id, name, district, address }) => ({
+      id: String(_id),
+      name,
+      district,
+      address: address || "",
+    }));
+  }
+
+  async queue(
+    page: number,
+    filter: "all" | "draft" | "review" | "issued",
+    search = "",
+  ) {
     const statuses: Record<typeof filter, DispatchStatus[]> = {
       all: [
+        "draft",
         "review",
         "returned",
         "sending",
@@ -237,6 +291,7 @@ export class DispatchService {
         "observed",
         "rejected",
       ],
+      draft: ["draft"],
       review: ["review", "sending", "pending", "rejected"],
       issued: ["accepted", "observed"],
     };
@@ -247,6 +302,9 @@ export class DispatchService {
         {
           $match: {
             status: { $in: statuses[filter] },
+            $nor: [
+              { status: "draft", accountingCreationHash: { $exists: false } },
+            ],
             ...(safe
               ? {
                   $or: [
@@ -267,7 +325,10 @@ export class DispatchService {
               $switch: {
                 branches: [
                   { case: { $in: ["$status", statuses.review] }, then: 0 },
-                  { case: { $eq: ["$status", "returned"] }, then: 1 },
+                  {
+                    case: { $in: ["$status", ["draft", "returned"]] },
+                    then: 1,
+                  },
                 ],
                 default: 2,
               },
@@ -302,25 +363,33 @@ export class DispatchService {
 
   async detail(id: string) {
     const doc = await this.get(id);
-    if (doc.status === "draft")
+    if (doc.status === "draft" && !doc.accountingCreationHash)
       throw new NotFoundException("Despacho no encontrado.");
     return { dispatch: view(doc), issues: guideIssues(doc.data) };
   }
 
-  async create(leadId: string, input: unknown, actor: string) {
+  async create(
+    leadId: string,
+    input: unknown,
+    actor: string,
+    accountingId?: string,
+  ) {
     const data = parse(dispatchSchema, input);
     const lead = await this.leads.get(leadId);
     if (!operationalStages.includes(lead.stage))
       throw new ConflictException(
         "Prepara el despacho cuando la obra esté en coordinación o ejecución.",
       );
+    const demo = isDemoLead(lead);
+    if (accountingId && demo)
+      throw new ConflictException("Elige una obra real para preparar la guía.");
     const now = new Date().toISOString();
     const record: DispatchRecord = {
-      _id: new ObjectId(),
+      _id: accountingId ? idOf(accountingId) : new ObjectId(),
       leadId: lead._id.toHexString(),
       workName: lead.name,
       data,
-      demo: isDemoLead(lead),
+      demo,
       status: "draft",
       version: 1,
       observation: "",
@@ -329,8 +398,57 @@ export class DispatchService {
       updatedAt: now,
       events: [{ action: "draft", actor, at: now }],
     };
+    if (accountingId) {
+      const accountingCreationHash = createHash("sha256")
+        .update(JSON.stringify([record.leadId, actor, data]))
+        .digest("hex");
+      const stored = await this.collection.findOneAndUpdate(
+        { _id: record._id },
+        { $setOnInsert: { ...record, accountingCreationHash } },
+        { upsert: true, returnDocument: "after" },
+      );
+      if (stored?.accountingCreationHash !== accountingCreationHash)
+        throw new ConflictException(
+          "Ya existe una guía con esta solicitud. Vuelve a Guías para abrirla.",
+        );
+      return view(stored);
+    }
     await this.collection.insertOne(record);
     return view(record);
+  }
+
+  async updateDraft(
+    id: string,
+    version: number,
+    input: unknown,
+    actor: string,
+  ) {
+    const doc = await this.get(id);
+    if (!doc.accountingCreationHash)
+      throw new NotFoundException("Borrador de Contabilidad no encontrado.");
+    const data = parse(dispatchSchema, input);
+    const dispatch = await this.change(
+      doc,
+      version,
+      ["draft", "rejected"],
+      {
+        data,
+        status: "draft",
+        observation: "",
+        guideNumber: "",
+        externalId: "",
+      },
+      actor,
+      "edit",
+    );
+    return { dispatch, issues: guideIssues(data) };
+  }
+
+  private async operationsDraft(leadId: string, id: string) {
+    const doc = await this.get(id, leadId);
+    if (doc.accountingCreationHash)
+      throw new NotFoundException("Despacho de Operaciones no encontrado.");
+    return doc;
   }
 
   async update(
@@ -340,13 +458,13 @@ export class DispatchService {
     input: unknown,
     actor: string,
   ) {
-    const doc = await this.get(id, leadId);
+    const doc = await this.operationsDraft(leadId, id);
     const data = parse(dispatchSchema, input);
     return this.change(doc, version, editable, { data }, actor, "edit");
   }
 
   async submit(leadId: string, id: string, version: number, actor: string) {
-    const doc = await this.get(id, leadId);
+    const doc = await this.operationsDraft(leadId, id);
     const lead = await this.leads.get(leadId);
     if (!operationalStages.includes(lead.stage))
       throw new ConflictException(
@@ -375,8 +493,11 @@ export class DispatchService {
     observation: string,
     actor: string,
   ) {
+    const doc = await this.get(id);
+    if (doc.accountingCreationHash)
+      throw new ConflictException("Corrige esta guía en Contabilidad.");
     return this.change(
-      await this.get(id),
+      doc,
       version,
       reviewable,
       { status: "returned", observation },
@@ -386,6 +507,11 @@ export class DispatchService {
 
   async issue(id: string, version: number, actor: string) {
     const doc = await this.get(id);
+    const ready = doc.accountingCreationHash ? "draft" : "review";
+    if (doc.version !== version || doc.status !== ready)
+      throw new ConflictException(
+        "El despacho cambió. Vuelve a cargarlo para continuar.",
+      );
     const lead = await this.leads.get(doc.leadId);
     if (doc.demo || isDemoLead(lead))
       throw new ConflictException(
@@ -397,20 +523,13 @@ export class DispatchService {
       );
     const issues = guideIssues(doc.data);
     if (issues.length) throw new BadRequestException(issues);
-    if (
-      !validTransfer(doc.data.transferAt) ||
-      Date.parse(doc.data.transferAt + ":00-05:00") <= Date.now()
-    )
-      throw new BadRequestException(
-        "La salida prevista debe ser posterior a la emisión.",
-      );
     await this.stockLines(doc.data.items);
-    this.provider.assertReady();
+    await this.provider.assertIssuerEnabled();
     const attemptKey = randomUUID();
     const locked = await this.change(
       doc,
       version,
-      ["review"],
+      [ready],
       {
         status: "sending",
         attemptKey,
