@@ -28,6 +28,13 @@ const landingSelectionSchema = z
         (ids) => new Set(ids).size === ids.length,
         "Hay proyectos duplicados.",
       ),
+    expectedProjectIds: z
+      .array(projectId)
+      .max(LANDING_PROJECT_LIMIT)
+      .optional(),
+    expectedPlacements: z
+      .partialRecord(z.enum(LANDING_PLACEMENT_IDS), projectId.nullable())
+      .optional(),
     placements: z
       .partialRecord(z.enum(LANDING_PLACEMENT_IDS), projectId.nullable())
       .optional(),
@@ -47,11 +54,20 @@ export class ProjectsController {
     return this.landing.getSelection();
   }
   @Put("landing") saveLandingSelection(@Body() input: unknown) {
-    const { revision, projectIds, placements } = parse(
-      landingSelectionSchema,
-      input,
+    const {
+      revision,
+      projectIds,
+      placements,
+      expectedPlacements,
+      expectedProjectIds,
+    } = parse(landingSelectionSchema, input);
+    return this.landing.saveSelection(
+      revision,
+      projectIds,
+      placements,
+      expectedPlacements,
+      expectedProjectIds,
     );
-    return this.landing.saveSelection(revision, projectIds, placements);
   }
   @Get(":id") get(@Param("id") id: string) {
     return this.projects.get(id);

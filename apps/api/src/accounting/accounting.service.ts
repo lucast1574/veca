@@ -25,6 +25,7 @@ import { InventoryService } from "../inventory/inventory.service";
 import { CrmRepository } from "../crm/crm.repository";
 import { StorageService } from "../media/storage.service";
 import { limaDate } from "../dispatch/guide-provider";
+import { LaborCostsService } from "./labor-costs.service";
 import { InvoiceProvider, type FiscalInvoice } from "./invoice-provider";
 
 type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck"> & {
@@ -90,6 +91,7 @@ export class AccountingService {
     private readonly storage: StorageService,
     private readonly inventory: InventoryService,
     private readonly warehouse: WarehouseService,
+    private readonly labor: LaborCostsService,
   ) {}
 
   get enabled() {
@@ -719,7 +721,7 @@ export class AccountingService {
     const work = await this.work(workId);
     if (!work) throw new NotFoundException("Obra no encontrada.");
     await this.inventory.flush();
-    const [sales, valuation, plan] = await Promise.all([
+    const [sales, valuation, plan, labor] = await Promise.all([
       this.invoices
         .aggregate<{
           sales: number;
@@ -779,6 +781,7 @@ export class AccountingService {
         ])
         .next(),
       this.warehouse.plan(workId),
+      this.labor.margin(workId),
     ]);
     const firstValuation = valuation?.since
       ? limaDate(new Date(valuation.since))
@@ -820,7 +823,12 @@ export class AccountingService {
       sales: sales?.sales || 0,
       paid: sales?.paid || 0,
       balance: sales?.balance || 0,
-      costs: (costs?.costs || 0) + (valuation?.costs || 0),
+      costs:
+        (costs?.costs || 0) +
+        (valuation?.costs || 0) +
+        labor.payroll +
+        labor.fees,
+      labor,
       costCount: (costs?.count || 0) + (valuation?.count || 0),
       materialCosts: valuation?.costs || 0,
       budgetCents: plan.budgetCents,

@@ -453,6 +453,10 @@ export default function App() {
                   <ProjectEditor
                     key={editing?.id || "new"}
                     initial={editing}
+                    landingSelection={landingSelection}
+                    landingError={landingError}
+                    onLandingSelection={setLandingSelection}
+                    onRefreshLanding={refreshLanding}
                     onBack={() => {
                       setEditing(undefined);
                       void refresh();

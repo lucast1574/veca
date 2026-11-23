@@ -35,6 +35,9 @@ import { CrmModule } from "../crm/crm.controller";
 import { MediaModule } from "../media/media.module";
 import { AccountingService } from "./accounting.service";
 import { SireService } from "./sire.service";
+import { LaborController } from "./labor.controller";
+import { LaborProvider } from "./labor-provider";
+import { LaborCostsService } from "./labor-costs.service";
 import { InvoiceProvider } from "./invoice-provider";
 
 const revision = z.object({ version: z.number().int().positive() }).strict();
@@ -294,7 +297,14 @@ class FiscalConnectionController {
     AccountingController,
     LeadInvoiceRequestController,
     FiscalConnectionController,
+    LaborController,
   ],
-  providers: [AccountingService, InvoiceProvider, SireService],
+  providers: [
+    AccountingService,
+    InvoiceProvider,
+    SireService,
+    LaborProvider,
+    LaborCostsService,
+  ],
 })
 export class AccountingModule {}

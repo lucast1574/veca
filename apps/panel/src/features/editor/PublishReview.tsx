@@ -16,11 +16,17 @@ import {
   type PublicationRequirement,
   seoFor,
   type Project,
+  type LandingProjectSelection,
   type ProjectInput,
 } from "@veca/content";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
+import {
+  PublicationPlacementEditor,
+  publicationPlacementSummary,
+  type PublicationPlacement,
+} from "./PublicationPlacement";
 export function PublishReview({
   draft,
   slug,
@@ -30,6 +36,11 @@ export function PublishReview({
   updating,
   hasBeenPublished,
   saved,
+  landingSelection,
+  landingError,
+  placement,
+  onPlacement,
+  onSavePlacement,
 }: {
   draft: ProjectInput;
   slug: string;
@@ -39,6 +50,11 @@ export function PublishReview({
   updating: boolean;
   hasBeenPublished: boolean;
   saved: Project | null;
+  landingSelection?: LandingProjectSelection;
+  landingError: string;
+  placement?: PublicationPlacement;
+  onPlacement: (value?: PublicationPlacement) => void;
+  onSavePlacement?: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const issues = publicationRequirements(draft),
@@ -81,7 +97,10 @@ export function PublishReview({
               {draft.excerpt || "Un trabajo que cuenta lo que hacemos en VECA."}
             </span>
             <div>
-              <span>{draft.images.length} fotos</span>
+              <span>
+                {draft.images.length}{" "}
+                {draft.images.length === 1 ? "foto" : "fotos"}
+              </span>
               <span>
                 {draft.pageLayout === "legacy"
                   ? "Diseño original"
@@ -140,6 +159,13 @@ export function PublishReview({
               </li>
             </ul>
           )}
+          <PublicationPlacementEditor
+            selection={landingSelection}
+            error={landingError}
+            projectId={saved?.id}
+            value={placement}
+            onChange={onPlacement}
+          />
           <div className="publish-final-action">
             {saved?.socialShareQueuedAt && (
               <SocialDelivery project={saved} key={saved.version} />
@@ -160,6 +186,16 @@ export function PublishReview({
             </Button>
             <small>Guardar un borrador lo mantiene privado.</small>
           </div>
+          {placement && onSavePlacement && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={onSavePlacement}
+            >
+              Guardar ubicación en portada
+            </Button>
+          )}
           <div className="publication-seo">
             <span>ASÍ APARECERÁ EN BUSCADORES</span>
             <strong>{seo.title}</strong>
@@ -191,7 +227,16 @@ export function PublishReview({
             </footer>
           }
         >
-          {null}
+          {placement && (
+            <>
+              <p>La publicación también aplicará estos cambios en portada.</p>
+              <ul>
+                {publicationPlacementSummary(placement).map((location) => (
+                  <li key={location}>{location}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </Modal>
       )}
     </section>
@@ -199,10 +244,12 @@ export function PublishReview({
 }
 export function PublishSuccess({
   project,
+  locations,
   onEdit,
   onBack,
 }: {
   project: Project;
+  locations: string[];
   onEdit: () => void;
   onBack: () => void;
 }) {
@@ -213,6 +260,16 @@ export function PublishSuccess({
       </div>
       <p>YA ES PARTE DE VECA</p>
       <h1>Tu proyecto está publicado.</h1>
+      {locations.length > 0 && (
+        <div className="publication-placement-summary">
+          <strong>Ubicación en portada actualizada</strong>
+          <ul>
+            {locations.map((location) => (
+              <li key={location}>{location}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <h2>{project.title}</h2>
       <span>
         La historia ya tiene su lugar en la web. Puedes compartirla o volver

@@ -1,3 +1,4 @@
+import type { LaborMargin } from "./labor.js";
 import { z } from "zod";
 
 const text = (length: number) => z.string().trim().min(1).max(length);
@@ -141,6 +142,7 @@ export type AccountingMargin = {
   balance: number;
   costCount: number;
   materialCosts: number;
+  labor: LaborMargin;
   budgetCents: number;
   pendingValuation: boolean;
   manualMaterialsToReview: number;

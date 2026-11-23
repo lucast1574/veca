@@ -289,10 +289,29 @@ for (const invalidPlacements of [
     400,
   );
 }
+for (const expected of [
+  { expectedProjectIds: [...originalIds].reverse() },
+  { expectedPlacements: { quote: spotlight[0].id } },
+]) {
+  assert.equal(
+    (
+      await request(landingPath, "PUT", {
+        revision: selection.revision,
+        projectIds: selectedIds,
+        placements,
+        ...expected,
+      })
+    ).status,
+    409,
+  );
+}
+assert.deepEqual((await request(landingContentPath)).body, initialLanding);
 const changedLanding = await request(landingPath, "PUT", {
   revision: selection.revision,
   projectIds: selectedIds,
   placements,
+  expectedProjectIds: originalIds,
+  expectedPlacements: { quote: initialLanding.projects.quote?.id ?? null },
 });
 assert.equal(changedLanding.status, 200);
 assert.equal(changedLanding.body.placements.quote.project.id, spotlight[1].id);

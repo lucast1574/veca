@@ -99,6 +99,8 @@ export function Margin() {
   const query = useAccountingQuery<AccountingMargin>(
     work ? accountingPath + "/margin/" + work : "",
   );
+  const labor = query.data?.labor;
+  const complete = labor?.available !== false;
   return (
     <section>
       <header className="accounting-section-head">
@@ -134,8 +136,18 @@ export function Margin() {
                 <Summary
                   entries={[
                     ["Venta neta", query.data.sales],
-                    ["Costos imputados", query.data.costs],
-                    ["Margen registrado", query.data.sales - query.data.costs],
+                    [
+                      complete ? "Costos imputados" : "Costos disponibles",
+                      query.data.costs,
+                    ],
+                    ...(complete
+                      ? [
+                          [
+                            "Margen registrado",
+                            query.data.sales - query.data.costs,
+                          ] as [string, number],
+                        ]
+                      : []),
                   ]}
                 />
                 <Summary
@@ -147,7 +159,20 @@ export function Margin() {
                 <Summary
                   entries={[
                     ["Materiales valorizados", query.data.materialCosts],
-                    ...(query.data.budgetCents
+                    [
+                      "Otros costos",
+                      query.data.costs -
+                        query.data.materialCosts -
+                        (labor?.payroll || 0) -
+                        (labor?.fees || 0),
+                    ],
+                    ...(labor?.available
+                      ? ([
+                          ["Planilla asignada", labor.payroll],
+                          ["Honorarios asignados", labor.fees],
+                        ] as [string, number][])
+                      : []),
+                    ...(query.data.budgetCents && complete
                       ? ([
                           ["Presupuesto de costos", query.data.budgetCents],
                           [
@@ -158,6 +183,16 @@ export function Margin() {
                       : []),
                   ]}
                 />
+                {!complete && (
+                  <p className="hint" role="status">
+                    No pudimos cargar los costos de personal asignados. El
+                    margen completo estará disponible cuando se puedan consultar
+                    en API SUNAT.
+                  </p>
+                )}
+                <a className="accounting-inline" href="#accounting/personal">
+                  Gestionar costos de personal
+                </a>
                 {query.data.pendingValuation && (
                   <p className="hint">
                     Hay consumos con saldo de origen sin costo registrado.

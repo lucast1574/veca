@@ -378,3 +378,5 @@ export * from "./accounting.js";
 export * from "./warehouse.js";
 
 export * from "./landing-projects.js";
+
+export * from "./labor.js";

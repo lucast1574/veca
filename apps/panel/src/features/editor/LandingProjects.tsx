@@ -1,8 +1,7 @@
-import { useRef, useState } from "react";
-import { ArrowDown, ArrowUp, X } from "lucide-react";
+import { useState } from "react";
+import { ArrowUpRight, LayoutGrid, PanelsTopLeft, Shapes } from "lucide-react";
 import {
   LANDING_PLACEMENT_IDS,
-  LANDING_PROJECT_LIMIT,
   SOLUTION_SLOTS,
   type LandingPlacementId,
   type LandingPlacements,
@@ -14,18 +13,30 @@ import { Modal } from "../../components/Modal";
 import { Button, Notice } from "../../components/ui";
 import { api, ApiError } from "../../lib/api";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
+import { LandingCarouselEditor } from "./LandingCarouselEditor";
 import "./landing-projects.css";
 
-const blocks = [
-  { id: "quote", name: "Cotiza tu instalación" },
-  { id: "caseStudy", name: "Obra destacada" },
-  { id: "company", name: "Nosotros" },
-] as const;
+import { landingBlocks as blocks } from "./PublicationPlacement";
 
 const sections = [
-  { id: "carousel", name: "Carrusel" },
-  { id: "blocks", name: "Bloques de la página" },
-  { id: "solutions", name: "Soluciones" },
+  {
+    id: "carousel",
+    name: "Carrusel",
+    Icon: LayoutGrid,
+    detail: "Selección y orden de las tarjetas.",
+  },
+  {
+    id: "blocks",
+    name: "Bloques de la página",
+    Icon: PanelsTopLeft,
+    detail: "Cotización, Obra destacada y Nosotros.",
+  },
+  {
+    id: "solutions",
+    name: "Soluciones",
+    Icon: Shapes,
+    detail: "Un proyecto de ejemplo por solución.",
+  },
 ] as const;
 
 export function LandingProjects({
@@ -52,8 +63,6 @@ export function LandingProjects({
     useState<(typeof sections)[number]["id"]>("carousel");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const addProject = useRef<HTMLButtonElement>(null);
-  const submit = useRef<HTMLButtonElement>(null);
 
   const original = draft?.original ?? selection;
   const items = draft?.items ?? original?.items ?? [];
@@ -69,13 +78,24 @@ export function LandingProjects({
   );
   const selected = new Set(items.map(({ id }) => id));
   const available = published.filter(({ id }) => !selected.has(id));
-  const changed =
-    !!original &&
-    (items.length !== original.items.length ||
-      items.some(({ id }, index) => id !== original.items[index].id) ||
-      LANDING_PLACEMENT_IDS.some(
-        (id) => placements[id] !== initialPlacements[id],
-      ));
+  const carouselChanged =
+    items.length !== original?.items.length ||
+    items.some(({ id }, index) => id !== original?.items[index]?.id);
+  const placementChanged = (id: LandingPlacementId) =>
+    placements[id] !== initialPlacements[id];
+  const sectionChanges = {
+    carousel: original && carouselChanged ? 1 : 0,
+    blocks: blocks.filter(({ id }) => placementChanged(id)).length,
+    solutions: LANDING_PLACEMENT_IDS.filter(
+      (id) => !blocks.some((block) => block.id === id) && placementChanged(id),
+    ).length,
+  };
+  const changeCount = Object.values(sectionChanges).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const changed = changeCount > 0;
+  const activeSection = sections.find(({ id }) => id === section)!;
   useUnsavedChanges(changed, saving);
 
   function setItems(items: LandingProjectSelection["items"]) {
@@ -88,17 +108,6 @@ export function LandingProjects({
     if (value === "automatic") delete next[id];
     else next[id] = value === "none" ? null : value;
     setDraft({ original, items, placements: next });
-  }
-
-  function move(index: number, offset: -1 | 1) {
-    const target = index + offset;
-    if (target < 0 || target >= items.length) return;
-    const reordered = [...items];
-    [reordered[index], reordered[target]] = [
-      reordered[target],
-      reordered[index],
-    ];
-    setItems(reordered);
   }
 
   async function save() {
@@ -138,24 +147,32 @@ export function LandingProjects({
       className="landing-projects-modal"
       size="wide"
       footer={
-        <footer className="ve-modal-actions">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={saving}
-            onClick={onClose}
-          >
-            {changed ? "Descartar cambios" : "Cerrar"}
-          </Button>
-          <button
-            className="btn btn-primary"
-            type="button"
-            ref={submit}
-            disabled={!changed || saving}
-            onClick={() => void save()}
-          >
-            {saving ? "Guardando…" : "Guardar portada"}
-          </button>
+        <footer className="ve-modal-actions landing-projects-footer">
+          <span role="status" className="landing-draft-status">
+            {changeCount
+              ? `${changeCount} ${changeCount === 1 ? "cambio pendiente" : "cambios pendientes"}`
+              : selection
+                ? "Portada al día"
+                : ""}
+          </span>
+          <div className="landing-footer-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={saving}
+              onClick={onClose}
+            >
+              {changed ? "Descartar cambios" : "Cerrar"}
+            </Button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={!changed || saving}
+              onClick={() => void save()}
+            >
+              {saving ? "Guardando…" : "Guardar portada"}
+            </button>
+          </div>
         </footer>
       }
     >
@@ -167,183 +184,124 @@ export function LandingProjects({
           <p role="status">Cargando la selección actual…</p>
         )
       ) : (
-        <>
-          {selection.placements && (
-            <nav
-              className="project-tabs landing-projects-tabs"
-              aria-label="Secciones de la portada"
-            >
-              {sections.map(({ id, name }) => (
+        <div className="landing-projects-layout">
+          <nav
+            className="landing-section-nav"
+            aria-label="Secciones de la portada"
+          >
+            {(selection.placements ? sections : sections.slice(0, 1)).map(
+              ({ id, name, Icon }) => (
                 <button
                   key={id}
                   type="button"
                   aria-pressed={section === id}
                   onClick={() => setSection(id)}
                 >
-                  {name}
+                  <Icon size={17} aria-hidden="true" />
+                  <span>{name}</span>
+                  {sectionChanges[id] > 0 && (
+                    <small
+                      aria-label={`${sectionChanges[id]} cambios pendientes`}
+                    >
+                      {sectionChanges[id]}
+                    </small>
+                  )}
                 </button>
-              ))}
-            </nav>
-          )}
-          {section === "carousel" ? (
-            <>
-              <p className="hint">
-                Orden de las tarjetas · {items.length} de{" "}
-                {LANDING_PROJECT_LIMIT}
-              </p>
-              <Select
-                label="Agregar proyecto publicado"
-                triggerRef={addProject}
-                placeholder={
-                  items.length >= LANDING_PROJECT_LIMIT
-                    ? `Selección completa · ${LANDING_PROJECT_LIMIT} proyectos`
-                    : available.length
-                      ? "Agregar proyecto publicado"
-                      : "No hay más proyectos publicados"
-                }
-                value=""
-                options={available.map(({ id, title }) => ({
-                  value: id,
-                  label: title,
-                }))}
-                disabled={
-                  saving ||
-                  items.length >= LANDING_PROJECT_LIMIT ||
-                  !available.length
-                }
-                onChange={(id) => {
-                  const project = available.find((entry) => entry.id === id);
-                  if (project)
-                    setItems([
-                      ...items,
-                      { id, title: project.title, published: true },
-                    ]);
-                }}
+              ),
+            )}
+            <a
+              href="https://veca.com.pe/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver portada publicada{" "}
+              <ArrowUpRight size={14} aria-hidden="true" />
+            </a>
+          </nav>
+          <section
+            className="landing-active-section"
+            aria-label={activeSection.name}
+          >
+            <header>
+              <h3>{activeSection.name}</h3>
+              <p>{activeSection.detail}</p>
+            </header>
+            {section === "carousel" ? (
+              <LandingCarouselEditor
+                items={items}
+                available={available}
+                saving={saving}
+                onChange={setItems}
               />
-              {items.length ? (
-                <ol
-                  className="landing-projects-list"
-                  role="list"
-                  aria-label="Orden del carrusel"
-                >
-                  {items.map(({ id, title, published }, index) => (
-                    <li key={id}>
-                      <span
-                        className="landing-projects-position"
-                        aria-hidden="true"
-                      >
-                        {index + 1}
-                      </span>
-                      <span className="landing-projects-title">
-                        {title}
-                        {!published && <small>Retirado de la web</small>}
-                      </span>
-                      <div className="landing-projects-actions">
-                        <button
-                          type="button"
-                          className="ops-icon-button"
-                          aria-label={`Subir ${title}`}
-                          aria-disabled={index === 0 || saving}
-                          onClick={() => !saving && move(index, -1)}
-                        >
-                          <ArrowUp size={17} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className="ops-icon-button"
-                          aria-label={`Bajar ${title}`}
-                          aria-disabled={index === items.length - 1 || saving}
-                          onClick={() => !saving && move(index, 1)}
-                        >
-                          <ArrowDown size={17} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          className="ops-icon-button"
-                          aria-label={`Quitar ${title}`}
+            ) : (
+              <div className="landing-projects-fields">
+                {(section === "blocks" ? blocks : SOLUTION_SLOTS).map(
+                  ({ id, name }) => {
+                    const current = original?.placements?.[id];
+                    const value = placements[id];
+                    const currentMissing =
+                      value &&
+                      !published.some((project) => project.id === value);
+                    return (
+                      <div className="landing-projects-field" key={id}>
+                        <div>
+                          <strong>{name}</strong>
+                          {current?.project ? (
+                            <small>
+                              {current.project.published
+                                ? "En la web"
+                                : "Retirado"}{" "}
+                              · {current.project.title}
+                            </small>
+                          ) : (
+                            <small>Sin proyecto publicado</small>
+                          )}
+                          {placementChanged(id) && (
+                            <small className="landing-pending-label">
+                              Cambio pendiente
+                            </small>
+                          )}
+                        </div>
+                        <Select
+                          label={name}
+                          value={
+                            value === null ? "none" : (value ?? "automatic")
+                          }
+                          options={[
+                            {
+                              value: "automatic",
+                              label:
+                                section === "solutions"
+                                  ? "Según el editor de proyectos"
+                                  : "Proyecto original",
+                            },
+                            { value: "none", label: "Sin proyecto" },
+                            ...(currentMissing
+                              ? [
+                                  {
+                                    value,
+                                    label:
+                                      current?.project?.title ??
+                                      "Proyecto retirado",
+                                  },
+                                ]
+                              : []),
+                            ...published.map(({ id, title }) => ({
+                              value: id,
+                              label: title,
+                            })),
+                          ]}
                           disabled={saving}
-                          onClick={() => {
-                            setItems(items.filter((item) => item.id !== id));
-                            requestAnimationFrame(() => {
-                              const next = addProject.current;
-                              (next && !next.disabled
-                                ? next
-                                : submit.current
-                              )?.focus();
-                            });
-                          }}
-                        >
-                          <X size={17} aria-hidden="true" />
-                        </button>
+                          onChange={(value) => changePlacement(id, value)}
+                        />
                       </div>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>
-                  Con esta selección, la portada queda sin tarjetas de
-                  proyectos.
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="landing-projects-fields">
-              {(section === "blocks" ? blocks : SOLUTION_SLOTS).map(
-                ({ id, name }) => {
-                  const current = original?.placements?.[id];
-                  const value = placements[id];
-                  const currentMissing =
-                    value && !published.some((project) => project.id === value);
-                  return (
-                    <div className="landing-projects-field" key={id}>
-                      <div>
-                        <strong>{name}</strong>
-                        {current?.project && (
-                          <small>
-                            {current.project.published
-                              ? "En la web"
-                              : "Retirado"}{" "}
-                            · {current.project.title}
-                          </small>
-                        )}
-                      </div>
-                      <Select
-                        label={name}
-                        value={value === null ? "none" : (value ?? "automatic")}
-                        options={[
-                          {
-                            value: "automatic",
-                            label:
-                              section === "solutions"
-                                ? "Según el editor de proyectos"
-                                : "Proyecto original",
-                          },
-                          { value: "none", label: "Sin proyecto" },
-                          ...(currentMissing
-                            ? [
-                                {
-                                  value,
-                                  label:
-                                    current?.project?.title ??
-                                    "Proyecto retirado",
-                                },
-                              ]
-                            : []),
-                          ...published.map(({ id, title }) => ({
-                            value: id,
-                            label: title,
-                          })),
-                        ]}
-                        disabled={saving}
-                        onChange={(value) => changePlacement(id, value)}
-                      />
-                    </div>
-                  );
-                },
-              )}
-            </div>
-          )}
-        </>
+                    );
+                  },
+                )}
+              </div>
+            )}
+          </section>
+        </div>
       )}
     </Modal>
   );

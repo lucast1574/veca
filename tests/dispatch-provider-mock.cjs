@@ -2,6 +2,7 @@
 if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
   const assert = require("node:assert/strict");
   const { randomUUID } = require("node:crypto");
+  const payroll = require("./labor-provider-mock.cjs");
   const fetch = globalThis.fetch;
   const url = "https://api.apisunat.net/api/v1/issuer";
   const guides = new Map();
@@ -12,6 +13,9 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
     if (typeof input !== "string" || !input.startsWith(url + "/"))
       return fetch(input, options);
     const path = input.slice(url.length);
+    const laborPrefix = "/issuers/20616656156/payroll/";
+    if (path.startsWith(laborPrefix))
+      return payroll(path.slice(laborPrefix.length), options);
     if (
       options.headers.Authorization === "Bearer asu_test_local_contract_mock"
     ) {

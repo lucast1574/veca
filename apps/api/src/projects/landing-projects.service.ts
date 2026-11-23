@@ -191,6 +191,8 @@ export class LandingProjectsService {
     revision: number,
     ids: string[],
     input?: LandingPlacements<string | null>,
+    expected?: LandingPlacements<string | null>,
+    expectedProjectIds?: string[],
   ): Promise<LandingProjectSelection> {
     const conflict = () =>
       new ConflictException(
@@ -198,6 +200,25 @@ export class LandingProjectsService {
       );
     const current = await this.selections.findOne({ _id: "carousel" });
     if (revision !== (current?.revision ?? 0)) throw conflict();
+    if (expectedProjectIds && !current) {
+      const before = (await this.initialProjects()).map(({ id }) => id);
+      if (
+        before.length !== expectedProjectIds.length ||
+        before.some((id, index) => id !== expectedProjectIds[index])
+      )
+        throw conflict();
+    }
+    if (expected && Object.keys(expected).length) {
+      const before = await this.placementSelection(current?.placements);
+      if (
+        LANDING_PLACEMENT_IDS.some(
+          (slot) =>
+            expected[slot] !== undefined &&
+            (before[slot]?.project?.id ?? null) !== expected[slot],
+        )
+      )
+        throw conflict();
+    }
 
     const projectIds = ids.map((id) => new ObjectId(id));
     const placements: LandingSelectionDocument["placements"] =
