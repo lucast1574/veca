@@ -1,4 +1,4 @@
-import type { Project } from "@veca/content";
+import { LANDING_FIXED_PROJECTS, type Project } from "@veca/content";
 import { Icon } from "@veca/ui/src/Icon";
 import { Action, Arrow } from "./Controls";
 
@@ -28,13 +28,21 @@ function WorkPhoto({
 }
 
 export function FeaturedCase({ project }: { project: Project }) {
-  const main = project.images.find(
-    (image) => image.id === "6afe88112b79ec6d83882c5e",
-  );
-  const details = [
-    "6afe88112b79ec6d83882c5d",
-    "6afe88112b79ec6d83882c5f",
-  ].flatMap((id) => project.images.filter((image) => image.id === id));
+  const original = project.slug === LANDING_FIXED_PROJECTS.caseStudy;
+  const main =
+    (original &&
+      project.images.find(
+        (image) => image.id === "6afe88112b79ec6d83882c5e",
+      )) ||
+    project.images.find((image) => image.id === project.coverId);
+  const details = original
+    ? ["6afe88112b79ec6d83882c5d", "6afe88112b79ec6d83882c5f"].flatMap((id) =>
+        project.images.filter((image) => image.id === id),
+      )
+    : project.images.filter(({ id }) => id !== main?.id).slice(0, 2);
+  const description = original
+    ? "Vidrio y aluminio para la fachada y los accesos de la clínica."
+    : project.excerpt;
 
   return (
     <section
@@ -46,16 +54,18 @@ export function FeaturedCase({ project }: { project: Project }) {
         <div className="ve-case-copy">
           <p className="ve-case-location">{project.location}</p>
           <h2 id="ve-case-title">{project.title}</h2>
-          <p>Vidrio y aluminio para la fachada y los accesos de la clínica.</p>
-          <div className="ve-case-scope">
-            <h3>Qué instalamos</h3>
-            <ul>
-              <li>Muro cortina Stick 45</li>
-              <li>Ventanas proyectantes</li>
-              <li>Puertas de cristal templado</li>
-              <li>Cortavientos</li>
-            </ul>
-          </div>
+          {description && <p>{description}</p>}
+          {original && (
+            <div className="ve-case-scope">
+              <h3>Qué instalamos</h3>
+              <ul>
+                <li>Muro cortina Stick 45</li>
+                <li>Ventanas proyectantes</li>
+                <li>Puertas de cristal templado</li>
+                <li>Cortavientos</li>
+              </ul>
+            </div>
+          )}
           <Action href={`/proyectos/${project.slug}/`} light>
             Ver la obra completa
           </Action>
@@ -76,9 +86,10 @@ export function FeaturedCase({ project }: { project: Project }) {
 }
 
 export function CompanyIntro({ office }: { office?: Project | null }) {
-  const image = office?.images.find(
-    (photo) => photo.id === "6afe87b02b79ec6d83882c3d",
-  );
+  const image =
+    (office?.slug === LANDING_FIXED_PROJECTS.company &&
+      office.images.find((photo) => photo.id === "6afe87b02b79ec6d83882c3d")) ||
+    office?.images.find((photo) => photo.id === office.coverId);
   return (
     <section
       className="ve-company ve-section"

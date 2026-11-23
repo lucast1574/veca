@@ -44,7 +44,7 @@ export const spaces = [
     details: ["Reemplazos", "Renovación", "Medidas y acabados"],
     href: "/vidrios-remodelaciones-lima/",
   },
-];
+] as const;
 export const questions = [
   [
     "¿En qué zonas atienden?",

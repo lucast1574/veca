@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, type ReactNode } from "react";
-import type { Project } from "@veca/content";
+import type { Project, SolutionSlot } from "@veca/content";
 import { SiteFooter } from "./SiteChrome";
 import { Icon } from "@veca/ui/src/Icon";
 import { WHATSAPP, questions } from "./landing/content";
@@ -14,14 +14,14 @@ export function VecaLanding({
   company,
   caseStudy,
   consultationUrl,
-  solutionProjects = [],
+  solutionProjects = {},
 }: {
   intro: ReactNode;
   featured: ReactNode;
   company: ReactNode;
   caseStudy: ReactNode;
   consultationUrl: string;
-  solutionProjects?: Project[];
+  solutionProjects?: Partial<Record<SolutionSlot, Project>>;
 }) {
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {

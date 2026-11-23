@@ -56,3 +56,43 @@
   opacity: 0.4;
   cursor: default;
 }
+
+.landing-projects-tabs {
+  margin-bottom: 16px;
+}
+
+.landing-projects-tabs button:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: var(--panel-raised);
+  color: var(--panel-ink);
+}
+
+.landing-projects-fields {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 12px;
+}
+
+.landing-projects-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.landing-projects-field small {
+  display: block;
+  margin-top: 4px;
+  color: var(--panel-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 580px) {
+  .landing-projects-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}

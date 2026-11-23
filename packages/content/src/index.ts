@@ -140,12 +140,6 @@ export const mediaSchema = z.object({
   positionX: z.number().min(0).max(100).default(50),
   positionY: z.number().min(0).max(100).default(50),
 });
-export const SOLUTION_SLOTS = [
-  { id: "viviendas", name: "Viviendas" },
-  { id: "edificios", name: "Edificios" },
-  { id: "interiores", name: "Interiores" },
-  { id: "remodelaciones", name: "Remodelaciones" },
-] as const;
 export const PAGE_LAYOUTS = [
   {
     id: "stacked",

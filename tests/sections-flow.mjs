@@ -259,15 +259,44 @@ assert.deepEqual(
   spotlight.map(({ id }) => id),
 );
 const selectedIds = [spotlight[2].id, spotlight[0].id];
-assert.equal(
-  (
-    await request(landingPath, "PUT", {
-      revision: selection.revision,
-      projectIds: selectedIds,
-    })
-  ).status,
-  200,
+const landingContentPath = "/public/landing-content";
+const initialLanding = (await request(landingContentPath)).body;
+assert.deepEqual(
+  initialLanding.carousel.map(({ id }) => id),
+  originalIds,
 );
+const placements = {
+  quote: spotlight[1].id,
+  caseStudy: spotlight[2].id,
+  company: spotlight[3].id,
+  viviendas: spotlight[3].id,
+  edificios: spotlight[2].id,
+  interiores: spotlight[1].id,
+  remodelaciones: spotlight[0].id,
+};
+for (const invalidPlacements of [
+  { quote: project.id },
+  { unknown: spotlight[0].id },
+]) {
+  assert.equal(
+    (
+      await request(landingPath, "PUT", {
+        revision: selection.revision,
+        projectIds: selectedIds,
+        placements: invalidPlacements,
+      })
+    ).status,
+    400,
+  );
+}
+const changedLanding = await request(landingPath, "PUT", {
+  revision: selection.revision,
+  projectIds: selectedIds,
+  placements,
+});
+assert.equal(changedLanding.status, 200);
+assert.equal(changedLanding.body.placements.quote.project.id, spotlight[1].id);
+assert.equal(changedLanding.body.placements.quote.automatic, false);
 assert.equal(
   (
     await request(landingPath, "PUT", {
@@ -277,10 +306,41 @@ assert.equal(
   ).status,
   409,
 );
+// Older panels can still change only the carousel without clearing placement overrides.
+assert.equal(
+  (
+    await request(landingPath, "PUT", {
+      revision: changedLanding.body.revision,
+      projectIds: selectedIds,
+    })
+  ).status,
+  200,
+);
 assert.deepEqual(
   (await request(publicLandingPath)).body.map(({ id }) => id),
   selectedIds,
 );
+const landingContent = (await request(landingContentPath)).body;
+assert.deepEqual(
+  Object.fromEntries(
+    Object.entries(landingContent.projects).map(([slot, item]) => [
+      slot,
+      item.id,
+    ]),
+  ),
+  placements,
+);
+const updatedHome = await (await fetch(site)).text();
+for (const [section, project] of [
+  ["ve-project-intro-title", spotlight[1]],
+  ["obra-destacada", spotlight[2]],
+  ["nosotros", spotlight[3]],
+  ["soluciones", spotlight[3]],
+]) {
+  const body = updatedHome.split(`id="${section}"`)[1].split("</section>")[0];
+  assert.ok(body.includes(`href="/proyectos/${project.slug}/"`), section);
+}
+assert.ok(!updatedHome.includes("Muro cortina Stick 45"));
 assert.equal(
   (await request("/public/projects/" + spotlight[1].slug)).status,
   200,
@@ -295,9 +355,24 @@ for (const item of spotlight)
     201,
   );
 assert.deepEqual((await request(publicLandingPath)).body, []);
-assert.ok(
-  (await request(landingPath)).body.items.every(({ published }) => !published),
-);
+assert.deepEqual((await request(landingContentPath)).body.projects, {});
+const withdrawn = (await request(landingPath)).body;
+assert.equal(withdrawn.placements.quote.project.published, false);
+const cleared = await request(landingPath, "PUT", {
+  revision: withdrawn.revision,
+  projectIds: [],
+  placements: { quote: null },
+});
+assert.equal(cleared.status, 200);
+assert.deepEqual(cleared.body.placements.quote, {
+  automatic: false,
+  project: null,
+});
+assert.deepEqual(cleared.body.placements.company, {
+  automatic: true,
+  project: null,
+});
+assert.ok(withdrawn.items.every(({ published }) => !published));
 console.log(
-  "PASS: canonical section media, mandatory cover, collages, publication snapshots, landing solutions and managed carousel order.",
+  "PASS: canonical section media, publication snapshots, carousel and independently managed landing projects.",
 );

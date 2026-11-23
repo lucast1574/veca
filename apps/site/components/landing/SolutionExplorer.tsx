@@ -1,14 +1,18 @@
 "use client";
 
-import type { Project } from "@veca/content";
+import type { Project, SolutionSlot } from "@veca/content";
 import { useRef, useState } from "react";
 import { spaces } from "./content";
 import { Action, Arrow } from "./Controls";
 
-export function SolutionExplorer({ projects = [] }: { projects?: Project[] }) {
+export function SolutionExplorer({
+  projects = {},
+}: {
+  projects?: Partial<Record<SolutionSlot, Project>>;
+}) {
   const [active, setActive] = useState(0);
   const item = spaces[active];
-  const project = projects.find((entry) => entry.solutionSlot === item.id);
+  const project = projects[item.id];
   const cover = project?.images.find((image) => image.id === project.coverId);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
 

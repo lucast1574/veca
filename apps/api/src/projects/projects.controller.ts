@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Param, Post, Put, Query } from "@nestjs/common";
 import { z } from "zod";
-import { CATEGORIES, LANDING_PROJECT_LIMIT, TAGS } from "@veca/content";
+import {
+  CATEGORIES,
+  LANDING_PLACEMENT_IDS,
+  LANDING_PROJECT_LIMIT,
+  TAGS,
+} from "@veca/content";
 import { PublicEndpoint, RequirePermission } from "../auth/route-access";
 import { ProjectsService } from "./projects.service";
 import { LandingProjectsService } from "./landing-projects.service";
@@ -12,16 +17,20 @@ const publishSchema = versionSchema.extend({
   // Accept requests from panels opened before automatic sharing was enabled.
   shareOnSocial: z.boolean().optional(),
 });
+const projectId = z.string().regex(/^[a-f0-9]{24}$/);
 const landingSelectionSchema = z
   .object({
     revision: z.number().int().nonnegative(),
     projectIds: z
-      .array(z.string().regex(/^[a-f0-9]{24}$/))
+      .array(projectId)
       .max(LANDING_PROJECT_LIMIT)
       .refine(
         (ids) => new Set(ids).size === ids.length,
         "Hay proyectos duplicados.",
       ),
+    placements: z
+      .partialRecord(z.enum(LANDING_PLACEMENT_IDS), projectId.nullable())
+      .optional(),
   })
   .strict();
 @Controller("admin/projects")
@@ -38,8 +47,11 @@ export class ProjectsController {
     return this.landing.getSelection();
   }
   @Put("landing") saveLandingSelection(@Body() input: unknown) {
-    const { revision, projectIds } = parse(landingSelectionSchema, input);
-    return this.landing.saveSelection(revision, projectIds);
+    const { revision, projectIds, placements } = parse(
+      landingSelectionSchema,
+      input,
+    );
+    return this.landing.saveSelection(revision, projectIds, placements);
   }
   @Get(":id") get(@Param("id") id: string) {
     return this.projects.get(id);
@@ -69,6 +81,11 @@ export class PublicProjectsController {
     private readonly projects: ProjectsService,
     private readonly landing: LandingProjectsService,
   ) {}
+  @PublicEndpoint()
+  @Get("landing-content")
+  landingContent() {
+    return this.landing.publicContent();
+  }
   @PublicEndpoint()
   @Get("landing-projects")
   landingProjects() {

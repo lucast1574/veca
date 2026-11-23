@@ -1,5 +1,33 @@
 import type { Project } from "./index.js";
 
+export const SOLUTION_SLOTS = [
+  { id: "viviendas", name: "Viviendas" },
+  { id: "edificios", name: "Edificios" },
+  { id: "interiores", name: "Interiores" },
+  { id: "remodelaciones", name: "Remodelaciones" },
+] as const;
+export const LANDING_FIXED_PROJECTS = {
+  quote: "jw-marriott-el-convento-882bdb",
+  caseStudy: "clinica-procabell-882c61",
+  company: "oficinas-onu-882c3e",
+} as const;
+
+export type SolutionSlot = (typeof SOLUTION_SLOTS)[number]["id"];
+export type FixedLandingPlacement = keyof typeof LANDING_FIXED_PROJECTS;
+export type LandingPlacementId = FixedLandingPlacement | SolutionSlot;
+export type LandingPlacements<T> = Partial<Record<LandingPlacementId, T>>;
+export const LANDING_PLACEMENT_IDS: LandingPlacementId[] = [
+  "quote",
+  "caseStudy",
+  "company",
+  ...SOLUTION_SLOTS.map(({ id }) => id),
+];
+
+export type LandingContent = {
+  carousel: Project[];
+  projects: LandingPlacements<Project>;
+};
+
 export const LANDING_PROJECT_LIMIT = 12;
 
 export const INITIAL_LANDING_SHOWCASE = [
@@ -15,9 +43,18 @@ export const INITIAL_LANDING_SHOWCASE = [
   "diners-club-882be1",
 ] as const;
 
+export type LandingProjectItem = {
+  id: string;
+  title: string;
+  published: boolean;
+};
 export type LandingProjectSelection = {
   revision: number;
-  items: { id: string; title: string; published: boolean }[];
+  items: LandingProjectItem[];
+  placements: LandingPlacements<{
+    automatic: boolean;
+    project: LandingProjectItem | null;
+  }>;
 };
 
 export function initialLandingProjects(

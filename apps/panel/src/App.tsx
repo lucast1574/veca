@@ -175,6 +175,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [landingSelection, setLandingSelection] =
     useState<LandingProjectSelection>();
+  const [landingError, setLandingError] = useState("");
   const [managingLanding, setManagingLanding] = useState(false);
   const [error, setError] = useState("");
   const [storageConfigured, setStorageConfigured] = useState(true);
@@ -187,6 +188,7 @@ export default function App() {
       setEditing(undefined);
       setProjects([]);
       setLandingSelection(undefined);
+      setLandingError("");
       setManagingLanding(false);
       setError("");
       setStorageConfigured(true);
@@ -202,23 +204,41 @@ export default function App() {
     setConnectionLost(false);
     setExpired(false);
   }, []);
-  const refresh = useCallback(async (signal?: AbortSignal) => {
+  const refreshLanding = useCallback(async (signal?: AbortSignal) => {
     const account = workspaceAccount.current;
-    const [rows, landing] = await Promise.allSettled([
-      api<Project[]>("/admin/projects", { signal }),
-      api<LandingProjectSelection>("/admin/projects/landing", { signal }),
-    ]);
-    if (signal?.aborted || workspaceAccount.current !== account) return;
-    if (rows.status === "fulfilled") setProjects(rows.value);
-    if (landing.status === "fulfilled") setLandingSelection(landing.value);
-    setError(
-      rows.status === "rejected"
-        ? (rows.reason as Error).message
-        : landing.status === "rejected"
-          ? "No pudimos cargar los proyectos de la portada."
-          : "",
-    );
+    const timeout = AbortSignal.timeout(8000);
+    setLandingError("");
+    try {
+      const selection = await api<LandingProjectSelection>(
+        "/admin/projects/landing",
+        { signal: signal ? AbortSignal.any([signal, timeout]) : timeout },
+      );
+      if (signal?.aborted || workspaceAccount.current !== account) return;
+      if (timeout.aborted) throw timeout.reason;
+      setLandingSelection((current) =>
+        current && current.revision > selection.revision ? current : selection,
+      );
+    } catch {
+      if (!signal?.aborted && workspaceAccount.current === account)
+        setLandingError("No pudimos cargar los proyectos de la portada.");
+    }
   }, []);
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      const account = workspaceAccount.current;
+      void refreshLanding(signal);
+      try {
+        const rows = await api<Project[]>("/admin/projects", { signal });
+        if (signal?.aborted || workspaceAccount.current !== account) return;
+        setProjects(rows);
+        setError("");
+      } catch (error) {
+        if (!signal?.aborted && workspaceAccount.current === account)
+          setError((error as Error).message);
+      }
+    },
+    [refreshLanding],
+  );
   useEffect(() => {
     api<Session>("/auth/me")
       .then(login)
@@ -297,15 +317,17 @@ export default function App() {
     document.body.classList.toggle("veca-reauthenticating", expired);
     return () => document.body.classList.remove("veca-reauthenticating");
   }, [expired]);
-  const landingOrder = useMemo(
-    () =>
-      new Map(
-        landingSelection?.items
-          .filter((item) => item.published)
-          .map(({ id }, index) => [id, index]),
+  const landingOrder = useMemo(() => {
+    if (!landingSelection) return new Map<string, number>();
+    const visible = [
+      ...landingSelection.items,
+      ...Object.values(landingSelection.placements ?? {}).flatMap(
+        ({ project }) => project ?? [],
       ),
-    [landingSelection],
-  );
+    ].filter(({ published }) => published);
+    const ids = [...new Set(visible.map(({ id }) => id))];
+    return new Map(ids.map((id, index) => [id, index]));
+  }, [landingSelection]);
   const filtered = useMemo(() => {
     const matches = projects.filter(
       (p) =>
@@ -460,7 +482,11 @@ export default function App() {
                       <div className="project-heading-actions">
                         <Button
                           variant="ghost"
-                          onClick={() => setManagingLanding(true)}
+                          onClick={() => {
+                            if (landingError && !landingSelection)
+                              void refreshLanding();
+                            setManagingLanding(true);
+                          }}
                         >
                           <Star size={17} />
                           Gestionar portada
@@ -587,6 +613,8 @@ export default function App() {
                                   <img
                                     src={cover.url}
                                     alt={cover.alt}
+                                    loading="lazy"
+                                    decoding="async"
                                     style={{
                                       objectPosition: `${cover.positionX}% ${cover.positionY}%`,
                                     }}
@@ -641,6 +669,9 @@ export default function App() {
                     {managingLanding && (
                       <LandingProjects
                         projects={projects}
+                        selection={landingSelection}
+                        loadError={landingError}
+                        onReload={() => void refreshLanding()}
                         onClose={() => setManagingLanding(false)}
                         onSelection={setLandingSelection}
                       />
