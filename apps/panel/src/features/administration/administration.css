@@ -114,10 +114,6 @@
   color: #246647;
 }
 
-html[data-theme="dark"] .administration-check[data-tone="ok"] {
-  color: #8ad9ad;
-}
-
 .administration-check[data-tone="review"] {
   color: var(--panel-accent);
 }

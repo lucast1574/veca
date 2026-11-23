@@ -10,7 +10,6 @@ import {
 import type { SessionUser } from "@veca/content";
 import { Button, Notice } from "../../components/ui";
 import { PhotoSettings } from "./PhotoSettings";
-import { AppearanceSettings } from "./AppearanceSettings";
 import {
   canOpenWorkspace,
   WORKSPACE_ITEMS,
@@ -184,7 +183,6 @@ export function UserProfile({
               </div>
             )}
           </section>
-          <AppearanceSettings />
           <p className="profile-privacy">
             Tu información permanece en el espacio privado de VECA.{" "}
             <a

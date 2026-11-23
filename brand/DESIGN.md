@@ -13,31 +13,30 @@ Vidrios VECA: empresa de vidrio y construcción, sede en San Luis y atención en
 
 ## Paleta del panel
 
-| Función / token                              | Claro   | Oscuro  |
-| -------------------------------------------- | ------- | ------- |
-| Naranja de marca `--panel-brand`             | #e74927 | #e74927 |
-| Naranja para texto `--panel-accent`          | #c34427 | #ff9678 |
-| Acento suave `--panel-accent-soft`           | #f9e9e2 | #402d2b |
-| Superficie destacada `--panel-brand-surface` | #fff1e9 | #342723 |
-| Borde destacado `--panel-brand-edge`         | #e8b1a0 | #80503d |
-| Fondo `--panel-canvas`                       | #f5f4f0 | #151722 |
-| Tarjeta `--panel-surface`                    | #ffffff | #202331 |
-| Fondo suave `--panel-soft`                   | #faf9f6 | #1a1d29 |
-| Superficie elevada `--panel-raised`          | #eeede8 | #2a2e3e |
-| Texto principal `--panel-ink`                | #242641 | #eeeef5 |
-| Texto secundario `--panel-secondary`         | #646879 | #b5b9ca |
-| Texto tenue `--panel-muted`                  | #858894 | #9499af |
-| Separación `--panel-edge`                    | #e6e4de | #35394b |
+| Función / token                              | Claro   |
+| -------------------------------------------- | ------- |
+| Naranja de marca `--panel-brand`             | #e74927 |
+| Naranja para texto `--panel-accent`          | #c34427 |
+| Acento suave `--panel-accent-soft`           | #f9e9e2 |
+| Superficie destacada `--panel-brand-surface` | #fff1e9 |
+| Borde destacado `--panel-brand-edge`         | #e8b1a0 |
+| Fondo `--panel-canvas`                       | #f5f4f0 |
+| Tarjeta `--panel-surface`                    | #ffffff |
+| Fondo suave `--panel-soft`                   | #faf9f6 |
+| Superficie elevada `--panel-raised`          | #eeede8 |
+| Texto principal `--panel-ink`                | #242641 |
+| Texto secundario `--panel-secondary`         | #646879 |
+| Texto tenue `--panel-muted`                  | #858894 |
+| Separación `--panel-edge`                    | #e6e4de |
 
-El naranja del logo se conserva en ambos temas. Las variantes de texto existen para mantener contraste; no reemplazan el logo. Comprobar pares reales de texto/fondo al cambiar la paleta. El texto secundario debe seguir siendo legible.
+El panel usa la paleta clara, incluso si el sistema operativo usa un esquema oscuro. Las variantes de texto existen para mantener contraste; no reemplazan el logo. Comprobar pares reales de texto/fondo al cambiar la paleta. El texto secundario debe seguir siendo legible.
 
 ## Aplicación
 
 - Naranja visible en la navegación activa, iconos de indicadores, enlaces de acción y encabezados de sección. El bloque de avance comercial usa un borde superior naranja.
-- La tarjeta de proyectos publicados usa una superficie naranja suave en ambos temas. Identificarla por su función, no por su posición en la grilla: las tarjetas dependen de permisos.
+- La tarjeta de proyectos publicados usa una superficie naranja suave. Identificarla por su función, no por su posición en la grilla: las tarjetas dependen de permisos.
 - El resto de las superficies conserva fondos neutros; no convertir todo el panel en naranja.
 - Las etapas conservan sus colores informativos existentes: #a4afa7, #cbb481, #7b9baf, #e77b51 y #7a9a76. Los estados de éxito, alerta o error no se convierten todos en naranja.
-- El tema oscuro debe cubrir fondo, borde, etiquetas, cifras, hover, foco y estados vacíos. No combinar textos claros con tarjetas blancas.
 
 ## Patrones existentes
 
@@ -54,6 +53,6 @@ Sin focus outlines, focus rings ni sombras que simulen anillos. Mantener teclado
 
 ## Verificación
 
-Revisar ambos temas en el dashboard real, con ancho de escritorio y móvil. Verificar el resultado publicado además del build. Una skill de branding no sustituye la validación de CSS calculado y contraste.
+Revisar el esquema claro en el dashboard real, con ancho de escritorio y móvil. Verificar el resultado publicado además del build. Una skill de branding no sustituye la validación de CSS calculado y contraste.
 
 Sin emojis ni flechas Unicode decorativas en móvil o escritorio. Usar `packages/ui/src/Icon.tsx` o SVG del mismo sistema visual, también en tarjetas públicas y formularios.
