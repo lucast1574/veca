@@ -126,4 +126,17 @@ export async function migrateAccess(db: Db) {
       { upsert: true },
     );
   }
+  if (!(await migrations.findOne({ name: "works-access-v1" }))) {
+    await db
+      .collection("roles")
+      .updateMany(
+        { permissions: { $in: ["leads", "inventory", "accounting"] } },
+        { $addToSet: { permissions: "works" }, $inc: { revision: 1 } },
+      );
+    await migrations.updateOne(
+      { name: "works-access-v1" },
+      { $setOnInsert: { completedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

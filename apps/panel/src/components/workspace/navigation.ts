@@ -1,5 +1,6 @@
 import {
   Gauge,
+  HardHat,
   LayoutGrid,
   Kanban,
   Package,
@@ -36,6 +37,13 @@ export const WORKSPACE_ITEMS = [
     label: "Leads",
     description: "Consultas y obras",
     Icon: Kanban,
+    group: "Seguimiento",
+  },
+  {
+    id: "works",
+    label: "Obras",
+    description: "Preparación y ejecución",
+    Icon: HardHat,
     group: "Seguimiento",
   },
   {

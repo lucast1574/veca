@@ -280,6 +280,7 @@ export function Team({ currentId }: { currentId: string }) {
                     dashboard: "Resumen",
                     projects: "Proyectos",
                     leads: "Leads",
+                    works: "Obras · consulta",
                     gallery: "Galería",
                     inventory: "Inventario",
                     dispatches: "Despachos",

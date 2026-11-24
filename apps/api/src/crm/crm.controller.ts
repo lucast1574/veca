@@ -1,4 +1,5 @@
 import { CrmEvents } from "./crm.events";
+import { WorksController } from "./works.controller";
 import {
   Body,
   Controller,
@@ -193,6 +194,7 @@ class CrmController {
   controllers: [
     ConsultationController,
     CrmController,
+    WorksController,
     GalleryController,
     MobileGalleryController,
   ],

@@ -30,11 +30,13 @@ export function Operations({
   inventoryAccess = true,
   dispatchAccess = false,
   accountingAccess = false,
+  worksAccess = false,
 }: {
   view: "leads" | "inventory";
   inventoryAccess?: boolean;
   dispatchAccess?: boolean;
   accountingAccess?: boolean;
+  worksAccess?: boolean;
 }) {
   const [route, setRoute] = useState(current);
   const [filters, setFilters] = useState<LeadBoardFilters>(() => ({
@@ -94,6 +96,7 @@ export function Operations({
         <LeadDetail
           key={route.id}
           id={route.id}
+          worksAccess={worksAccess}
           inventoryAccess={inventoryAccess}
           dispatchAccess={dispatchAccess}
           proposal={route.proposal}

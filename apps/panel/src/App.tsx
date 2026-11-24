@@ -71,6 +71,11 @@ const AccountingWorkspace = lazy(() =>
     default: module.AccountingWorkspace,
   })),
 );
+const WorksWorkspace = lazy(() =>
+  import("./features/works/WorksWorkspace").then((module) => ({
+    default: module.WorksWorkspace,
+  })),
+);
 const Operations = lazy(() =>
   import("./features/operations/Operations").then((module) => ({
     default: module.Operations,
@@ -438,10 +443,20 @@ export default function App() {
                     canOpenLead={can("leads")}
                     canOpenProjects={can("projects")}
                   />
+                ) : view === "works" ? (
+                  <WorksWorkspace
+                    canEdit={can("leads")}
+                    inventoryAccess={can("inventory")}
+                    dispatchAccess={session.user.permissions.includes(
+                      "dispatches",
+                    )}
+                    accountingAccess={can("accounting")}
+                  />
                 ) : view === "accounting" ? (
                   <AccountingWorkspace inventoryAccess={can("inventory")} />
                 ) : view === "leads" || view === "inventory" ? (
                   <Operations
+                    worksAccess={can("works")}
                     view={view}
                     inventoryAccess={can("inventory")}
                     dispatchAccess={session.user.permissions.includes(

@@ -74,8 +74,14 @@ export function LeadDetail({
   inventoryAccess = true,
   dispatchAccess = false,
   back,
+  readOnly = false,
+  workView = false,
+  worksAccess = false,
 }: {
   id: string;
+  readOnly?: boolean;
+  workView?: boolean;
+  worksAccess?: boolean;
   proposal?: string;
   dispatchId?: string;
   inventoryAccess?: boolean;
@@ -84,7 +90,7 @@ export function LeadDetail({
 }) {
   const [data, setData] = useState<LeadDetailData | null>(null),
     [draft, setDraft] = useState<LeadInput | null>(null),
-    [tab, setTab] = useState(dispatchId ? "work" : "overview"),
+    [tab, setTab] = useState(workView || dispatchId ? "work" : "overview"),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState(false),
     [transition, setTransition] = useState<LeadInput["stage"] | null>(null),
@@ -99,33 +105,35 @@ export function LeadDetail({
     });
   const { error, setError, fail } = useMessage();
   const upload = useRef<HTMLInputElement>(null);
+  const detailPath =
+    workView || readOnly ? `/admin/works/${id}` : `/admin/crm/leads/${id}`;
   const refresh = useCallback(async () => {
     try {
-      const next = await api<LeadDetailData>(`/admin/crm/leads/${id}`);
+      const next = await api<LeadDetailData>(detailPath);
       setData(next);
       setDraft(leadInput(next.lead));
       setError("");
     } catch (e) {
       fail(e);
     }
-  }, [id]);
+  }, [id, detailPath]);
   useEffect(() => {
     void refresh();
-    if (inventoryAccess)
+    if (inventoryAccess && !readOnly)
       void api<Material[]>("/admin/crm/materials")
         .then(setMaterials)
         .catch(fail);
   }, [refresh]);
   useEffect(() => {
-    if (!data || !proposal) return;
+    if (readOnly || !data || !proposal) return;
     const from = data.lead.stage;
     const next =
       from === "discarded" ? "prelead" : phases[phases.indexOf(from) + 1];
     if (proposal === next || (proposal === "discarded" && from !== "discarded"))
       setTransition(proposal as LeadInput["stage"]);
-  }, [proposal, data?.lead.id]);
+  }, [proposal, data?.lead.id, readOnly]);
   const refreshRelated = useCallback(() => {
-    void api<LeadDetailData>(`/admin/crm/leads/${id}`)
+    void api<LeadDetailData>(detailPath)
       .then((next) => {
         setData((old) =>
           old
@@ -145,11 +153,11 @@ export function LeadDetail({
         });
       })
       .catch(fail);
-    if (inventoryAccess)
+    if (inventoryAccess && !readOnly)
       void api<Material[]>("/admin/crm/materials")
         .then(setMaterials)
         .catch(fail);
-  }, [id]);
+  }, [id, detailPath]);
   useLiveRefresh(refreshRelated);
   const dirty =
     !!data &&
@@ -171,7 +179,7 @@ export function LeadDetail({
   }
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (!draft || busy) return;
+    if (readOnly || !draft || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -186,7 +194,7 @@ export function LeadDetail({
   }
   async function addNote(event: FormEvent) {
     event.preventDefault();
-    if (!draft) return;
+    if (readOnly || !draft) return;
     setBusy(true);
     setError("");
     try {
@@ -205,6 +213,7 @@ export function LeadDetail({
     }
   }
   async function file(file: File) {
+    if (readOnly) return;
     setBusy(true);
     setError("");
     try {
@@ -214,7 +223,7 @@ export function LeadDetail({
       form.append("tags", JSON.stringify(photoMetadata.tags));
       form.append("sharing", photoMetadata.sharing);
       await api(`/admin/crm/leads/${id}/files`, { method: "POST", body: form });
-      const attachments = await api<LeadDetailData>(`/admin/crm/leads/${id}`);
+      const attachments = await api<LeadDetailData>(detailPath);
       setData((old) =>
         old ? { ...old, attachments: attachments.attachments } : old,
       );
@@ -232,7 +241,7 @@ export function LeadDetail({
       <main className="ops-page">
         {error ? <Notice error>{error}</Notice> : <p>Cargando ficha…</p>}
         <Button variant="ghost" onClick={back}>
-          Volver al tablero
+          {workView ? "Volver a Obras" : "Volver al tablero"}
         </Button>
       </main>
     );
@@ -255,7 +264,9 @@ export function LeadDetail({
     ["files", "Archivos"],
     ["materials", "Materiales"],
     ["history", "Historial"],
-  ].filter(([value]) => value !== "materials" || inventoryAccess);
+  ].filter(
+    ([value]) => value !== "materials" || (inventoryAccess && !readOnly),
+  );
   const formField = (key: keyof LeadInput, label: string, type = "text") => (
     <Field label={label}>
       <input
@@ -285,7 +296,7 @@ export function LeadDetail({
     <main className="ops-page ops-detail">
       <div className="lead-detail-top">
         <button className="ops-back" onClick={back}>
-          <ArrowLeft size={17} /> Leads
+          <ArrowLeft size={17} /> {workView ? "Obras" : "Leads"}
         </button>
         <button
           className="ops-icon-button"
@@ -314,8 +325,21 @@ export function LeadDetail({
               .filter(Boolean)
               .join(" · ") || LEAD_SOURCE_LABELS[lead.source]}
           </p>
+          {!workView &&
+            worksAccess &&
+            ["coordination", "execution", "completed"].includes(lead.stage) && (
+              <a
+                className="btn btn-ghost"
+                href={`#works/${id}`}
+                onClick={(event) => {
+                  if (!confirmDiscard(dirty, busy)) event.preventDefault();
+                }}
+              >
+                Abrir en Obras <ArrowRight size={16} />
+              </a>
+            )}
         </div>
-        {nextStage && (
+        {nextStage && !readOnly && (
           <Button
             disabled={busy || editing}
             onClick={() => {
@@ -361,7 +385,7 @@ export function LeadDetail({
           </button>
         ))}
       </nav>
-      {transition && (
+      {transition && !readOnly && (
         <LeadStageDialog
           stage={transition}
           initial={draft}
@@ -385,12 +409,16 @@ export function LeadDetail({
             <div className="lead-detail-section-head">
               <h2>
                 {tab === "overview"
-                  ? "Sobre esta oportunidad"
+                  ? workView
+                    ? "Sobre esta obra"
+                    : "Sobre esta oportunidad"
                   : "Coordinación y obra"}
               </h2>
-              <Button variant="ghost" onClick={() => setEditing(true)}>
-                <Pencil size={15} /> Editar datos
-              </Button>
+              {!readOnly && (
+                <Button variant="ghost" onClick={() => setEditing(true)}>
+                  <Pencil size={15} /> Editar datos
+                </Button>
+              )}
             </div>
             {tab === "overview" ? (
               <>
@@ -477,7 +505,7 @@ export function LeadDetail({
                   <CalendarDays size={17} />
                   {lead.appointment ? "Cita programada" : "Sin cita programada"}
                 </p>
-                {dispatchAccess && (
+                {dispatchAccess && !readOnly && (
                   <Button
                     variant="ghost"
                     type="button"
@@ -491,13 +519,16 @@ export function LeadDetail({
                   </Button>
                 )}
                 {dispatchAccess &&
+                  !readOnly &&
                   !demo &&
                   ["coordination", "execution", "completed"].includes(
                     lead.stage,
                   ) && <WorkInvoiceRequest id={id} />}
               </>
             )}
-            {lead.stage !== "discarded" &&
+            {!readOnly &&
+              !workView &&
+              lead.stage !== "discarded" &&
               lead.stage !== "completed" &&
               tab === "overview" && (
                 <Button
@@ -510,7 +541,7 @@ export function LeadDetail({
           </aside>
         </div>
       )}
-      {["overview", "work"].includes(tab) && editing && (
+      {["overview", "work"].includes(tab) && editing && !readOnly && (
         <form
           onSubmit={save}
           className="ops-card lead-detail-panel lead-detail-edit"
@@ -621,23 +652,28 @@ export function LeadDetail({
                 Archivos privados. Añadirlos aquí no los publica en la landing.
               </p>
             </div>
-            <Button disabled={busy} onClick={() => upload.current?.click()}>
-              <Upload size={16} />
-              {busy ? "Subiendo…" : "Añadir archivo"}
-            </Button>
+            {!readOnly && (
+              <Button disabled={busy} onClick={() => upload.current?.click()}>
+                <Upload size={16} />
+                {busy ? "Subiendo…" : "Añadir archivo"}
+              </Button>
+            )}
           </div>
-          <fieldset className="gallery-edit-fields" disabled={busy}>
-            <PhotoMetadataFields
-              value={photoMetadata}
-              onChange={setPhotoMetadata}
-            />
-            <p className="hint">
-              Las fotos aparecerán en la Galería. En contratos PDF solo se
-              guarda la descripción.
-            </p>
-          </fieldset>
+          {!readOnly && (
+            <fieldset className="gallery-edit-fields" disabled={busy}>
+              <PhotoMetadataFields
+                value={photoMetadata}
+                onChange={setPhotoMetadata}
+              />
+              <p className="hint">
+                Las fotos aparecerán en la Galería. En contratos PDF solo se
+                guarda la descripción.
+              </p>
+            </fieldset>
+          )}
           <input
             ref={upload}
+            disabled={readOnly}
             className="ops-file-input"
             type="file"
             accept="image/jpeg,image/png,image/webp,image/avif,application/pdf"
@@ -683,7 +719,7 @@ export function LeadDetail({
           )}
         </section>
       )}
-      {tab === "work" && dispatchAccess && (
+      {tab === "work" && dispatchAccess && !readOnly && (
         <div id="lead-dispatches">
           <LeadDispatches
             lead={lead}
@@ -692,7 +728,7 @@ export function LeadDetail({
           />
         </div>
       )}
-      {tab === "materials" && inventoryAccess && (
+      {tab === "materials" && inventoryAccess && !readOnly && (
         <>
           {!demo &&
             ["coordination", "execution", "completed"].includes(lead.stage) && (
@@ -736,11 +772,10 @@ export function LeadDetail({
               onSaved={() => {
                 setMovement(false);
                 void api<Material[]>("/admin/crm/materials").then(setMaterials);
-                void api<LeadDetailData>(`/admin/crm/leads/${id}`).then(
-                  (next) =>
-                    setData((old) =>
-                      old ? { ...old, movements: next.movements } : old,
-                    ),
+                void api<LeadDetailData>(detailPath).then((next) =>
+                  setData((old) =>
+                    old ? { ...old, movements: next.movements } : old,
+                  ),
                 );
               }}
             />
@@ -749,19 +784,26 @@ export function LeadDetail({
       )}
       {tab === "history" && (
         <section className="ops-card">
-          <h2>Historial de atención</h2>
-          <form className="ops-note-form" onSubmit={addNote}>
-            <textarea
-              aria-label="Nueva nota de seguimiento"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Registra una llamada, acuerdo o avance…"
-              required
-              maxLength={4000}
-              rows={3}
-            />
-            <Button disabled={busy}>Añadir nota</Button>
-          </form>
+          <h2>{workView ? "Avances e historial" : "Historial de atención"}</h2>
+          {workView && !lead.events.length && (
+            <p className="hint">Aún no hay avances registrados.</p>
+          )}
+          {!readOnly && (
+            <form className="ops-note-form" onSubmit={addNote}>
+              <textarea
+                aria-label="Nueva nota de seguimiento"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Registra una llamada, acuerdo o avance…"
+                required
+                maxLength={4000}
+                rows={3}
+              />
+              <Button disabled={busy}>
+                {workView ? "Registrar avance" : "Añadir nota"}
+              </Button>
+            </form>
+          )}
           <ol className="ops-timeline">
             {[...lead.events].reverse().map((event, i) => (
               <li key={`${event.at}-${i}`}>

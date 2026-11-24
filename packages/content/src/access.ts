@@ -3,6 +3,7 @@ export const PERMISSIONS = [
   "dashboard",
   "projects",
   "leads",
+  "works",
   "gallery",
   "inventory",
   "dispatches",
