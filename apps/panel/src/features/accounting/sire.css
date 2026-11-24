@@ -1,3 +1,33 @@
+.sire-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sire-section-title h3 {
+  margin: 0;
+}
+.sire-help-copy {
+  display: grid;
+  gap: 20px;
+  color: var(--panel-secondary);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.sire-help-copy p,
+.sire-help-copy ul {
+  margin: 0;
+}
+.sire-help-copy ul {
+  padding-left: 20px;
+}
+.sire-help-copy li + li {
+  margin-top: 8px;
+}
+.sire-help-note {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
 .sire-automatic {
   display: grid;
   gap: 24px;

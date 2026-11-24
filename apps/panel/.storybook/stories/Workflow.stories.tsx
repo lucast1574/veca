@@ -4,6 +4,8 @@ import { http, HttpResponse } from "msw";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
 import { WorksWorkspace } from "../../src/features/works/WorksWorkspace";
 import { AccountingWorkspace } from "../../src/features/accounting/AccountingWorkspace";
+import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
+import { SireReconciliation } from "../../src/features/accounting/SireReconciliation";
 import type { ReactNode } from "react";
 import type { AccountingMargin } from "@veca/content";
 import { margin, user, works } from "./fixtures";
@@ -55,6 +57,16 @@ export const ObrasConActividad: Story = {
     history.replaceState(null, "", "#works");
   },
   render: workScreen,
+};
+export const ConciliacionSunat: Story = {
+  name: "Conciliación con SUNAT · Ayuda",
+  render: () => (
+    <Frame view="accounting">
+      <AccountingAccess.Provider value={["accounting_write"]}>
+        <SireReconciliation month="2026-11" />
+      </AccountingAccess.Provider>
+    </Frame>
+  ),
 };
 export const ObraConPendientes: Story = {
   name: "Obra con pendientes",

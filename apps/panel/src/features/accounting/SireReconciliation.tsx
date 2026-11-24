@@ -1,8 +1,9 @@
 import { useAccountingPermission } from "./AccountingAccess";
 import { useState } from "react";
-import { FileCheck2 } from "lucide-react";
+import { FileCheck2, Info } from "lucide-react";
 import type { SireReconciliation as Result } from "@veca/content";
 import { Button } from "../../components/ui";
+import { Modal } from "../../components/Modal";
 import { SireAutomaticDialog } from "./SireAutomaticDialog";
 import { SireFileDialog } from "./SireFileDialog";
 import "./sire.css";
@@ -49,7 +50,7 @@ const exportRows = (result: Result) => {
 
 export function SireReconciliation({ month }: { month: string }) {
   const canWrite = useAccountingPermission("accounting_write");
-  const [open, setOpen] = useState<"automatic" | "file" | null>(null);
+  const [open, setOpen] = useState<"automatic" | "file" | "help" | null>(null);
   const [result, setResult] = useState<Result>();
   const [page, setPage] = useState(1);
   const size = 20;
@@ -57,7 +58,18 @@ export function SireReconciliation({ month }: { month: string }) {
     <section className="ops-card warehouse-panel">
       <div className="accounting-section-head">
         <div>
-          <h3>Conciliación con SUNAT</h3>
+          <div className="sire-section-title">
+            <h3>Conciliación con SUNAT</h3>
+            <button
+              type="button"
+              className="ops-icon-button"
+              aria-label="Cómo funciona la conciliación con SUNAT"
+              aria-haspopup="dialog"
+              onClick={() => setOpen("help")}
+            >
+              <Info size={17} aria-hidden="true" />
+            </button>
+          </div>
           <p className="hint">
             Compara los comprobantes y sus importes con la propuesta del
             periodo.
@@ -72,6 +84,35 @@ export function SireReconciliation({ month }: { month: string }) {
           <FileCheck2 size={17} /> Comparar con SUNAT
         </Button>
       </div>
+      {open === "help" && (
+        <Modal
+          title="¿Qué revisa esta comparación?"
+          onClose={() => setOpen(null)}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button type="button" onClick={() => setOpen(null)}>
+                Entendido
+              </Button>
+            </footer>
+          }
+        >
+          <div className="sire-help-copy">
+            <p>
+              Compara los comprobantes registrados en VECA con la propuesta de
+              compras o ventas que SUNAT tiene para el periodo seleccionado.
+            </p>
+            <ul>
+              <li>Identifica los comprobantes que coinciden.</li>
+              <li>Señala los que aparecen solo en VECA o solo en SUNAT.</li>
+              <li>Destaca importes distintos y datos por revisar.</li>
+            </ul>
+            <p className="sire-help-note">
+              Es una revisión para Contabilidad. No declara impuestos, no acepta
+              libros ni modifica tus registros.
+            </p>
+          </div>
+        </Modal>
+      )}
       {open === "automatic" && (
         <SireAutomaticDialog
           month={month}
