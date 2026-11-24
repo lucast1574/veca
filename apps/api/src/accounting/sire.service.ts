@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { SireBook, SireReconciliation } from "@veca/content";
+import type {
+  SireBook,
+  SireComparison,
+  SireReconciliation,
+} from "@veca/content";
+import { SireProvider } from "./sire-provider";
 import { fiscalIssuerRuc } from "../common/fiscal-config";
 import { Database } from "../database/database.module";
 
@@ -76,7 +81,56 @@ function sunatRows(file: Buffer, month: string, book: SireBook) {
 
 @Injectable()
 export class SireService {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly provider: SireProvider,
+  ) {}
+
+  connection() {
+    return this.provider.connection();
+  }
+
+  async automatic(
+    month: string,
+    book: SireBook,
+    job?: string,
+  ): Promise<SireComparison> {
+    const proposal = job
+      ? await this.provider.poll(job)
+      : await this.provider.start(month, book);
+    if (
+      proposal.period !== month ||
+      proposal.book !== book ||
+      proposal.ruc !== fiscalIssuerRuc
+    )
+      throw new BadRequestException(
+        "La propuesta no corresponde a la empresa, libro y periodo seleccionados.",
+      );
+    if (proposal.status === "pending")
+      return { job: proposal.job, status: "pending" };
+    if (
+      !proposal.files ||
+      proposal.files.reduce(
+        (sum, file) => sum + Buffer.byteLength(file.text),
+        0,
+      ) > 8_000_000
+    )
+      throw new BadRequestException(
+        "No se recibió una propuesta completa de hasta 8 MB.",
+      );
+    const incoming = proposal.files.flatMap((file) =>
+      sunatRows(Buffer.from(file.text), month, book),
+    );
+    if (incoming.length > 10_000)
+      throw new BadRequestException(
+        "El periodo supera el límite de 10 000 comprobantes.",
+      );
+    return {
+      job: proposal.job,
+      status: "ready",
+      result: await this.compare(month, book, incoming),
+    };
+  }
 
   async reconcile(
     month: string,
@@ -90,6 +144,14 @@ export class SireService {
       throw new BadRequestException(
         "La propuesta no contiene comprobantes para comparar.",
       );
+    return this.compare(month, book, incoming);
+  }
+
+  private async compare(
+    month: string,
+    book: SireBook,
+    incoming: ReturnType<typeof sunatRows>,
+  ): Promise<SireReconciliation> {
     const range = { $gte: month + "-01", $lte: month + "-31" };
     const rows =
       book === "sales"

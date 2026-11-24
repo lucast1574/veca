@@ -76,6 +76,7 @@ const mailServer = createServer(async (req, res) => {
 await new Promise((resolve) => mailServer.listen(4510, "127.0.0.1", resolve));
 const guideMock = process.env.VECA_GUIDE_QA_MOCK === "1";
 const pushMock = process.env.VECA_PUSH_QA_MOCK === "1";
+const sireMock = process.env.VECA_SIRE_QA_MOCK === "1";
 const pushKey = createECDH("prime256v1");
 pushKey.generateKeys();
 const env = {
@@ -115,7 +116,13 @@ const guideMockArgs = guideMock
   : [];
 const api = spawn(
   process.execPath,
-  [...guideMockArgs, "apps/api/dist/main.js"],
+  [
+    ...guideMockArgs,
+    ...(sireMock
+      ? ["--require", path.resolve("tests/sire-provider-mock.cjs")]
+      : []),
+    "apps/api/dist/main.js",
+  ],
   {
     env,
     stdio: ["ignore", "ignore", "inherit"],

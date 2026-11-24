@@ -789,8 +789,13 @@ export class AccountingService {
     const firstValuation = valuation?.since
       ? limaDate(new Date(valuation.since))
       : "";
-    const costs = await this.costs
-      .aggregate<{ costs: number; count: number; manual: number }>([
+    const categories = await this.costs
+      .aggregate<{
+        _id: CostInput["kind"];
+        costs: number;
+        count: number;
+        manual: number;
+      }>([
         { $match: { kind: { $ne: "purchase" }, "allocations.workId": workId } },
         { $unwind: "$allocations" },
         { $match: { "allocations.workId": workId } },
@@ -808,7 +813,7 @@ export class AccountingService {
         },
         {
           $group: {
-            _id: null,
+            _id: "$kind",
             costs: {
               $sum: { $cond: ["$duplicateRisk", 0, "$allocations.cents"] },
             },
@@ -819,7 +824,31 @@ export class AccountingService {
           },
         },
       ])
-      .next();
+      .toArray();
+    const costs = categories.reduce(
+      (total, row) => ({
+        costs: total.costs + row.costs,
+        count: total.count + row.count,
+        manual: total.manual + row.manual,
+      }),
+      { costs: 0, count: 0, manual: 0 },
+    );
+    const costBreakdown: AccountingMargin["costBreakdown"] = [
+      {
+        kind: "materials",
+        cents:
+          (valuation?.costs || 0) +
+          (categories.find((row) => row._id === "materials")?.costs || 0),
+      },
+      { kind: "payroll", cents: labor.payroll },
+      { kind: "fees", cents: labor.fees },
+      ...categories
+        .filter((row) => row._id !== "materials" && row._id !== "purchase")
+        .map((row) => ({
+          kind: row._id as Exclude<CostInput["kind"], "purchase">,
+          cents: row.costs,
+        })),
+    ];
     return {
       workId,
       workName: work.workName || work.name,
@@ -834,6 +863,7 @@ export class AccountingService {
       labor,
       costCount: (costs?.count || 0) + (valuation?.count || 0),
       materialCosts: valuation?.costs || 0,
+      costBreakdown,
       budgetCents: plan.budgetCents,
       pendingValuation: (valuation?.unvalued || 0) > 0.0001,
       manualMaterialsToReview: costs?.manual || 0,

@@ -1,0 +1,128 @@
+.sire-automatic {
+  display: grid;
+  gap: 24px;
+}
+.sire-connect-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.sire-connect-intro > span {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+}
+.sire-connect-intro h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+.sire-connect-intro p,
+.sire-query-status p {
+  color: var(--panel-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.sire-automatic .notice {
+  margin: 0;
+}
+.sire-query-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--panel-soft);
+  padding: 16px;
+  border-radius: 12px;
+}
+.sire-query-status svg {
+  flex-shrink: 0;
+  color: var(--panel-accent);
+  margin-top: 3px;
+}
+.sire-query-status strong {
+  font-size: 12px;
+}
+.sire-query-status p {
+  margin-top: 4px;
+}
+.sire-readonly {
+  display: flex;
+  gap: 8px;
+  color: var(--panel-secondary);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.sire-readonly svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.sire-manual-option {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  background: var(--panel-surface);
+  color: var(--panel-ink);
+  text-align: left;
+}
+.sire-manual-option > svg {
+  flex-shrink: 0;
+  color: var(--panel-secondary);
+}
+.sire-manual-option strong {
+  display: block;
+  font-size: 12px;
+}
+.sire-manual-option small {
+  display: block;
+  margin-top: 4px;
+  color: var(--panel-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.sire-manual-option:hover,
+.sire-manual-option:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: var(--panel-soft);
+}
+.sire-connection-error {
+  display: grid;
+  gap: 12px;
+}
+.sire-file-help {
+  display: block;
+}
+.sire-file-help summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+}
+.sire-file-help summary:focus-visible {
+  outline: none;
+  background: var(--panel-accent-soft);
+}
+.sire-file-help[open] > summary {
+  margin-bottom: 16px;
+}
+.sire-file-help > ol {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+.sire-file-help li + li {
+  margin-top: 8px;
+}
+@media (max-width: 600px) {
+  .sire-connect-intro {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

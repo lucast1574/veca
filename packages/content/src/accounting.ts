@@ -142,6 +142,10 @@ export type AccountingMargin = {
   balance: number;
   costCount: number;
   materialCosts: number;
+  costBreakdown: {
+    kind: Exclude<CostInput["kind"], "purchase"> | "payroll" | "fees";
+    cents: number;
+  }[];
   labor: LaborMargin;
   budgetCents: number;
   pendingValuation: boolean;
@@ -181,4 +185,9 @@ export type SireReconciliation = {
     currency: string;
     note?: string;
   }[];
+};
+export type SireComparison = {
+  job: string;
+  status: "pending" | "ready";
+  result?: SireReconciliation;
 };

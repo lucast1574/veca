@@ -1,0 +1,148 @@
+import assert from "node:assert/strict";
+import { MongoClient, ObjectId } from "mongodb";
+
+const base = process.env.QA_API_URL || "http://localhost:4400";
+assert.equal(
+  new URL(base).hostname,
+  "localhost",
+  "SIRE QA must use the isolated local API",
+);
+const client = await new MongoClient("mongodb://127.0.0.1:27099").connect();
+const db = client.db("veca_qa");
+const period = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Lima",
+  year: "numeric",
+  month: "2-digit",
+}).format(new Date());
+const root = "/admin/accounting/period/";
+try {
+  const login = await fetch(base + "/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://localhost:3300",
+    },
+    body: JSON.stringify({
+      username: "admin",
+      password: "Local-only-visual-test-2026!",
+    }),
+  });
+  assert.equal(login.status, 201);
+  const session = await login.json();
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  const request = async (
+    path,
+    method = "GET",
+    authorized = true,
+    csrf = true,
+  ) => {
+    const r = await fetch(base + path, {
+      method,
+      headers: {
+        Origin: "http://localhost:3300",
+        ...(authorized && { Cookie: cookie }),
+        ...(csrf && { "X-Veca-Csrf": session.csrf }),
+      },
+    });
+    return { status: r.status, data: await r.json() };
+  };
+  const startPath = (book) => `${root}${period}/reconcile/${book}/automatic`;
+  assert.equal(
+    (await request(startPath("purchases"), "POST", false)).status,
+    401,
+  );
+  assert.equal(
+    (await request(startPath("purchases"), "POST", true, false)).status,
+    403,
+  );
+  assert.equal(
+    (await request("/admin/accounting/sire/connection", "GET", false)).status,
+    401,
+  );
+  const invoiceId = new ObjectId(),
+    costId = new ObjectId();
+  await db.collection("accounting_invoices").insertOne({
+    _id: invoiceId,
+    issueDate: period + "-05",
+    status: "accepted",
+    number: "FQA-0001",
+    customerRuc: "20100066603",
+    totalCents: 11800,
+  });
+  await db.collection("accounting_costs").insertOne({
+    _id: costId,
+    date: period + "-05",
+    kind: "fuel",
+    reference: "FQA-0001",
+    supplierRuc: "20100066603",
+    netCents: 10000,
+    taxCents: 1800,
+  });
+  try {
+    assert.equal(
+      (await request("/admin/accounting/sire/connection")).data.configured,
+      true,
+    );
+    for (const book of ["sales", "purchases"]) {
+      const started = await request(startPath(book), "POST");
+      assert.equal(started.status, 201);
+      assert.equal(started.data.status, "pending");
+      const path = startPath(book) + "/" + started.data.job;
+      assert.equal((await request(path, "GET", false)).status, 401);
+      assert.equal((await request(path)).data.status, "pending");
+      const ready = await request(path);
+      assert.equal(ready.status, 200);
+      assert.equal(ready.data.status, "ready");
+      assert.equal(ready.data.result.matches, 1);
+      assert.equal(
+        ready.data.result.issues.find((row) => row.reference === "FQA-2")
+          .status,
+        "onlySunat",
+      );
+      assert.equal(
+        "files" in ready.data,
+        false,
+        "TXT is processed on the server, not returned to the browser",
+      );
+      const other = path.replace(
+        `/reconcile/${book}/`,
+        `/reconcile/${book === "sales" ? "purchases" : "sales"}/`,
+      );
+      assert.equal((await request(other)).status, 400);
+    }
+    const mismatchPath = root + "2026-01/reconcile/purchases/automatic";
+    const mismatch = await request(mismatchPath, "POST");
+    assert.equal(
+      (await request(mismatchPath + "/" + mismatch.data.job)).status,
+      400,
+    );
+    const emptyPath = root + "2026-04/reconcile/purchases/automatic";
+    const empty = await request(emptyPath, "POST");
+    await request(emptyPath + "/" + empty.data.job);
+    const emptyResult = await request(emptyPath + "/" + empty.data.job);
+    assert.equal(emptyResult.data.result.count, 0);
+    const admin = await db.collection("users").findOne({ username: "admin" });
+    try {
+      await db
+        .collection("users")
+        .updateOne({ _id: admin._id }, { $set: { role: "operations" } });
+      assert.equal((await request(startPath("sales"), "POST")).status, 403);
+      assert.equal(
+        (await request("/admin/accounting/sire/connection")).status,
+        403,
+      );
+    } finally {
+      await db
+        .collection("users")
+        .updateOne({ _id: admin._id }, { $set: { role: admin.role } });
+    }
+    console.log(
+      "PASS SIRE: conexión, compras/ventas automáticas, espera, comparación, libro/RUC, periodo vacío, sesión, CSRF y permisos.",
+    );
+  } finally {
+    await db.collection("accounting_invoices").deleteOne({ _id: invoiceId });
+    await db.collection("accounting_costs").deleteOne({ _id: costId });
+  }
+} finally {
+  await client.close();
+}

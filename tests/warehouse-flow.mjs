@@ -322,6 +322,14 @@ try {
     assert.equal(margin.costs, 5000);
     assert.equal(margin.budgetCents, 45000);
     assert.equal(margin.pendingValuation, false);
+    assert.equal(
+      margin.costBreakdown.find((row) => row.kind === "materials").cents,
+      5000,
+    );
+    assert.equal(
+      margin.costBreakdown.reduce((sum, row) => sum + row.cents, 0),
+      margin.costs,
+    );
     const cols = Array(40).fill("");
     Object.assign(cols, {
       0: "20616656156",
@@ -359,6 +367,37 @@ try {
     assert.equal(
       report.issues.find((row) => row.reference === "F054-4").status,
       "onlySunat",
+    );
+
+    for (const [kind, cents, number] of [
+      ["fuel", 2000, "991"],
+      ["transport", 3000, "992"],
+    ]) {
+      await call(acct + "/costs", 201, {
+        id: String(new ObjectId()),
+        data: {
+          ...expense,
+          kind,
+          reference: "FQA-" + number,
+          netCents: cents,
+          taxCents: Math.round(cents * 0.18),
+          allocations: [{ workId: String(workId), cents }],
+        },
+      });
+    }
+    const categorized = await call(acct + "/margin/" + workId);
+    assert.equal(categorized.costs, 10000);
+    assert.equal(
+      categorized.costBreakdown.find((row) => row.kind === "fuel").cents,
+      2000,
+    );
+    assert.equal(
+      categorized.costBreakdown.find((row) => row.kind === "transport").cents,
+      3000,
+    );
+    assert.equal(
+      categorized.costBreakdown.reduce((sum, row) => sum + row.cents, 0),
+      categorized.costs,
     );
 
     await users.updateOne({ _id: admin._id }, { $set: { role: "accounting" } });

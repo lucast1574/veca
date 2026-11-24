@@ -1,0 +1,490 @@
+.margin-workspace {
+  --margin-materials: var(--panel-ink);
+  --margin-payroll: var(--panel-brand);
+  --margin-fees: var(--panel-chart-blue);
+  --margin-installation: var(--panel-chart-sage);
+  --margin-transport: var(--panel-chart-sand);
+  --margin-fuel: var(--panel-chart-clay);
+  --margin-other: var(--panel-muted);
+  font-variant-numeric: tabular-nums;
+}
+.margin-subtitle {
+  margin-top: 6px;
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.margin-report {
+  display: grid;
+  gap: 24px;
+}
+.margin-result,
+.margin-card {
+  min-width: 0;
+  border: 1px solid var(--panel-edge);
+  border-radius: 16px;
+  background: var(--panel-surface);
+}
+.margin-result {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  overflow: hidden;
+}
+.margin-result-copy {
+  padding: 28px;
+  background: var(--panel-brand-surface);
+}
+.margin-eyebrow {
+  color: var(--panel-secondary);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.margin-result h3 {
+  margin: 8px 0 12px;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+.margin-state {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: var(--panel-surface);
+  color: var(--panel-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+.margin-main-value {
+  display: grid;
+  gap: 8px;
+  margin: 28px 0 12px;
+}
+.margin-main-value > span {
+  font-size: 12px;
+  font-weight: 650;
+}
+.margin-main-value > strong {
+  font-size: clamp(30px, 3.2vw, 46px);
+  font-weight: 750;
+  letter-spacing: -0.055em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.margin-ratio {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.margin-ratio > span {
+  color: var(--panel-accent);
+  font-weight: 800;
+  font-size: 17px;
+}
+.margin-explanation,
+.margin-footnote,
+.margin-empty-budget {
+  color: var(--panel-secondary);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.margin-explanation {
+  max-width: 34ch;
+  margin-top: 20px;
+}
+.margin-result-chart {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 28px 20px;
+}
+.margin-bridge {
+  width: 100%;
+  overflow: visible;
+}
+.margin-chart-axis,
+.margin-chart-connector {
+  stroke: var(--panel-edge);
+  stroke-width: 1;
+}
+.margin-chart-connector {
+  stroke-dasharray: 4 4;
+}
+.margin-chart-value {
+  fill: var(--panel-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+.margin-chart-label {
+  fill: var(--panel-secondary);
+  font-size: 14px;
+  font-weight: 650;
+}
+.margin-chart-sales rect {
+  fill: var(--panel-ink);
+}
+.margin-chart-costs rect {
+  fill: var(--panel-brand);
+}
+.margin-chart-profit rect {
+  fill: var(--panel-chart-sage);
+}
+.margin-chart-loss rect {
+  fill: var(--panel-danger);
+}
+.margin-totals,
+.margin-pairs {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.margin-totals {
+  grid-template-columns: 1fr 1fr;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+.margin-totals dt,
+.margin-pairs dt {
+  color: var(--panel-secondary);
+  font-size: 11px;
+}
+.margin-totals dd,
+.margin-pairs dd {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 750;
+}
+.margin-review {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--panel-brand-surface);
+  border-radius: 12px;
+}
+.margin-review > svg {
+  flex-shrink: 0;
+  color: var(--panel-accent);
+  margin-top: 2px;
+}
+.margin-review strong {
+  font-size: 12px;
+}
+.margin-review p {
+  margin-top: 4px;
+  color: var(--panel-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.margin-card {
+  padding: 24px;
+}
+.margin-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.margin-card-heading h3 {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+.margin-card-heading p {
+  color: var(--panel-secondary);
+  font-size: 11px;
+  line-height: 1.8;
+  margin-top: 6px;
+}
+.margin-card-heading > svg {
+  flex-shrink: 0;
+  color: var(--panel-accent);
+}
+.margin-distribution {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.3fr);
+  gap: 32px;
+  align-items: center;
+}
+.margin-donut {
+  position: relative;
+  width: min(100%, 220px);
+  margin: auto;
+}
+.margin-donut svg {
+  display: block;
+  width: 100%;
+}
+.margin-donut circle {
+  fill: none;
+  stroke-width: 22;
+}
+.margin-donut-track {
+  stroke: var(--panel-raised);
+}
+.margin-donut > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.margin-donut small {
+  font-size: 11px;
+  color: var(--panel-secondary);
+}
+.margin-donut strong {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.margin-cost-materials {
+  stroke: var(--margin-materials);
+  background: var(--margin-materials);
+}
+.margin-cost-payroll {
+  stroke: var(--margin-payroll);
+  background: var(--margin-payroll);
+}
+.margin-cost-fees {
+  stroke: var(--margin-fees);
+  background: var(--margin-fees);
+}
+.margin-cost-installation {
+  stroke: var(--margin-installation);
+  background: var(--margin-installation);
+}
+.margin-cost-transport {
+  stroke: var(--margin-transport);
+  background: var(--margin-transport);
+}
+.margin-cost-fuel {
+  stroke: var(--margin-fuel);
+  background: var(--margin-fuel);
+}
+.margin-cost-other {
+  stroke: var(--margin-other);
+  background: var(--margin-other);
+}
+.margin-cost-list {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.margin-cost-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+.margin-cost-list li + li {
+  border-top: 1px solid var(--panel-edge);
+}
+.margin-cost-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.margin-cost-list li > div:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.margin-cost-list li > div:last-child {
+  text-align: right;
+  flex-shrink: 0;
+}
+.margin-cost-list strong {
+  font-size: 12px;
+  font-weight: 750;
+}
+.margin-cost-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--panel-secondary);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.margin-card-links {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  border-top: 1px solid var(--panel-edge);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.margin-card-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--panel-accent);
+  font-size: 11px;
+  font-weight: 750;
+}
+.margin-card-links a:hover,
+.margin-card-links a:focus-visible {
+  background: var(--panel-accent-soft);
+  text-decoration: underline;
+  outline: none;
+  box-shadow: none;
+  border-radius: 4px;
+}
+.margin-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.margin-finance-value {
+  display: grid;
+  gap: 8px;
+}
+.margin-finance-value > span {
+  color: var(--panel-secondary);
+  font-size: 11px;
+}
+.margin-finance-value > strong {
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+.margin-meter {
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--panel-raised);
+  margin: 20px 0;
+}
+.margin-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--panel-brand);
+}
+.margin-meter.is-over > span {
+  background: var(--panel-danger);
+}
+.margin-meter.is-collected > span {
+  background: var(--panel-chart-sage);
+}
+.margin-pairs > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.margin-pairs dd {
+  margin: 0;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.margin-footnote {
+  margin-top: 16px;
+}
+.margin-loss-text,
+.margin-result.is-loss .margin-main-value > strong,
+.margin-result.is-loss .margin-ratio > span {
+  color: var(--panel-danger);
+}
+.margin-incomplete,
+.margin-no-costs {
+  display: grid;
+  gap: 12px;
+  padding: 24px 8px;
+  color: var(--panel-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.margin-incomplete > svg,
+.margin-no-costs > svg {
+  color: var(--panel-accent);
+}
+@media (max-width: 900px) {
+  .margin-result {
+    grid-template-columns: 1fr;
+  }
+  .margin-result-copy {
+    padding: 24px;
+  }
+  .margin-main-value {
+    margin-top: 20px;
+  }
+  .margin-explanation {
+    max-width: none;
+  }
+  .margin-result-chart {
+    padding: 24px;
+  }
+  .margin-bridge {
+    max-width: 520px;
+    margin: 0 auto;
+  }
+}
+@media (max-width: 600px) {
+  .margin-workspace > .accounting-section-head {
+    align-items: stretch;
+    gap: 20px;
+  }
+  .margin-workspace .accounting-tools {
+    width: 100%;
+  }
+  .margin-workspace .accounting-tools > .veca-select {
+    min-width: 0;
+    flex: 1;
+  }
+  .margin-report {
+    gap: 16px;
+  }
+  .margin-result-copy,
+  .margin-result-chart,
+  .margin-card {
+    padding: 20px;
+  }
+  .margin-result-chart {
+    padding-inline: 12px;
+  }
+  .margin-main-value > strong {
+    font-size: 32px;
+  }
+  .margin-bridge .margin-chart-value {
+    font-size: 20px;
+  }
+  .margin-bridge .margin-chart-label {
+    font-size: 18px;
+  }
+  .margin-distribution,
+  .margin-finance-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .margin-card-heading {
+    margin-bottom: 16px;
+  }
+  .margin-cost-list li {
+    gap: 8px;
+  }
+  .margin-cost-list li > div:last-child {
+    max-width: 48%;
+    overflow-wrap: anywhere;
+  }
+  .margin-card-links {
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .margin-pairs > div {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+}

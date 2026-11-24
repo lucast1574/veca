@@ -35,6 +35,7 @@ import { CrmModule } from "../crm/crm.controller";
 import { MediaModule } from "../media/media.module";
 import { AccountingService } from "./accounting.service";
 import { SireService } from "./sire.service";
+import { SireProvider } from "./sire-provider";
 import { LaborController } from "./labor.controller";
 import { LaborProvider } from "./labor-provider";
 import { LaborCostsService } from "./labor-costs.service";
@@ -212,6 +213,41 @@ class AccountingController {
     );
   }
 
+  @Get("sire/connection")
+  sireConnection() {
+    return this.sire.connection();
+  }
+
+  @Post("period/:month/reconcile/:book/automatic")
+  @RequirePermission("accounting_write", "accounting")
+  automatic(@Param("month") month: string, @Param("book") book: string) {
+    return this.sire.automatic(
+      parse(accountingMonth, month),
+      parse(z.enum(["sales", "purchases"]), book),
+    );
+  }
+
+  @Get("period/:month/reconcile/:book/automatic/:job")
+  @RequirePermission("accounting_write", "accounting")
+  automaticResult(
+    @Param("month") month: string,
+    @Param("book") book: string,
+    @Param("job") job: string,
+  ) {
+    return this.sire.automatic(
+      parse(accountingMonth, month),
+      parse(z.enum(["sales", "purchases"]), book),
+      parse(
+        z
+          .string()
+          .min(1)
+          .max(2000)
+          .regex(/^v1\.[\w.-]+$/),
+        job,
+      ),
+    );
+  }
+
   @Post("period/:month/reconcile/:book")
   @RequirePermission("accounting_write", "accounting")
   @UseInterceptors(
@@ -314,6 +350,7 @@ class FiscalConnectionController {
     AccountingService,
     InvoiceProvider,
     SireService,
+    SireProvider,
     LaborProvider,
     LaborCostsService,
   ],

@@ -13,6 +13,11 @@
   --panel-brand: #e74927;
   --panel-brand-surface: #fff1e9;
   --panel-brand-edge: #e8b1a0;
+  --panel-chart-blue: #7b9baf;
+  --panel-chart-sage: #7a9a76;
+  --panel-chart-sand: #cbb481;
+  --panel-chart-clay: #b77a65;
+  --panel-danger: #ac382c;
 }
 body {
   background: var(--panel-canvas);
