@@ -2,7 +2,8 @@ import { useAccountingPermission } from "./AccountingAccess";
 import { useState } from "react";
 import { FileCheck2 } from "lucide-react";
 import type { SireBook, SireReconciliation as Result } from "@veca/content";
-import { Button, Field } from "../../components/ui";
+import { Button } from "../../components/ui";
+import { FileInput } from "../../components/FileInput";
 import { api } from "../../lib/api";
 import { WarehouseForm, WarehouseSelect } from "../warehouse/shared";
 import { accountingPath, amount, Pagination } from "./accounting-shared";
@@ -66,7 +67,7 @@ export function SireReconciliation({ month }: { month: string }) {
         <Button
           type="button"
           variant="ghost"
-          disabled={!month}
+          disabled={!month || !canWrite}
           onClick={() => setOpen(true)}
         >
           <FileCheck2 size={17} /> Comparar propuesta
@@ -76,11 +77,19 @@ export function SireReconciliation({ month }: { month: string }) {
         <WarehouseForm
           title="Comparar propuesta de SUNAT"
           action="Comparar comprobantes"
+          canSubmit={canWrite}
           onClose={() => setOpen(false)}
           save={async (values) => {
             const file = values.get("file");
-            if (!(file instanceof File) || file.size > 8_000_000)
-              throw new Error("Adjunta un TXT de hasta 8 MB.");
+            if (
+              !(file instanceof File) ||
+              !/\.txt$/i.test(file.name) ||
+              !file.size ||
+              file.size > 8_000_000
+            )
+              throw new Error(
+                "Adjunta la propuesta TXT de SUNAT, con contenido y de hasta 8 MB.",
+              );
             const form = new FormData();
             form.append("file", file);
             const next = await api<Result>(
@@ -96,6 +105,10 @@ export function SireReconciliation({ month }: { month: string }) {
             setOpen(false);
           }}
         >
+          <p className="hint">
+            Periodo {month}. Adjunta el TXT original de la propuesta descargada
+            de SIRE. Si viene en ZIP, extráelo primero.
+          </p>
           <WarehouseSelect
             label="Registro"
             value={book}
@@ -105,18 +118,50 @@ export function SireReconciliation({ month }: { month: string }) {
               { value: "sales", label: "Registro de ventas (RVIE)" },
             ]}
           />
-          <Field label="Archivo de la propuesta (TXT)">
-            <input
-              type="file"
-              disabled={!canWrite}
-              accept=".txt"
-              name="file"
-              required
-            />
-          </Field>
+          <FileInput
+            label="Archivo de la propuesta (TXT)"
+            disabled={!canWrite}
+            accept=".txt"
+            name="file"
+            required
+          />
+          <div className="warehouse-preview import-instructions">
+            <h3>Qué archivo necesitas</h3>
+            <ol>
+              <li>
+                Entra a SIRE de SUNAT con la cuenta de la empresa y elige el
+                periodo <strong>{month}</strong>.
+              </li>
+              <li>
+                Descarga la propuesta del Registro de compras (RCE) o de ventas
+                (RVIE), según el registro que compararás.
+              </li>
+              <li>
+                Si llega en ZIP, extráelo y adjunta el{" "}
+                <strong>TXT original</strong>, separado por barras verticales
+                (|). Conserva sus columnas.
+              </li>
+            </ol>
+            <p className="hint">
+              Hasta 8 MB y 10 000 comprobantes. El archivo debe corresponder al
+              mismo RUC, periodo y registro. Un PDF, Excel o reporte resumido no
+              sirve para esta comparación.
+            </p>
+            <a
+              className="warehouse-link"
+              href="https://cpe.sunat.gob.pe/node/158"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Ver orientación oficial de SIRE
+            </a>
+          </div>
           <p className="hint">
-            Periodo {month}. Descarga la propuesta en SUNAT y extrae el archivo
-            TXT si viene en ZIP.
+            Verás coincidencias, importes distintos y comprobantes que aparecen
+            solo en SUNAT o solo en VECA. Las facturas en soles se comparan
+            automáticamente; otros tipos, monedas o datos incompletos requieren
+            revisión manual. Este paso no declara impuestos ni modifica tus
+            registros.
           </p>
         </WarehouseForm>
       )}

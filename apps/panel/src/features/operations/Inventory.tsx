@@ -1,14 +1,11 @@
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
+import { Modal } from "../../components/Modal";
+import { MaterialForm } from "../warehouse/MaterialForm";
 import { useAccountingQuery } from "../accounting/accounting-shared";
-import { useCallback, useRef, useState, type FormEvent } from "react";
-import {
-  MATERIAL_CATEGORIES,
-  MATERIAL_UNITS,
-  type Material,
-  type Movement,
-} from "@veca/content";
+import { useCallback, useId, useRef, useState, type FormEvent } from "react";
+import { type Material, type Movement } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
-import { Plus, Package, Search, RefreshCw, X } from "lucide-react";
+import { Plus, Package, Search, RefreshCw } from "lucide-react";
 import { post } from "../../lib/api";
 import {
   CatalogImport,
@@ -43,7 +40,11 @@ export function MaterialMovement({
     [busy, setBusy] = useState(false);
   const operation = useRef(crypto.randomUUID());
   const [dirty, setDirty] = useState(false);
-  useUnsavedChanges(dirty, busy);
+  const clearGuard = useUnsavedChanges(dirty, busy);
+  const formId = useId();
+  const close = () => {
+    if (confirmDiscard(dirty, busy)) onCancel();
+  };
   const { error, setError, fail } = useMessage();
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,6 +63,7 @@ export function MaterialMovement({
           leadId,
         },
       );
+      clearGuard();
       onSaved(movement);
     } catch (e) {
       fail(e);
@@ -71,106 +73,110 @@ export function MaterialMovement({
   }
   const selected = materials.find((m) => m.id === material);
   return (
-    <form
-      className="ops-card ops-movement-form"
-      onSubmit={save}
-      onChange={() => setDirty(true)}
+    <Modal
+      title={
+        leadId ? "Registrar materiales de la obra" : "Registrar una entrada"
+      }
+      onClose={close}
+      busy={busy}
+      footer={
+        <footer className="ve-modal-actions">
+          <Button type="button" variant="ghost" disabled={busy} onClick={close}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={formId} disabled={busy || !material}>
+            {busy ? "Registrando…" : "Registrar movimiento"}
+          </Button>
+        </footer>
+      }
     >
-      <div className="ops-card-heading">
-        <h3>
-          {leadId ? "Registrar materiales de la obra" : "Registrar una entrada"}
-        </h3>
-        <button
-          type="button"
-          className="ops-icon-button"
-          disabled={busy}
-          onClick={() => {
-            if (confirmDiscard(dirty, busy)) onCancel();
-          }}
-          aria-label="Cerrar movimiento"
-        >
-          <X size={18} />
-        </button>
-      </div>
-      {error && <Notice error>{error}</Notice>}
-      <div className="ops-form-grid">
-        <Field label="Material">
-          <Select
-            label="Material"
-            value={material}
-            placeholder="Selecciona un material"
-            onChange={(value) => {
-              setMaterial(value);
-              setDirty(true);
-            }}
-            options={materials.map((m) => ({
-              value: m.id,
-              label: m.name,
-              description: `${m.sku} · Disponible: ${amount(m.available ?? m.balance)} ${unitName(m.unit)}`,
-            }))}
-          />
-        </Field>
-        {leadId && (
-          <Field label="Movimiento">
-            <Select
-              label="Movimiento"
-              value={kind}
-              onChange={(value) => {
-                setKind(value);
-                setDirty(true);
-              }}
-              options={[
-                {
-                  value: "consumption",
-                  label: "Consumo en obra",
-                  description: "Descontar del inventario",
-                },
-                ...(canReturn
-                  ? [
-                      {
-                        value: "return",
-                        label: "Devolución de obra",
-                        description: "Reintegrar material al inventario",
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </Field>
-        )}
-        <Field label={`Cantidad (${unitName(selected?.unit || "")})`}>
-          <input
-            name="quantity"
-            type="number"
-            required
-            min="0.001"
-            step="0.001"
-            max="1000000"
-          />
-        </Field>
-        <Field label="Detalle o motivo">
-          <input
-            name="reason"
-            required
-            minLength={4}
-            maxLength={1000}
-            placeholder={
-              leadId
-                ? "Ej. Ventanas del segundo piso"
-                : "Ej. Recepción según guía del proveedor"
-            }
-          />
-        </Field>
-      </div>
-      <p className="hint">
-        Disponible: {amount(selected?.balance || 0)}{" "}
-        {unitName(selected?.unit || "")}. El movimiento queda en el historial;
-        cerrar la obra no vuelve a descontarlo.
-      </p>
-      <Button disabled={busy || !material}>
-        {busy ? "Registrando…" : "Registrar movimiento"}
-      </Button>
-    </form>
+      <form
+        id={formId}
+        className="ops-movement-form"
+        onSubmit={save}
+        onChange={() => setDirty(true)}
+      >
+        <fieldset className="warehouse-fields" disabled={busy}>
+          {error && <Notice error>{error}</Notice>}
+          <div className="ops-form-grid">
+            <Field label="Material">
+              <Select
+                floating
+                label="Material"
+                value={material}
+                placeholder="Selecciona un material"
+                onChange={(value) => {
+                  setMaterial(value);
+                  setDirty(true);
+                }}
+                options={materials.map((m) => ({
+                  value: m.id,
+                  label: m.name,
+                  description: `${m.sku} · Disponible: ${amount(m.available ?? m.balance)} ${unitName(m.unit)}`,
+                }))}
+              />
+            </Field>
+            {leadId && (
+              <Field label="Movimiento">
+                <Select
+                  floating
+                  label="Movimiento"
+                  value={kind}
+                  onChange={(value) => {
+                    setKind(value);
+                    setDirty(true);
+                  }}
+                  options={[
+                    {
+                      value: "consumption",
+                      label: "Consumo en obra",
+                      description: "Descontar del inventario",
+                    },
+                    ...(canReturn
+                      ? [
+                          {
+                            value: "return",
+                            label: "Devolución de obra",
+                            description: "Reintegrar material al inventario",
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              </Field>
+            )}
+            <Field label={`Cantidad (${unitName(selected?.unit || "")})`}>
+              <input
+                name="quantity"
+                type="number"
+                required
+                min="0.001"
+                step="0.001"
+                max="1000000"
+              />
+            </Field>
+            <Field label="Detalle o motivo">
+              <input
+                name="reason"
+                required
+                minLength={4}
+                maxLength={1000}
+                placeholder={
+                  leadId
+                    ? "Ej. Ventanas del segundo piso"
+                    : "Ej. Recepción según guía del proveedor"
+                }
+              />
+            </Field>
+          </div>
+          <p className="hint">
+            Disponible: {amount(selected?.balance || 0)}{" "}
+            {unitName(selected?.unit || "")}. El movimiento queda en el
+            historial; cerrar la obra no vuelve a descontarlo.
+          </p>
+        </fieldset>
+      </form>
+    </Modal>
   );
 }
 export function Inventory({
@@ -189,12 +195,7 @@ export function Inventory({
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [create, setCreate] = useState(false);
-  const [createDirty, setCreateDirty] = useState(false);
   const [movement, setMovement] = useState<string | null>(null);
-  const [unit, setUnit] = useState("unit");
-  const [category, setCategory] = useState("Vidrio");
-  const [busy, setBusy] = useState(false);
-  const { error, setError, fail } = useMessage();
   const catalog = useAccountingQuery<Material[]>("/admin/crm/materials");
   const selected = useAccountingQuery<Material>(
     materialId ? `/admin/crm/materials/${encodeURIComponent(materialId)}` : "",
@@ -212,30 +213,6 @@ export function Inventory({
   }, [reloadCatalog, reloadSelected, reloadHistory]);
   const items = catalog.data || [];
   useLiveRefresh(refresh, false);
-  useUnsavedChanges(create && createDirty, busy);
-  async function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const data = Object.fromEntries(new FormData(event.currentTarget));
-    setBusy(true);
-    setError("");
-    try {
-      await post("/admin/crm/materials", {
-        ...data,
-        unit,
-        category,
-        minimum: Number(data.minimum),
-      });
-      setCreate(false);
-      setCreateDirty(false);
-      setMessage("Material registrado.");
-      refresh();
-    } catch (e) {
-      fail(e);
-    } finally {
-      setBusy(false);
-    }
-  }
   const filtered = (
     materialId ? (selected.data ? [selected.data] : []) : items
   ).filter((m) =>
@@ -261,12 +238,7 @@ export function Inventory({
           <Button
             variant="ghost"
             disabled={!canCatalog}
-            onClick={() => {
-              if (!create || confirmDiscard(createDirty, busy)) {
-                setCreate(!create);
-                setCreateDirty(false);
-              }
-            }}
+            onClick={() => setCreate(true)}
           >
             <Plus size={16} />
             Nuevo material
@@ -319,7 +291,6 @@ export function Inventory({
           </button>
         </Notice>
       )}
-      {error && <Notice error>{error}</Notice>}
       {message && (
         <p className="warehouse-message" role="status">
           {message}
@@ -347,75 +318,14 @@ export function Inventory({
         />
       )}
       {create && (
-        <form
-          className="ops-card"
-          onSubmit={add}
-          onChange={() => setCreateDirty(true)}
-        >
-          <h2>Nuevo material</h2>
-          <p className="hint">
-            Se crea con saldo cero. Registra después la recepción para conservar
-            el origen del stock.
-          </p>
-          <div className="ops-form-grid">
-            {[
-              ["sku", "Código / SKU"],
-              ["name", "Nombre del material"],
-              ["location", "Ubicación en almacén"],
-              ["description", "Especificación o medida"],
-            ].map(([name, label]) => (
-              <Field key={name} label={label}>
-                <input
-                  name={name}
-                  required={name === "sku" || name === "name"}
-                  maxLength={name === "description" ? 1000 : 160}
-                />
-              </Field>
-            ))}
-            <Field label="Unidad de medida">
-              <Select
-                label="Unidad de medida"
-                value={unit}
-                onChange={(value) => {
-                  setUnit(value);
-                  setCreateDirty(true);
-                }}
-                options={MATERIAL_UNITS.map((u) => ({
-                  value: u.id,
-                  label: u.name,
-                }))}
-              />
-            </Field>
-            <Field label="Familia">
-              <Select
-                label="Familia"
-                value={category}
-                onChange={(value) => {
-                  setCategory(value);
-                  setCreateDirty(true);
-                }}
-                options={MATERIAL_CATEGORIES.map((c) => ({
-                  value: c,
-                  label: c,
-                }))}
-              />
-            </Field>
-            <Field label="Saldo mínimo">
-              <input
-                name="minimum"
-                type="number"
-                defaultValue="0"
-                min="0"
-                max="1000000"
-                step="0.001"
-                required
-              />
-            </Field>
-          </div>
-          <Button disabled={busy}>
-            {busy ? "Creando…" : "Crear material"}
-          </Button>
-        </form>
+        <MaterialForm
+          close={() => setCreate(false)}
+          done={() => {
+            setCreate(false);
+            setMessage("Material registrado.");
+            refresh();
+          }}
+        />
       )}
       {movement !== null && (
         <MaterialMovement

@@ -5,7 +5,10 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "dev": "vite --host 0.0.0.0"
+    "dev": "vite --host 0.0.0.0",
+    "storybook": "storybook dev -p 6006 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry",
+    "typecheck-storybook": "tsc --noEmit -p tsconfig.storybook.json"
   },
   "dependencies": {
     "@firebase/app": "^0.16.3",
@@ -24,9 +27,13 @@
     "read-excel-file": "9.3.20"
   },
   "devDependencies": {
+    "@storybook/react-vite": "^10.6.8",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
+    "msw": "^2.14.0",
+    "msw-storybook-addon": "^3.0.3",
+    "storybook": "^10.6.8",
     "vite": "^7.3.0"
   }
 }

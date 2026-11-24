@@ -1,4 +1,6 @@
+"use client";
 import { useEffect, useId, useRef, useState } from "react";
+import { useFloatingMenu } from "./useFloatingMenu";
 import type { SelectOption } from "./Select";
 
 const normalized = (text: string) =>
@@ -15,6 +17,7 @@ export function SearchableSelect({
   options,
   placeholder,
   onChange,
+  floating = false,
 }: {
   id: string;
   label: string;
@@ -22,11 +25,14 @@ export function SearchableSelect({
   options: readonly SelectOption[];
   placeholder: string;
   onChange: (value: string) => void;
+  floating?: boolean;
 }) {
   const uid = useId();
   const listId = uid + "-options";
   const selected = options.find((option) => option.value === value);
   const root = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -34,6 +40,8 @@ export function SearchableSelect({
   const matches = needle
     ? options.filter((option) => normalized(option.label).includes(needle))
     : options;
+
+  useFloatingMenu(open, floating, input, menu);
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +77,7 @@ export function SearchableSelect({
   return (
     <div ref={root} className={`veca-select${open ? " is-open" : ""}`}>
       <input
+        ref={input}
         id={id}
         type="text"
         role="combobox"
@@ -115,7 +124,11 @@ export function SearchableSelect({
         }}
       />
       {open && (
-        <div className="veca-select-menu">
+        <div
+          ref={menu}
+          popover={floating ? "manual" : undefined}
+          className="veca-select-menu"
+        >
           <div role="listbox" id={listId} aria-label={label}>
             {matches.map((option, i) => (
               <div

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FileUp } from "lucide-react";
+import { Download, FileUp } from "lucide-react";
 import {
   MATERIAL_CATEGORIES,
   MATERIAL_UNITS,
@@ -7,6 +7,7 @@ import {
   type Material,
 } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
+import { FileInput } from "../../components/FileInput";
 import { amount, unitName } from "../operations/shared";
 import { WarehouseForm, postWarehouse, warehousePath } from "./shared";
 
@@ -19,9 +20,7 @@ const header = [
   "descripcion",
   "minimo",
 ];
-const template =
-  header.join(",") +
-  "\nAGL-18,Tablero aglomerado de 18 mm,Aglomerado,unit,Estante A,Panel 18 mm,3\n";
+const template = header.join(",") + "\r\n";
 const normalize = (value: string) =>
   value
     .trim()
@@ -30,6 +29,10 @@ const normalize = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "");
 
 async function readCatalog(file: File) {
+  if (!/\.(xlsx|csv)$/i.test(file.name))
+    throw new Error(
+      "Selecciona un Excel (.xlsx) o un CSV (.csv). Usa la plantilla para conservar las columnas.",
+    );
   if (file.size > 1_000_000)
     throw new Error("El archivo debe pesar menos de 1 MB.");
   let table: string[][];
@@ -171,24 +174,64 @@ export function CatalogImport({
       }}
     >
       <p className="hint">
-        Sube un Excel (.xlsx) o CSV. Los códigos existentes se actualizan
-        conservando su saldo y unidad.
+        Sube de 1 a 500 materiales en Excel (.xlsx) o CSV, hasta 1 MB. Se lee la
+        primera hoja del Excel. Los códigos existentes se actualizan conservando
+        su saldo y unidad.
       </p>
+      <a
+        className="catalog-template"
+        href="/templates/catalogo-veca.xlsx"
+        download="catalogo-veca.xlsx"
+      >
+        <img src="/assets/excel.svg" alt="" width="28" height="28" />
+        <span>
+          <strong>Descargar plantilla de Excel</strong>
+          <small>Columnas listas, listas de opciones e instrucciones</small>
+        </span>
+        <Download size={18} aria-hidden="true" />
+      </a>
       <a
         className="warehouse-link"
         href={`data:text/csv;charset=utf-8,${encodeURIComponent("\uFEFF" + template)}`}
         download="catalogo-veca.csv"
       >
-        Descargar plantilla
+        Descargar también en CSV
       </a>
-      <Field label="Archivo del catálogo">
-        <input
-          type="file"
-          accept=".csv,.xlsx"
-          required
-          onChange={(event) => void inspect(event.target.files?.[0])}
-        />
-      </Field>
+      <FileInput
+        label="Archivo del catálogo"
+        accept=".csv,.xlsx"
+        required
+        onChange={(event) => void inspect(event.target.files?.[0])}
+      />
+      <div className="warehouse-preview import-instructions">
+        <h3>Cómo preparar la carga</h3>
+        <ol>
+          <li>
+            Completa la hoja <strong>Catálogo</strong> (o las filas del CSV) con
+            un material por fila, desde la fila 2. Mantén los encabezados.
+          </li>
+          <li>
+            Código, nombre, familia y unidad son obligatorios. Ubicación,
+            descripción y mínimo son opcionales; el mínimo vacío se considera
+            cero.
+          </li>
+          <li>
+            Elige una familia y unidad de las listas de Excel. Usa un código
+            único por material y mínimos positivos o cero, con hasta tres
+            decimales.
+          </li>
+          <li>
+            Adjunta el archivo y revisa la vista previa. Si hay errores,
+            corrígelos antes de confirmar.
+          </li>
+        </ol>
+        <p className="hint">
+          La carga registra el catálogo, no existencias. Los materiales nuevos
+          empiezan en cero; usa Registrar entrada para ingresar stock. Al
+          confirmar verás cuántos se crearon y actualizaron.
+        </p>
+      </div>
+
       {issue && <Notice error>{issue}</Notice>}
       {rowIssues.length > 0 && (
         <div role="alert" className="warehouse-preview">

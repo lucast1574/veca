@@ -36,6 +36,10 @@ function sunatRows(file: Buffer, month: string, book: SireBook) {
   const text = decode(file);
   const { number, taxId, total, currency } = scope[book];
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
+  if (!lines.length)
+    throw new BadRequestException(
+      "La propuesta TXT está vacía. Descarga el archivo con el detalle de comprobantes.",
+    );
   if (lines.length > 10_000)
     throw new BadRequestException("El archivo supera 10 000 comprobantes.");
   const period = month.replace("-", "");
@@ -82,6 +86,10 @@ export class SireService {
     if (!file)
       throw new BadRequestException("Adjunta la propuesta TXT de SUNAT.");
     const incoming = sunatRows(file.buffer, month, book);
+    if (!incoming.length)
+      throw new BadRequestException(
+        "La propuesta no contiene comprobantes para comparar.",
+      );
     const range = { $gte: month + "-01", $lte: month + "-31" };
     const rows =
       book === "sales"

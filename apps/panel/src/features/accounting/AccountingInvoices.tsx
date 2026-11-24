@@ -1,6 +1,6 @@
 import { useAccountingPermission } from "./AccountingAccess";
-import { useUnsavedChanges } from "../../lib/unsaved";
-import { useRef, useState, type FormEvent } from "react";
+import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import {
   accountingTotals,
@@ -56,10 +56,11 @@ export function AccountingInvoices({
   const canIssue = useAccountingPermission("accounting_issue");
   const [page, setPage] = useState(1);
   const query = useAccountingQuery<InvoicePage>(
-    selected ? "" : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
+    selected && selected !== "nueva"
+      ? ""
+      : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
   );
-  if (selected === "nueva" && canWrite) return <InvoiceForm />;
-  if (selected) return <InvoiceDetail id={selected} />;
+  if (selected && selected !== "nueva") return <InvoiceDetail id={selected} />;
   const rows = query.data?.items || [];
   return (
     <section aria-labelledby="accounting-invoices">
@@ -141,6 +142,13 @@ export function AccountingInvoices({
           </ul>
         )}
       </QueryState>
+      {selected === "nueva" && canWrite && (
+        <InvoiceForm
+          onClose={() => {
+            location.hash = baseHash;
+          }}
+        />
+      )}
       <Pagination
         page={page}
         hasMore={Boolean(query.data?.hasMore)}
@@ -153,10 +161,13 @@ export function AccountingInvoices({
 function InvoiceForm({
   current,
   onSaved,
+  onClose,
 }: {
+  onClose: () => void;
   current?: AccountingInvoice;
   onSaved?: (invoice: AccountingInvoice) => void;
 }) {
+  const formId = useId();
   const works = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
   const [work, setWork] = useState(current?.workId || "");
   const [customer, setCustomer] = useState(current?.customer || "");
@@ -180,6 +191,12 @@ function InvoiceForm({
   const [dirty, setDirty] = useState(false);
   const clearGuard = useUnsavedChanges(dirty, busy);
   const [error, setError] = useState("");
+  function close() {
+    if (confirmDiscard(dirty, busy)) {
+      clearGuard();
+      onClose();
+    }
+  }
   const id = useRef(recordId());
   const items = draft.map((item) => ({
     description: item.description,
@@ -239,18 +256,29 @@ function InvoiceForm({
   }
 
   return (
-    <section>
-      {!current && (
-        <a className="accounting-inline" href={baseHash}>
-          <ArrowLeft size={16} /> Facturas y cobros
-        </a>
-      )}
+    <Modal
+      title={current ? "Editar borrador" : "Nueva factura"}
+      description="Prepara el comprobante y revisa los importes antes de emitirlo."
+      size="wide"
+      busy={busy}
+      onClose={close}
+      footer={
+        <footer className="ve-modal-actions">
+          <Button type="button" variant="ghost" onClick={close} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={formId} disabled={busy}>
+            {busy ? "Guardando…" : "Guardar borrador"}
+          </Button>
+        </footer>
+      }
+    >
       <form
-        className="accounting-form accounting-group"
+        id={formId}
+        className="accounting-form accounting-invoice-form"
         onSubmit={save}
         onChange={() => setDirty(true)}
       >
-        <h2>{current ? "Editar borrador" : "Nueva factura"}</h2>
         <fieldset disabled={busy}>
           <div className="accounting-grid">
             <Field label="Cliente o razón social">
@@ -273,6 +301,7 @@ function InvoiceForm({
             </Field>
             <Field label="Origen">
               <Select
+                floating
                 label="Origen"
                 value={work}
                 options={workOptions}
@@ -284,6 +313,7 @@ function InvoiceForm({
             </Field>
             <Field label="Forma de pago">
               <Select
+                floating
                 label="Forma de pago"
                 value={method}
                 options={[
@@ -358,11 +388,12 @@ function InvoiceForm({
                     variant="ghost"
                     aria-label="Quitar concepto"
                     disabled={draft.length === 1}
-                    onClick={() =>
+                    onClick={() => {
+                      setDirty(true);
                       setDraft((rows) =>
                         rows.filter((row) => row.id !== item.id),
-                      )
-                    }
+                      );
+                    }}
                   >
                     <Trash2 size={16} />
                   </Button>
@@ -373,7 +404,8 @@ function InvoiceForm({
               type="button"
               variant="ghost"
               disabled={draft.length >= 30}
-              onClick={() =>
+              onClick={() => {
+                setDirty(true);
                 setDraft((rows) => [
                   ...rows,
                   {
@@ -382,8 +414,8 @@ function InvoiceForm({
                     quantity: "1",
                     unit: "",
                   },
-                ])
-              }
+                ]);
+              }}
             >
               <Plus size={16} /> Añadir concepto
             </Button>
@@ -397,13 +429,8 @@ function InvoiceForm({
           ]}
         />
         {error && <Notice error>{error}</Notice>}
-        <div className="accounting-form-actions">
-          <Button disabled={busy}>
-            {busy ? "Guardando…" : "Guardar borrador"}
-          </Button>
-        </div>
       </form>
-    </section>
+    </Modal>
   );
 }
 
@@ -453,24 +480,18 @@ function InvoiceDetail({ id }: { id: string }) {
     }
   }
 
-  if (edit && row)
-    return (
-      <>
-        <Button variant="ghost" onClick={() => setEdit(false)}>
-          <ArrowLeft size={16} /> Volver a factura
-        </Button>
+  return (
+    <section className="dispatch-review">
+      {edit && row && (
         <InvoiceForm
           current={row}
+          onClose={() => setEdit(false)}
           onSaved={(saved) => {
             setOverride(saved);
             setEdit(false);
           }}
         />
-      </>
-    );
-
-  return (
-    <section className="dispatch-review">
+      )}
       <a className="accounting-inline" href={baseHash}>
         <ArrowLeft size={16} /> Facturas y cobros
       </a>

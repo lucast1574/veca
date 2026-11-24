@@ -1,6 +1,7 @@
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useCallback,
+  useId,
   useEffect,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import {
   Plus,
 } from "lucide-react";
 import { api, post, API_BASE } from "../../lib/api";
+import { Modal } from "../../components/Modal";
 import { DemoPhoto } from "../administration/DemoPhoto";
 import { LeadDispatches } from "../dispatch/LeadDispatches";
 import { Button, Field, Notice } from "../../components/ui";
@@ -141,6 +143,7 @@ export function LeadDetail({
       sharing: "internal",
     });
   const { error, setError, fail } = useMessage();
+  const editFormId = useId();
   const upload = useRef<HTMLInputElement>(null);
   const hasLocalChanges = useRef(false);
   const detailPath =
@@ -245,6 +248,12 @@ export function LeadDetail({
     setData((old) => (old ? { ...old, lead: saved } : old));
     setDraft(leadInput(saved));
     return saved;
+  }
+  function closeEdit() {
+    if (!confirmDiscard(dirty, busy)) return;
+    if (data) setDraft(leadInput(data.lead));
+    setError("");
+    setEditing(false);
   }
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -549,7 +558,7 @@ export function LeadDetail({
           {notice}
         </p>
       )}
-      {["overview", "work"].includes(tab) && !editing && (
+      {["overview", "work"].includes(tab) && (
         <div className="lead-detail-content">
           <section className="ops-card lead-detail-panel">
             <div className="lead-detail-section-head">
@@ -688,107 +697,116 @@ export function LeadDetail({
         </div>
       )}
       {["overview", "work"].includes(tab) && editing && !readOnly && (
-        <form
-          onSubmit={save}
-          className="ops-card lead-detail-panel lead-detail-edit"
-        >
-          <h2>
-            {tab === "overview"
+        <Modal
+          title={
+            tab === "overview"
               ? "Editar oportunidad"
-              : "Editar coordinación y obra"}
-          </h2>
-          <fieldset disabled={busy} className="lead-detail-fieldset">
-            {tab === "overview" ? (
-              <>
-                <div className="ops-form-grid">
-                  {formField("name", "Nombre y apellido")}
-                  {formField("phone", "Teléfono", "tel")}
-                  {formField("email", "Correo", "email")}
-                  {formField("district", "Distrito")}
-                  <Field label="Tipo de trabajo">
-                    <Select
-                      label="Tipo de trabajo"
-                      value={draft.requestType}
-                      onChange={(value) =>
-                        patch("requestType", value as LeadInput["requestType"])
-                      }
-                      options={REQUEST_TYPES.map((type) => ({
-                        value: type.id,
-                        label: type.name,
-                      }))}
-                    />
-                  </Field>
-                  <Field label="Tipo de lead">
-                    <Select
-                      label="Tipo de lead"
-                      value={draft.segment}
-                      onChange={(value) =>
-                        patch("segment", value as LeadInput["segment"])
-                      }
-                      options={LEAD_SEGMENTS.map((type) => ({
-                        value: type.id,
-                        label: type.name,
-                      }))}
-                    />
-                  </Field>
-                  {!lead.workAssignment &&
-                    formField("assignedTo", "Responsable")}
-                </div>
-                {area("idea", "Consulta del cliente", 4)}
-                {area("contactResult", "Último acuerdo")}
-              </>
-            ) : (
-              <>
-                {formField("workName", "Nombre de la obra")}
-                <ProjectLocation
-                  value={draft.workLocation || draft.district}
-                  onChange={(value) => patch("workLocation", value)}
-                />
-                <div className="ops-form-grid">
-                  {formField(
-                    "appointment",
-                    "Cita de coordinación (hora de Lima)",
-                    "datetime-local",
-                  )}
-                  {formField("address", "Dirección de la obra")}
-                  <Field label="Estado del contrato">
-                    <Select
-                      label="Estado del contrato"
-                      value={draft.contractStatus}
-                      options={contracts}
-                      onChange={(value) =>
-                        patch(
-                          "contractStatus",
-                          value as LeadInput["contractStatus"],
-                        )
-                      }
-                    />
-                  </Field>
-                  {formField("contractReference", "Referencia del contrato")}
-                </div>
-                {area("workPlan", "Alcance de la obra", 4)}
-                {area("completionNote", "Resultado de la obra")}
-              </>
-            )}
-          </fieldset>
-          <div className="lead-detail-edit-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                setDraft(leadInput(lead));
-                setEditing(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button disabled={busy}>
-              <Save size={16} />
-              {busy ? "Guardando…" : "Guardar cambios"}
-            </Button>
-          </div>
-        </form>
+              : "Editar coordinación y obra"
+          }
+          size="wide"
+          busy={busy}
+          onClose={closeEdit}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={closeEdit}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" form={editFormId} disabled={busy}>
+                <Save size={16} />
+                {busy ? "Guardando…" : "Guardar cambios"}
+              </Button>
+            </footer>
+          }
+        >
+          <form id={editFormId} onSubmit={save} className="lead-detail-edit">
+            <fieldset disabled={busy} className="lead-detail-fieldset">
+              {tab === "overview" ? (
+                <>
+                  <div className="ops-form-grid">
+                    {formField("name", "Nombre y apellido")}
+                    {formField("phone", "Teléfono", "tel")}
+                    {formField("email", "Correo", "email")}
+                    {formField("district", "Distrito")}
+                    <Field label="Tipo de trabajo">
+                      <Select
+                        floating
+                        label="Tipo de trabajo"
+                        value={draft.requestType}
+                        onChange={(value) =>
+                          patch(
+                            "requestType",
+                            value as LeadInput["requestType"],
+                          )
+                        }
+                        options={REQUEST_TYPES.map((type) => ({
+                          value: type.id,
+                          label: type.name,
+                        }))}
+                      />
+                    </Field>
+                    <Field label="Tipo de lead">
+                      <Select
+                        floating
+                        label="Tipo de lead"
+                        value={draft.segment}
+                        onChange={(value) =>
+                          patch("segment", value as LeadInput["segment"])
+                        }
+                        options={LEAD_SEGMENTS.map((type) => ({
+                          value: type.id,
+                          label: type.name,
+                        }))}
+                      />
+                    </Field>
+                    {!lead.workAssignment &&
+                      formField("assignedTo", "Responsable")}
+                  </div>
+                  {area("idea", "Consulta del cliente", 4)}
+                  {area("contactResult", "Último acuerdo")}
+                </>
+              ) : (
+                <>
+                  {formField("workName", "Nombre de la obra")}
+                  <ProjectLocation
+                    value={draft.workLocation || draft.district}
+                    onChange={(value) => patch("workLocation", value)}
+                  />
+                  <div className="ops-form-grid">
+                    {formField(
+                      "appointment",
+                      "Cita de coordinación (hora de Lima)",
+                      "datetime-local",
+                    )}
+                    {formField("address", "Dirección de la obra")}
+                    <Field label="Estado del contrato">
+                      <Select
+                        floating
+                        label="Estado del contrato"
+                        value={draft.contractStatus}
+                        options={contracts}
+                        onChange={(value) =>
+                          patch(
+                            "contractStatus",
+                            value as LeadInput["contractStatus"],
+                          )
+                        }
+                      />
+                    </Field>
+                    {formField("contractReference", "Referencia del contrato")}
+                  </div>
+                  {area("workPlan", "Alcance de la obra", 4)}
+                  {area("completionNote", "Resultado de la obra")}
+                </>
+              )}
+            </fieldset>
+            {error && <Notice error>{error}</Notice>}
+          </form>
+        </Modal>
       )}
       {tab === "files" && (
         <section className="ops-card">

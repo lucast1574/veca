@@ -1,0 +1,17 @@
+.storybook-demo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 32px 0;
+  padding: 10px 14px;
+  color: var(--panel-accent);
+  background: var(--panel-accent-soft);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+@media (max-width: 760px) {
+  .storybook-demo {
+    margin: 16px 20px 0;
+  }
+}

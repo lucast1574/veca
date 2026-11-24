@@ -38,6 +38,10 @@ import { Button, Notice, Status } from "./components/ui";
 import { LandingProjects } from "./features/editor/LandingProjects";
 import { WorkPhotoPicker } from "./features/editor/WorkPhotoPicker";
 import { CompletedWorks } from "./features/editor/CompletedWorks";
+import {
+  ProjectCreateDialog,
+  type ProjectStart,
+} from "./features/editor/ProjectCreateDialog";
 import { useProjectRoute } from "./features/editor/useProjectRoute";
 import { canLeaveWorkspace } from "./lib/unsaved";
 
@@ -156,8 +160,10 @@ export default function App() {
         "",
       );
       const nextView = currentView();
+      setCreatingProject(false);
       if (previousView === "projects" && nextView !== "projects") {
         setEditing(undefined);
+        setProjectSeed(undefined);
         setManagingLanding(false);
       }
       setView(nextView);
@@ -170,6 +176,8 @@ export default function App() {
     if (location.hash === "#" + next && editing === undefined) return true;
     if (!canLeaveWorkspace()) return false;
     setEditing(undefined);
+    setCreatingProject(false);
+    setProjectSeed(undefined);
     if (location.hash !== "#" + next) {
       approvedHash.current = "#" + next;
       location.hash = next;
@@ -188,6 +196,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [storageConfigured, setStorageConfigured] = useState(true);
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [projectSeed, setProjectSeed] = useState<ProjectStart>();
   const [sourceWork, setSourceWork] = useState<string>();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -195,6 +205,8 @@ export default function App() {
     if (workspaceAccount.current !== s.user.id) {
       workspaceAccount.current = s.user.id;
       setEditing(undefined);
+      setCreatingProject(false);
+      setProjectSeed(undefined);
       setProjects([]);
       setLandingSelection(undefined);
       setLandingError("");
@@ -385,6 +397,8 @@ export default function App() {
     workspaceAccount.current = null;
     setSession(null);
     setEditing(undefined);
+    setCreatingProject(false);
+    setProjectSeed(undefined);
     setManagingLanding(false);
   }
   return (
@@ -496,8 +510,11 @@ export default function App() {
                   <ProjectEditor
                     key={editing?.id || "new"}
                     initial={editing}
+                    seed={projectSeed}
                     onBack={() => {
                       setEditing(undefined);
+                      setCreatingProject(false);
+                      setProjectSeed(undefined);
                       location.hash = "projects";
                       void refresh();
                     }}
@@ -536,7 +553,7 @@ export default function App() {
                           <Star size={17} />
                           Gestionar portada
                         </Button>
-                        <Button onClick={() => setEditing(null)}>
+                        <Button onClick={() => setCreatingProject(true)}>
                           <Plus size={18} />
                           Nuevo proyecto
                         </Button>
@@ -631,7 +648,7 @@ export default function App() {
                           el espacio y revísalo antes de compartirlo con el
                           mundo.
                         </p>
-                        <Button onClick={() => setEditing(null)}>
+                        <Button onClick={() => setCreatingProject(true)}>
                           <Plus size={17} />
                           Crear mi primer proyecto
                         </Button>
@@ -731,6 +748,16 @@ export default function App() {
               </Suspense>
             </SectionBoundary>
           </WorkspaceShell>
+          {creatingProject && active && can("projects") && (
+            <ProjectCreateDialog
+              close={() => setCreatingProject(false)}
+              next={(seed) => {
+                setProjectSeed(seed);
+                setCreatingProject(false);
+                setEditing(null);
+              }}
+            />
+          )}
           {sourceWork && session.user.permissions.includes("projects") && (
             <WorkPhotoPicker
               key={sourceWork}

@@ -346,6 +346,15 @@ try {
       201,
       file,
     );
+    for (const content of ["", "RUC|Nombre|Periodo\n"]) {
+      const emptyProposal = new FormData();
+      emptyProposal.append("file", new Blob([content]), "rce-vacio.txt");
+      await call(
+        acct + "/period/" + month + "/reconcile/purchases",
+        400,
+        emptyProposal,
+      );
+    }
     assert.equal(report.matches, 1);
     assert.equal(
       report.issues.find((row) => row.reference === "F054-4").status,

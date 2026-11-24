@@ -25,6 +25,12 @@
   margin: 12px 0;
   max-width: 280px;
 }
+.supply-requests > .hint {
+  margin: 20px 0 12px;
+}
+.supply-requests > .supply-filters {
+  margin-bottom: 4px;
+}
 .warehouse-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -228,4 +234,48 @@
     align-items: stretch;
     flex-direction: column;
   }
+}
+.catalog-template {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--panel-ink);
+  text-decoration: none;
+}
+.catalog-template:hover,
+.catalog-template:focus-visible {
+  background: var(--panel-raised);
+  color: var(--panel-accent);
+}
+.catalog-template > span {
+  flex: 1;
+  min-width: 0;
+}
+.catalog-template strong,
+.catalog-template small {
+  display: block;
+}
+.catalog-template small {
+  margin-top: 4px;
+  color: var(--panel-secondary);
+}
+.import-instructions h3,
+.import-instructions p {
+  margin: 0;
+}
+.import-instructions ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.65;
+}
+
+.work-tasks {
+  display: grid;
+  gap: 16px;
 }

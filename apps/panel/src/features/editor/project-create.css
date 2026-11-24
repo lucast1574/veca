@@ -1,0 +1,8 @@
+.project-create-form,
+.project-create-form .project-location {
+  display: grid;
+  gap: 16px;
+}
+.project-create-form .field {
+  margin: 0;
+}

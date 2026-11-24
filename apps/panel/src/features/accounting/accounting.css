@@ -231,3 +231,14 @@
 a.accounting-inline.btn-primary {
   color: var(--panel-btn-primary-text, #fff);
 }
+
+.ve-modal .accounting-invoice-form {
+  max-width: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.accounting-invoice-form .accounting-line + .btn {
+  margin-top: 12px;
+}

@@ -133,103 +133,106 @@ export function SupplyRequests({
         {!query.data?.items.length && (
           <p className="hint">No hay solicitudes en esta vista.</p>
         )}
-        <ul className="warehouse-list supply-list">
-          {query.data?.items.map((row) => {
-            const offered = actions(row, user);
-            if (
-              report &&
-              row.pending &&
-              ["receive", "request_return"].includes(row.pending.action)
-            )
-              offered.push(row.pending.action);
-            if (report && !row.pending) {
-              if (row.received < row.delivered) offered.push("receive");
-              if (row.received - row.returned - row.returnRequested > 0)
-                offered.push("request_return");
-            }
-            return (
-              <li key={row.id}>
-                <div className="supply-summary">
-                  <strong>
-                    <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
-                    {row.materialName}
-                  </strong>
-                  {!workId &&
-                    (user.permissions.includes("works") &&
-                    user.permissions.some(
-                      (p) => p === "works_all" || p === "works_manage",
-                    ) ? (
-                      <a href={`#works/${row.workId}`}>{row.workName}</a>
-                    ) : (
-                      <span>{row.workName}</span>
-                    ))}
-                  <small>
-                    Necesario el {row.neededBy.split("-").reverse().join("/")} ·{" "}
-                    {unitName(row.unit)}
-                  </small>
-                  <p>{row.reason}</p>
-                  <dl className="supply-quantities">
-                    {[
-                      ["Solicitado", row.quantity],
-                      ["Reservado", row.reserved],
-                      ["Entregado", row.delivered],
-                      ["Recibido", row.received],
-                      ["Devuelto", row.returned],
-                    ].map(([label, value]) => (
-                      <div key={String(label)}>
-                        <dt>{label}</dt>
-                        <dd>{amount(Number(value))}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {!workId && (
-                    <p className="hint">
-                      Disponible en Almacén · {amount(row.available || 0)}{" "}
-                      {unitName(row.unit)}
-                    </p>
-                  )}
-                  {row.returnRequested > 0 && (
-                    <p className="hint">
-                      Devolución por recibir · {amount(row.returnRequested)}
-                    </p>
-                  )}
-                  {row.purchaseId && user.permissions.includes("inventory") && (
-                    <a href={`#inventory/compras/${row.purchaseId}`}>
-                      Revisar compra del faltante
-                    </a>
-                  )}
-                  {row.cancelled && (
-                    <p className="hint">
-                      {row.delivered
-                        ? "Faltante cancelado"
-                        : "Solicitud cancelada"}
-                    </p>
-                  )}
-                  {row.pending && (
-                    <p className="hint">
-                      Hay una operación pendiente. Reinténtala para confirmar el
-                      movimiento.
-                    </p>
-                  )}
-                  <div className="supply-actions">
-                    {offered.map((action) => (
-                      <Button
-                        variant="ghost"
-                        key={action}
-                        onClick={() => setSelected({ row, action })}
-                      >
-                        {row.pending
-                          ? "Reintentar " +
-                            supplyActionLabels[action].toLowerCase()
-                          : supplyActionLabels[action]}
-                      </Button>
-                    ))}
+        {!!query.data?.items.length && (
+          <ul className="warehouse-list supply-list">
+            {query.data?.items.map((row) => {
+              const offered = actions(row, user);
+              if (
+                report &&
+                row.pending &&
+                ["receive", "request_return"].includes(row.pending.action)
+              )
+                offered.push(row.pending.action);
+              if (report && !row.pending) {
+                if (row.received < row.delivered) offered.push("receive");
+                if (row.received - row.returned - row.returnRequested > 0)
+                  offered.push("request_return");
+              }
+              return (
+                <li key={row.id}>
+                  <div className="supply-summary">
+                    <strong>
+                      <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
+                      {row.materialName}
+                    </strong>
+                    {!workId &&
+                      (user.permissions.includes("works") &&
+                      user.permissions.some(
+                        (p) => p === "works_all" || p === "works_manage",
+                      ) ? (
+                        <a href={`#works/${row.workId}`}>{row.workName}</a>
+                      ) : (
+                        <span>{row.workName}</span>
+                      ))}
+                    <small>
+                      Necesario el {row.neededBy.split("-").reverse().join("/")}{" "}
+                      · {unitName(row.unit)}
+                    </small>
+                    <p>{row.reason}</p>
+                    <dl className="supply-quantities">
+                      {[
+                        ["Solicitado", row.quantity],
+                        ["Reservado", row.reserved],
+                        ["Entregado", row.delivered],
+                        ["Recibido", row.received],
+                        ["Devuelto", row.returned],
+                      ].map(([label, value]) => (
+                        <div key={String(label)}>
+                          <dt>{label}</dt>
+                          <dd>{amount(Number(value))}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {!workId && (
+                      <p className="hint">
+                        Disponible en Almacén · {amount(row.available || 0)}{" "}
+                        {unitName(row.unit)}
+                      </p>
+                    )}
+                    {row.returnRequested > 0 && (
+                      <p className="hint">
+                        Devolución por recibir · {amount(row.returnRequested)}
+                      </p>
+                    )}
+                    {row.purchaseId &&
+                      user.permissions.includes("inventory") && (
+                        <a href={`#inventory/compras/${row.purchaseId}`}>
+                          Revisar compra del faltante
+                        </a>
+                      )}
+                    {row.cancelled && (
+                      <p className="hint">
+                        {row.delivered
+                          ? "Faltante cancelado"
+                          : "Solicitud cancelada"}
+                      </p>
+                    )}
+                    {row.pending && (
+                      <p className="hint">
+                        Hay una operación pendiente. Reinténtala para confirmar
+                        el movimiento.
+                      </p>
+                    )}
+                    <div className="supply-actions">
+                      {offered.map((action) => (
+                        <Button
+                          variant="ghost"
+                          key={action}
+                          onClick={() => setSelected({ row, action })}
+                        >
+                          {row.pending
+                            ? "Reintentar " +
+                              supplyActionLabels[action].toLowerCase()
+                            : supplyActionLabels[action]}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </QueryState>
       {(page > 1 || query.data?.hasMore) && (
         <div className="accounting-tools">

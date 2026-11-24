@@ -79,10 +79,12 @@ function removeMissingImages(node: RichNode, ids: Set<string>): RichNode {
 }
 export function ProjectEditor({
   initial,
+  seed,
   onBack,
   onSaved,
 }: {
   initial: Project | null;
+  seed?: Pick<ProjectInput, "title" | "category" | "location">;
   onBack: () => void;
   onSaved: (p: Project) => void;
 }) {
@@ -94,10 +96,11 @@ export function ProjectEditor({
           location: "",
           pageLayout: "stacked",
           sections: [newSection()],
+          ...seed,
         },
   );
   const [saved, setSaved] = useState<Project | null>(initial);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(Boolean(seed && !initial));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const busy = saving || uploading;

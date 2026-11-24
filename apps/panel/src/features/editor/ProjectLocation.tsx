@@ -37,6 +37,7 @@ export function ProjectLocation({
         hint="Perú"
       >
         <Select
+          floating
           id="location-region"
           label="Ubicación del proyecto"
           value={region}
@@ -56,6 +57,7 @@ export function ProjectLocation({
       {selectedZone && (
         <Field label="Distrito o localidad" htmlFor="location-locality">
           <SearchableSelect
+            floating
             key={selectedZone}
             id="location-locality"
             label="Distrito o localidad"
