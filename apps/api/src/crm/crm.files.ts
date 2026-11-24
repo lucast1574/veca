@@ -5,6 +5,8 @@ import {
 } from "@nestjs/common";
 import { ObjectId } from "mongodb";
 import sharp from "sharp";
+import { photoMetadataSchema } from "@veca/content";
+import { parse } from "../common/validation";
 import { Database } from "../database/database.module";
 import { StorageService } from "../media/storage.service";
 import { CrmRepository } from "./crm.repository";
@@ -14,6 +16,17 @@ export type AttachmentDocument = Omit<LeadAttachment, "id" | "url"> & {
   key: string;
   mime: string;
 };
+export function photoMetadataFromForm(body: Record<string, unknown>) {
+  let tags: unknown = [];
+  if (body.tags !== undefined) {
+    try {
+      tags = JSON.parse(String(body.tags));
+    } catch {
+      throw new BadRequestException("Etiquetas inválidas.");
+    }
+  }
+  return parse(photoMetadataSchema, { ...body, tags });
+}
 @Injectable()
 export class CrmFiles {
   constructor(

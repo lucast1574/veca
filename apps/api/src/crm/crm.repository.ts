@@ -9,6 +9,7 @@ import { Database } from "../database/database.module";
 export type LeadDocument = Omit<Lead, "id"> & {
   _id: ObjectId;
   submissionId: string;
+  workHandoffRequired?: boolean;
 };
 @Injectable()
 export class CrmRepository {
@@ -27,7 +28,7 @@ export class CrmRepository {
     return doc;
   }
   view(doc: LeadDocument): Lead {
-    const { _id, submissionId, ...rest } = doc;
+    const { _id, submissionId, workHandoffRequired, ...rest } = doc;
     return { ...rest, id: String(_id) };
   }
   async change(

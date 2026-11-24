@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { LEAD_STAGES } from "@veca/content";
+import { LEAD_STAGES, type SessionUser } from "@veca/content";
 import {
   emptyLeadFilters,
   LeadBoard,
@@ -31,12 +31,14 @@ export function Operations({
   dispatchAccess = false,
   accountingAccess = false,
   worksAccess = false,
+  user,
 }: {
   view: "leads" | "inventory";
   inventoryAccess?: boolean;
   dispatchAccess?: boolean;
   accountingAccess?: boolean;
   worksAccess?: boolean;
+  user?: SessionUser;
 }) {
   const [route, setRoute] = useState(current);
   const [filters, setFilters] = useState<LeadBoardFilters>(() => ({
@@ -96,6 +98,7 @@ export function Operations({
         <LeadDetail
           key={route.id}
           id={route.id}
+          user={user}
           worksAccess={worksAccess}
           inventoryAccess={inventoryAccess}
           dispatchAccess={dispatchAccess}

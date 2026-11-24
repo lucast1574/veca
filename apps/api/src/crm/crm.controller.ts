@@ -1,3 +1,5 @@
+import { WorkHandoffController } from "./work-handoff.controller";
+import { WorkAccess } from "./work-access.service";
 import { CrmEvents } from "./crm.events";
 import { WorksController } from "./works.controller";
 import {
@@ -15,12 +17,13 @@ import {
   UseInterceptors,
   Sse,
   BadRequestException,
+  ForbiddenException,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { Readable } from "node:stream";
 import { z } from "zod";
-import { photoMetadataSchema } from "@veca/content";
+import { leadUpdateSchema } from "@veca/content";
 import { GalleryController } from "../gallery/gallery.controller";
 import { MobileGalleryController } from "../gallery/mobile-gallery.controller";
 import { GalleryService } from "../gallery/gallery.service";
@@ -33,7 +36,7 @@ import { MediaModule } from "../media/media.module";
 import { parse } from "../common/validation";
 import { CrmService } from "./crm.service";
 import { CrmRepository } from "./crm.repository";
-import { CrmFiles } from "./crm.files";
+import { CrmFiles, photoMetadataFromForm } from "./crm.files";
 import { InventoryService } from "../inventory/inventory.service";
 @Controller("public/consultations")
 class ConsultationController {
@@ -89,12 +92,29 @@ class CrmController {
         : [],
     };
   }
-  @Put("leads/:id") update(
+  @Put("leads/:id") async update(
     @Param("id") id: string,
     @Body() body: unknown,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.crm.update(id, body, req.session.user.username);
+    const data = parse(leadUpdateSchema, body);
+    const existing = await this.crm.get(id);
+    if (
+      existing.workHandoff &&
+      existing.workHandoff.status !== "returned" &&
+      !req.session.user.permissions.includes("works_manage")
+    )
+      throw new ForbiddenException(
+        "La entrega está en Operaciones. Solicita su devolución para corregirla.",
+      );
+    if (
+      ["execution", "completed"].includes(data.stage) &&
+      !req.session.user.permissions.includes("works_manage")
+    )
+      throw new ForbiddenException(
+        "El inicio y cierre de obra corresponden a Operaciones.",
+      );
+    return this.crm.update(id, data, req.session.user.username);
   }
   @Post("leads/:id/notes") note(
     @Param("id") id: string,
@@ -128,20 +148,9 @@ class CrmController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
   ) {
-    let tags: unknown = [];
-    if (body.tags !== undefined) {
-      try {
-        tags = JSON.parse(String(body.tags));
-      } catch {
-        throw new BadRequestException("Etiquetas inválidas.");
-      }
-    }
-    return this.files.upload(
-      id,
-      file,
-      parse(photoMetadataSchema, { ...body, tags }),
-    );
+    return this.files.upload(id, file, photoMetadataFromForm(body));
   }
+
   @Get("files/:id") async read(@Param("id") id: string, @Res() res: Response) {
     const { doc, file } = await this.files.read(id);
     res.set({
@@ -195,6 +204,7 @@ class CrmController {
     ConsultationController,
     CrmController,
     WorksController,
+    WorkHandoffController,
     GalleryController,
     MobileGalleryController,
   ],
@@ -202,6 +212,7 @@ class CrmController {
   providers: [
     CrmRepository,
     CrmService,
+    WorkAccess,
     CrmFiles,
     InventoryService,
     CrmEvents,

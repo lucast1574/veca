@@ -77,3 +77,43 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.work-handoff {
+  margin-top: 24px;
+}
+.work-handoff h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+.work-handoff p {
+  margin-top: 8px;
+  color: var(--panel-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.work-handoff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.work-team-form {
+  display: grid;
+  gap: 16px;
+}
+.work-team-form .field,
+.work-team-form .notice {
+  margin: 0;
+}
+.work-scope {
+  margin-top: 20px;
+}
+@media (max-width: 600px) {
+  .work-handoff .lead-detail-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

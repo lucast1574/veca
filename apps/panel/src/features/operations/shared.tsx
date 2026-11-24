@@ -86,10 +86,11 @@ export function useLiveRefresh(
   refresh: () => void,
   refreshOnOpen = true,
   enabled = true,
+  path = "/admin/crm/events",
 ) {
   useEffect(() => {
     if (!enabled) return;
-    const stream = new EventSource(API_BASE + "/admin/crm/events", {
+    const stream = new EventSource(API_BASE + path, {
       withCredentials: true,
     });
     const update = (event: MessageEvent) => {
@@ -106,7 +107,7 @@ export function useLiveRefresh(
       stream.close();
       clearInterval(timer);
     };
-  }, [enabled, refresh, refreshOnOpen]);
+  }, [enabled, refresh, refreshOnOpen, path]);
 }
 export function Movements({ items }: { items: Movement[] }) {
   return items.length ? (

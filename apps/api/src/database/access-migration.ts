@@ -139,4 +139,45 @@ export async function migrateAccess(db: Db) {
       { upsert: true },
     );
   }
+  if (!(await migrations.findOne({ name: "work-teams-v1" }))) {
+    const roles = db.collection("roles");
+    await roles.updateMany(
+      {
+        permissions: {
+          $all: ["works"],
+          $in: ["leads", "inventory", "accounting"],
+        },
+      },
+      { $addToSet: { permissions: "works_all" }, $inc: { revision: 1 } },
+    );
+    await roles.updateMany(
+      {
+        id: { $in: ["admin", "management", "operations"] },
+        permissions: "works",
+      },
+      {
+        $addToSet: { permissions: { $each: ["works_manage", "works_report"] } },
+        $inc: { revision: 1 },
+      },
+    );
+    await roles.updateOne(
+      { id: "worker" },
+      {
+        $setOnInsert: {
+          id: "worker",
+          name: "Trabajador de obra",
+          description: "Consulta sus obras asignadas y registra avances.",
+          permissions: ["works", "works_report"],
+          revision: 1,
+          createdAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+    await migrations.updateOne(
+      { name: "work-teams-v1" },
+      { $setOnInsert: { completedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

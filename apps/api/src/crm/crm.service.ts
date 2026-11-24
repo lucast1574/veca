@@ -3,7 +3,11 @@ import { MailService } from "../mail/mail.service";
 import { panelAction } from "../mail/templates";
 import { config } from "../common/config";
 import { CrmEvents } from "./crm.events";
-import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from "@nestjs/common";
 import { ObjectId } from "mongodb";
 import type { Filter } from "mongodb";
 import {
@@ -72,6 +76,7 @@ export class CrmService {
       segment:
         REQUEST_TYPES.find((t) => t.id === data.requestType)?.segment ?? "",
       stage: "prelead",
+      workHandoffRequired: true,
       version: 1,
       createdAt: now,
       updatedAt: now,
@@ -192,6 +197,8 @@ export class CrmService {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.appointment))
       data.appointment += ":00-05:00";
     const old = await this.repository.get(id);
+    if (old.workAssignment)
+      data.assignedTo = old.workAssignment.coordinatorName;
     if (["coordination", "execution", "completed"].includes(data.stage)) {
       parse(leadWorkSchema, {
         district: data.district,
@@ -259,6 +266,15 @@ export class CrmService {
     if (data.contractStatus === "signed" && !data.contractReference.trim())
       throw new BadRequestException(
         "Indica la referencia del contrato firmado.",
+      );
+    if (
+      changed &&
+      data.stage === "execution" &&
+      (old.workHandoffRequired || old.workHandoff) &&
+      old.workHandoff?.status !== "accepted"
+    )
+      throw new ConflictException(
+        "El coordinador debe aceptar la entrega antes de iniciar la obra.",
       );
     const { version, ...set } = data;
     const at = new Date().toISOString();

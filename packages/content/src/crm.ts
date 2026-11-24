@@ -160,6 +160,20 @@ export type LeadEvent = {
   to?: LeadStage;
 };
 export type Lead = Omit<LeadInput, "version"> & {
+  workAssignment?: {
+    coordinatorId: string;
+    participantIds: string[];
+    coordinatorName: string;
+    participantNames: string[];
+  };
+  workHandoff?: {
+    status: "submitted" | "accepted" | "returned";
+    submittedBy: string;
+    submittedAt: string;
+    decidedBy?: string;
+    decidedAt?: string;
+    observation: string;
+  };
   id: string;
   version: number;
   source: keyof typeof LEAD_SOURCE_LABELS;

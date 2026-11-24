@@ -242,11 +242,36 @@ function update(overrides) {
     contactedAt,
     completedAt,
     events,
+    workAssignment,
+    workHandoff,
     ...fields
   } = lead;
   return { ...fields, ...overrides };
 }
 expect(await req(path, "PUT", update({ stage: "execution" })), 400);
+const roster = expect(await req("/admin/crm/work-people"), 200);
+const coordinator = roster.find(
+  (person) => person.canCoordinate && person.name === "Administrador",
+);
+assert.ok(coordinator);
+lead = expect(
+  await req(path + "/handoff", "POST", {
+    version: lead.version,
+    coordinatorId: coordinator.id,
+    participantIds: [],
+    address: "Dirección local de QA",
+    workPlan: "Instalación de dos ventanas.",
+  }),
+  201,
+);
+lead = expect(
+  await req("/admin/works/" + lead.id + "/handoff", "POST", {
+    version: lead.version,
+    action: "accepted",
+  }),
+  201,
+);
+
 lead = expect(
   await req(
     path,

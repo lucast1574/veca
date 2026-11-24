@@ -14,6 +14,7 @@ import {
   DEMO_CASES,
   isDemoLead,
   type LeadInput,
+  type SessionUser,
   type PhotoMetadata,
   type Lead,
   type Material,
@@ -50,6 +51,7 @@ import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
 import { WorkSupply } from "../warehouse/WorkSupply";
+import { WorkHandoffPanel } from "../works/WorkHandoffPanel";
 import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
 import "./lead-detail.css";
@@ -77,11 +79,13 @@ export function LeadDetail({
   readOnly = false,
   workView = false,
   worksAccess = false,
+  user,
 }: {
   id: string;
   readOnly?: boolean;
   workView?: boolean;
   worksAccess?: boolean;
+  user?: SessionUser;
   proposal?: string;
   dispatchId?: string;
   inventoryAccess?: boolean;
@@ -158,7 +162,12 @@ export function LeadDetail({
         .then(setMaterials)
         .catch(fail);
   }, [id, detailPath]);
-  useLiveRefresh(refreshRelated);
+  useLiveRefresh(
+    refreshRelated,
+    true,
+    true,
+    workView || readOnly ? "/admin/works/events" : "/admin/crm/events",
+  );
   const dirty =
     !!data &&
     !!draft &&
@@ -168,11 +177,23 @@ export function LeadDetail({
     setDraft((old) => (old ? { ...old, [key]: value } : old));
     setNotice("");
   }
+  const commercialLocked =
+    !workView &&
+    !!data?.lead.workHandoff &&
+    data.lead.workHandoff.status !== "returned" &&
+    !user?.permissions.includes("works_manage");
+  const canReport =
+    !!user?.permissions.includes("works_report") &&
+    workView &&
+    (!data?.lead.workHandoff || data.lead.workHandoff.status === "accepted");
   async function persist(next: LeadInput) {
-    const saved = await api<Lead>(`/admin/crm/leads/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(next),
-    });
+    const saved = await api<Lead>(
+      workView ? `/admin/works/${id}` : `/admin/crm/leads/${id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(next),
+      },
+    );
     setData((old) => (old ? { ...old, lead: saved } : old));
     setDraft(leadInput(saved));
     return saved;
@@ -194,14 +215,17 @@ export function LeadDetail({
   }
   async function addNote(event: FormEvent) {
     event.preventDefault();
-    if (readOnly || !draft) return;
+    if ((readOnly && !canReport) || !draft || busy) return;
     setBusy(true);
     setError("");
     try {
-      const lead = await post<Lead>(`/admin/crm/leads/${id}/notes`, {
-        version: draft.version,
-        text: note,
-      });
+      const lead = await post<Lead>(
+        workView ? `/admin/works/${id}/notes` : `/admin/crm/leads/${id}/notes`,
+        {
+          version: draft.version,
+          text: note,
+        },
+      );
       setNote("");
       setData((old) => (old ? { ...old, lead } : old));
       setDraft((old) => (old ? { ...old, version: lead.version } : old));
@@ -213,7 +237,7 @@ export function LeadDetail({
     }
   }
   async function file(file: File) {
-    if (readOnly) return;
+    if (readOnly && !canReport) return;
     setBusy(true);
     setError("");
     try {
@@ -222,7 +246,10 @@ export function LeadDetail({
       form.append("caption", photoMetadata.caption);
       form.append("tags", JSON.stringify(photoMetadata.tags));
       form.append("sharing", photoMetadata.sharing);
-      await api(`/admin/crm/leads/${id}/files`, { method: "POST", body: form });
+      await api(
+        workView ? `/admin/works/${id}/files` : `/admin/crm/leads/${id}/files`,
+        { method: "POST", body: form },
+      );
       const attachments = await api<LeadDetailData>(detailPath);
       setData((old) =>
         old ? { ...old, attachments: attachments.attachments } : old,
@@ -327,7 +354,8 @@ export function LeadDetail({
           </p>
           {!workView &&
             worksAccess &&
-            ["coordination", "execution", "completed"].includes(lead.stage) && (
+            (["execution", "completed"].includes(lead.stage) ||
+              !!lead.workHandoff) && (
               <a
                 className="btn btn-ghost"
                 href={`#works/${id}`}
@@ -339,19 +367,40 @@ export function LeadDetail({
               </a>
             )}
         </div>
-        {nextStage && !readOnly && (
-          <Button
-            disabled={busy || editing}
-            onClick={() => {
-              setError("");
-              setNotice("");
-              setTransition(nextStage);
-            }}
-          >
-            {stageAction(nextStage)} <ArrowRight size={16} />
-          </Button>
-        )}
+        {nextStage &&
+          !readOnly &&
+          !commercialLocked &&
+          (!user ||
+            user.permissions.includes("works_manage") ||
+            !["execution", "completed"].includes(nextStage)) && (
+            <Button
+              disabled={
+                busy ||
+                editing ||
+                (nextStage === "execution" &&
+                  lead.workHandoff?.status !== "accepted")
+              }
+              onClick={() => {
+                setError("");
+                setNotice("");
+                setTransition(nextStage);
+              }}
+            >
+              {stageAction(nextStage)} <ArrowRight size={16} />
+            </Button>
+          )}
       </header>
+      {user &&
+        ["coordination", "execution", "completed"].includes(lead.stage) &&
+        !dirty &&
+        !editing && (
+          <WorkHandoffPanel
+            lead={lead}
+            user={user}
+            workView={workView}
+            onSaved={() => void refresh()}
+          />
+        )}
       <ol className="lead-detail-progress" aria-label="Avance del lead">
         {LEAD_STAGES.slice(0, 5).map((stage, position) => (
           <li
@@ -414,7 +463,7 @@ export function LeadDetail({
                     : "Sobre esta oportunidad"
                   : "Coordinación y obra"}
               </h2>
-              {!readOnly && (
+              {!readOnly && !commercialLocked && (
                 <Button variant="ghost" onClick={() => setEditing(true)}>
                   <Pencil size={15} /> Editar datos
                 </Button>
@@ -585,7 +634,8 @@ export function LeadDetail({
                       }))}
                     />
                   </Field>
-                  {formField("assignedTo", "Responsable")}
+                  {!lead.workAssignment &&
+                    formField("assignedTo", "Responsable")}
                 </div>
                 {area("idea", "Consulta del cliente", 4)}
                 {area("contactResult", "Último acuerdo")}
@@ -652,7 +702,7 @@ export function LeadDetail({
                 Archivos privados. Añadirlos aquí no los publica en la landing.
               </p>
             </div>
-            {!readOnly && (
+            {(!readOnly || canReport) && (
               <Button disabled={busy} onClick={() => upload.current?.click()}>
                 <Upload size={16} />
                 {busy ? "Subiendo…" : "Añadir archivo"}
@@ -673,10 +723,14 @@ export function LeadDetail({
           )}
           <input
             ref={upload}
-            disabled={readOnly}
+            disabled={readOnly && !canReport}
             className="ops-file-input"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/avif,application/pdf"
+            accept={
+              readOnly
+                ? "image/jpeg,image/png,image/webp,image/avif"
+                : "image/jpeg,image/png,image/webp,image/avif,application/pdf"
+            }
             onChange={(e) => {
               const selected = e.target.files?.[0];
               if (selected) void file(selected);
@@ -788,7 +842,7 @@ export function LeadDetail({
           {workView && !lead.events.length && (
             <p className="hint">Aún no hay avances registrados.</p>
           )}
-          {!readOnly && (
+          {(!readOnly || canReport) && (
             <form className="ops-note-form" onSubmit={addNote}>
               <textarea
                 aria-label="Nueva nota de seguimiento"

@@ -204,6 +204,15 @@ export default function App() {
       appliedHash.current = location.hash;
       setView(currentView());
     }
+    if (
+      (!location.hash || location.hash === "#dashboard") &&
+      !canOpenWorkspace("dashboard", s.user) &&
+      canOpenWorkspace("works", s.user)
+    ) {
+      location.hash = "works";
+      appliedHash.current = "#works";
+      setView("works");
+    }
     setCsrf(s.csrf);
     setSession(s);
     setConnectionLost(false);
@@ -445,7 +454,8 @@ export default function App() {
                   />
                 ) : view === "works" ? (
                   <WorksWorkspace
-                    canEdit={can("leads")}
+                    user={session.user}
+                    canEdit={session.user.permissions.includes("works_manage")}
                     inventoryAccess={can("inventory")}
                     dispatchAccess={session.user.permissions.includes(
                       "dispatches",
@@ -456,6 +466,7 @@ export default function App() {
                   <AccountingWorkspace inventoryAccess={can("inventory")} />
                 ) : view === "leads" || view === "inventory" ? (
                   <Operations
+                    user={session.user}
                     worksAccess={can("works")}
                     view={view}
                     inventoryAccess={can("inventory")}

@@ -123,7 +123,7 @@ try {
         session.body.csrf,
       )
     ).status,
-    404,
+    403,
   );
   assert.equal(
     (await request("/admin/works?stage=prelead", cookie)).status,

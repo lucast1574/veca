@@ -6,7 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
 } from "lucide-react";
-import type { Lead } from "@veca/content";
+import type { Lead, SessionUser } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { api } from "../../lib/api";
 import { Button, Notice } from "../../components/ui";
@@ -28,7 +28,9 @@ export function WorksWorkspace({
   inventoryAccess,
   dispatchAccess,
   accountingAccess,
+  user,
 }: {
+  user: SessionUser;
   canEdit: boolean;
   inventoryAccess: boolean;
   dispatchAccess: boolean;
@@ -36,6 +38,7 @@ export function WorksWorkspace({
 }) {
   const [id, setId] = useState(() => location.hash.split("/")[1] || "");
   const [search, setSearch] = useState("");
+  const [mine, setMine] = useState(false);
   const [stage, setStage] = useState("");
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
@@ -48,7 +51,7 @@ export function WorksWorkspace({
     return () => window.removeEventListener("hashchange", update);
   }, []);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
-  useLiveRefresh(refresh, false, !id);
+  useLiveRefresh(refresh, false, !id, "/admin/works/events");
   useEffect(() => {
     if (id) return;
     const controller = new AbortController();
@@ -60,6 +63,7 @@ export function WorksWorkspace({
           search,
           stage,
           page: String(page),
+          mine: mine ? "true" : "",
         });
         api<WorkPage>("/admin/works?" + params, { signal: controller.signal })
           .then((value) => {
@@ -78,7 +82,7 @@ export function WorksWorkspace({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [id, search, stage, page, revision]);
+  }, [id, search, stage, page, revision, mine]);
 
   if (id)
     return (
@@ -87,6 +91,7 @@ export function WorksWorkspace({
           key={id}
           id={id}
           workView
+          user={user}
           readOnly={!canEdit}
           inventoryAccess={inventoryAccess}
           dispatchAccess={dispatchAccess}
@@ -114,7 +119,13 @@ export function WorksWorkspace({
     <main className="ops-page works-page">
       <header className="ops-heading">
         <div>
-          <h1>Obras</h1>
+          <h1>
+            {user.permissions.some(
+              (p) => p === "works_all" || p === "works_manage",
+            )
+              ? "Obras"
+              : "Mis obras"}
+          </h1>
           <span>Preparación, ejecución y seguimiento del equipo</span>
         </div>
         <Button
@@ -149,6 +160,37 @@ export function WorksWorkspace({
           }}
         />
       </div>
+      {user.permissions.some(
+        (permission) =>
+          permission === "works_all" || permission === "works_manage",
+      ) && (
+        <div
+          className="gallery-usage-tabs work-scope"
+          role="group"
+          aria-label="Alcance de obras"
+        >
+          <button
+            type="button"
+            aria-pressed={!mine}
+            onClick={() => {
+              setMine(false);
+              setPage(1);
+            }}
+          >
+            Todas las obras
+          </button>
+          <button
+            type="button"
+            aria-pressed={mine}
+            onClick={() => {
+              setMine(true);
+              setPage(1);
+            }}
+          >
+            Mis obras
+          </button>
+        </div>
+      )}
       {error && <Notice error>{error}</Notice>}
       <p className="works-count" role="status">
         {loading
@@ -166,7 +208,11 @@ export function WorksWorkspace({
           <p>
             {search || stage
               ? "Prueba otra búsqueda o cambia el estado."
-              : "Las fichas en Coordinación aparecen aquí para preparar la obra."}
+              : user.permissions.some(
+                    (p) => p === "works_all" || p === "works_manage",
+                  )
+                ? "Las entregas enviadas desde Leads aparecen aquí para preparar la obra."
+                : "Aquí aparecerán las obras que te asignen cuando el coordinador acepte la entrega."}
           </p>
         </section>
       )}
@@ -180,6 +226,12 @@ export function WorksWorkspace({
             <span className="lead-detail-stage">
               {stages.find((item) => item.value === work.stage)?.label}
             </span>
+            {work.workHandoff?.status === "submitted" && (
+              <p className="hint">Entrega por revisar</p>
+            )}
+            {work.workHandoff?.status === "returned" && (
+              <p className="hint">Devuelta a Comercial</p>
+            )}
             <h2>{work.name}</h2>
             <p>{work.address || work.district || "Dirección por completar"}</p>
             <p>{work.workPlan || work.idea || "Alcance por completar"}</p>
