@@ -61,21 +61,19 @@ const decisionPath = (row) => `${requestPath}/${row.stageRequest.id}/decision`;
 try {
   const admin = await db.collection("users").findOne({ username: "admin" });
   for (const [key, _id] of Object.entries(ids)) {
-    await db
-      .collection("users")
-      .insertOne({
-        _id,
-        username: tag + key,
-        name: key,
-        role: ["coordinator", "other"].includes(key)
-          ? "operations"
-          : key === "outsider"
-            ? "worker"
-            : key,
-        status: "active",
-        emailVerified: true,
-        passwordHash: admin.passwordHash,
-      });
+    await db.collection("users").insertOne({
+      _id,
+      username: tag + key,
+      name: key,
+      role: ["coordinator", "other"].includes(key)
+        ? "operations"
+        : key === "outsider"
+          ? "worker"
+          : key,
+      status: "active",
+      emailVerified: true,
+      passwordHash: admin.passwordHash,
+    });
     const login = await call(
       "/auth/login",
       null,
@@ -203,6 +201,26 @@ try {
     ).count,
     1,
   );
+  await db
+    .collection("roles")
+    .insertOne({
+      id: tag,
+      name: "Coordinación sin Obras",
+      permissions: ["leads", "works_manage", "dashboard"],
+      revision: 1,
+    });
+  await db
+    .collection("users")
+    .updateOne({ _id: ids.coordinator }, { $set: { role: tag } });
+  await put(
+    `/admin/crm/leads/${workId}`,
+    "coordinator",
+    input(row, "execution"),
+    403,
+  );
+  await db
+    .collection("users")
+    .updateOne({ _id: ids.coordinator }, { $set: { role: "operations" } });
   const previousRequest = row.stageRequest.id;
   row = await post(requestPath, "worker", {
     version: row.version,
@@ -282,13 +300,11 @@ try {
   });
   assert.equal(row.stageRequest.to, "completed");
   const equipmentId = new ObjectId();
-  await db
-    .collection("warehouse_equipment")
-    .insertOne({
-      _id: equipmentId,
-      qaTag: tag,
-      assignment: { workId: String(workId) },
-    });
+  await db.collection("warehouse_equipment").insertOne({
+    _id: equipmentId,
+    qaTag: tag,
+    assignment: { workId: String(workId) },
+  });
   await post(
     decisionPath(row),
     "coordinator",
@@ -372,5 +388,6 @@ try {
     .collection("crm_leads")
     .deleteMany({ _id: { $in: [workId, preparingId] } });
   await db.collection("warehouse_equipment").deleteMany({ qaTag: tag });
+  await db.collection("roles").deleteOne({ id: tag });
   await client.close();
 }

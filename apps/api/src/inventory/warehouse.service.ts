@@ -113,13 +113,13 @@ export class WarehouseService {
         name: { $not: /^\[demo\]/i },
         email: { $not: /\.invalid$/i },
       })
-      .project({ name: 1, stage: 1 })
+      .project({ name: 1, workName: 1, stage: 1 })
       .sort({ updatedAt: -1 })
       .limit(1000)
       .toArray();
     return rows.map((row) => ({
       id: String(row._id),
-      name: String(row.name),
+      name: String(row.workName || row.name),
       stage: String(row.stage),
     }));
   }
@@ -307,7 +307,7 @@ export class WarehouseService {
     const document: PurchaseRecord = {
       _id: safeId(input.id),
       workId: String(work._id),
-      workName: work.name,
+      workName: work.workName || work.name,
       supplier: "",
       supplierRuc: "",
       reason: input.reason,
@@ -595,7 +595,7 @@ export class WarehouseService {
         throw new BadRequestException("La obra ya está realizada.");
       const assignment = {
         workId: String(work._id),
-        workName: work.name,
+        workName: work.workName || work.name,
         responsible: input.responsible,
         ...(input.expectedReturn
           ? { expectedReturn: input.expectedReturn }

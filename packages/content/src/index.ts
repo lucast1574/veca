@@ -209,6 +209,7 @@ export const projectInputSchema = z
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 export type Media = z.infer<typeof mediaSchema>;
 export type Project = ProjectInput & {
+  sourceWork?: { id: string; name: string; location: string };
   id: string;
   slug: string;
   status: "draft" | "published";
@@ -369,6 +370,8 @@ export const emptyProject = (): ProjectInput => ({
 
 export * from "./crm.js";
 export * from "./works.js";
+export * from "./project-sources.js";
+export * from "./notifications.js";
 
 export * from "./access.js";
 export * from "./administration.js";

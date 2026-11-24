@@ -251,7 +251,7 @@ export class SupplyRequests {
         $setOnInsert: {
           ...fields,
           workId,
-          workName: work.name,
+          workName: work.workName || work.name,
           materialName: material.name,
           sku: material.sku,
           unit: material.unit,

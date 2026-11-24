@@ -20,6 +20,8 @@ import {
   type Lead,
   LEAD_STAGES,
   REQUEST_TYPES,
+  matchPeruLocation,
+  formatPeruLocation,
   leadUpdateSchema,
   publicLeadSchema,
   leadWorkSchema,
@@ -210,6 +212,23 @@ export class CrmService {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.appointment))
       data.appointment += ":00-05:00";
     const old = await this.repository.get(id);
+    if (["coordination", "execution", "completed"].includes(data.stage)) {
+      const location = matchPeruLocation(data.workLocation || data.district);
+      if (
+        data.workLocation &&
+        data.workLocation !== old.workLocation &&
+        !location
+      )
+        throw new BadRequestException(
+          "Elige la ubicación de la obra con los selectores de zona y localidad.",
+        );
+      if (location)
+        data.workLocation = formatPeruLocation(
+          location.region,
+          location.locality,
+        );
+      data.workName = data.workName || old.workName || data.name;
+    }
     if (old.workAssignment)
       data.assignedTo = old.workAssignment.coordinatorName;
     if (["coordination", "execution", "completed"].includes(data.stage)) {
@@ -234,6 +253,7 @@ export class CrmService {
       if (
         old.workAssignment &&
         (context?.user.id !== old.workAssignment.coordinatorId ||
+          !context.user.permissions.includes("works") ||
           !context.user.permissions.includes("works_manage"))
       )
         throw new ForbiddenException(

@@ -1,5 +1,11 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Lead, WorkPerson } from "@veca/content";
+import {
+  formatPeruLocation,
+  matchPeruLocation,
+  type Lead,
+  type WorkPerson,
+} from "@veca/content";
+import { ProjectLocation } from "../editor/ProjectLocation";
 import { Select } from "@veca/ui/src/Select";
 import { Modal } from "../../components/Modal";
 import { Button, Field, Notice } from "../../components/ui";
@@ -25,6 +31,12 @@ export function WorkTeamDialog({
   const [participantIds, setParticipants] = useState(
     lead.workAssignment?.participantIds || [],
   );
+  const location = matchPeruLocation(lead.workLocation || lead.district);
+  const initialLocation = location
+    ? formatPeruLocation(location.region, location.locality)
+    : "";
+  const [workName, setWorkName] = useState(lead.workName || lead.name);
+  const [workLocation, setWorkLocation] = useState(initialLocation);
   const [address, setAddress] = useState(lead.address);
   const [workPlan, setPlan] = useState(lead.workPlan);
   const [busy, setBusy] = useState(false);
@@ -45,6 +57,8 @@ export function WorkTeamDialog({
     coordinatorId !== (lead.workAssignment?.coordinatorId || "") ||
     JSON.stringify(participantIds) !==
       JSON.stringify(lead.workAssignment?.participantIds || []) ||
+    workName !== (lead.workName || lead.name) ||
+    workLocation !== initialLocation ||
     address !== lead.address ||
     workPlan !== lead.workPlan;
   function close() {
@@ -62,6 +76,10 @@ export function WorkTeamDialog({
       setError("Selecciona un coordinador activo.");
       return;
     }
+    if (handoff && (!workLocation || workName.trim().length < 4)) {
+      setError("Completa el nombre y la ubicación de la obra.");
+      return;
+    }
     setBusy(true);
     try {
       const team = {
@@ -76,7 +94,14 @@ export function WorkTeamDialog({
           method: handoff ? "POST" : "PUT",
           body: JSON.stringify(
             handoff
-              ? { version: lead.version, ...team, address, workPlan }
+              ? {
+                  version: lead.version,
+                  ...team,
+                  address,
+                  workPlan,
+                  workName,
+                  workLocation,
+                }
               : { version: lead.version, team },
           ),
         },
@@ -115,6 +140,21 @@ export function WorkTeamDialog({
       <form id={formId} onSubmit={save} className="work-team-form">
         {error && <Notice error>{error}</Notice>}
         {!people && !error && <p role="status">Cargando equipo…</p>}
+        {handoff && (
+          <>
+            <Field label="Nombre de la obra">
+              <input
+                required
+                minLength={4}
+                maxLength={140}
+                value={workName}
+                onChange={(e) => setWorkName(e.target.value)}
+                disabled={busy}
+              />
+            </Field>
+            <ProjectLocation value={workLocation} onChange={setWorkLocation} />
+          </>
+        )}
         <Field label="Coordinador de obra" htmlFor={formId + "-coordinator"}>
           <Select
             id={formId + "-coordinator"}

@@ -238,7 +238,7 @@ export class DispatchService {
           leadId,
           demo: true,
           data,
-          workName: lead.name,
+          workName: lead.workName || lead.name,
           status: fixture.guideStatus,
           version: 1,
           guideNumber: "",
@@ -420,7 +420,7 @@ export class DispatchService {
     const record: DispatchRecord = {
       _id: idOf(accountingId || creationId!),
       leadId: lead._id.toHexString(),
-      workName: lead.name,
+      workName: lead.workName || lead.name,
       data,
       demo,
       status: "draft",

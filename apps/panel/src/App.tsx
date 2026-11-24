@@ -36,6 +36,9 @@ import {
 import { api, ApiError, post, setCsrf } from "./lib/api";
 import { Button, Notice, Status } from "./components/ui";
 import { LandingProjects } from "./features/editor/LandingProjects";
+import { WorkPhotoPicker } from "./features/editor/WorkPhotoPicker";
+import { CompletedWorks } from "./features/editor/CompletedWorks";
+import { useProjectRoute } from "./features/editor/useProjectRoute";
 import { canLeaveWorkspace } from "./lib/unsaved";
 
 const UserProfile = lazy(() =>
@@ -185,6 +188,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [storageConfigured, setStorageConfigured] = useState(true);
   const [editing, setEditing] = useState<Project | null | undefined>(undefined);
+  const [sourceWork, setSourceWork] = useState<string>();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const login = useCallback((s: Session) => {
@@ -276,6 +280,15 @@ export default function App() {
     return () => controller.abort();
   }, [view, canEditProjects, userId, expired, refresh]);
   const userStatus = session?.user.status;
+  useProjectRoute(
+    session?.user.status === "active" &&
+      session.user.permissions.includes("projects")
+      ? session.user.id
+      : undefined,
+    setEditing,
+    setSourceWork,
+    setError,
+  );
   const sessionCheck = useRef<AbortController | null>(null);
   const checkSession = useCallback(async () => {
     if (sessionCheck.current) return;
@@ -382,6 +395,7 @@ export default function App() {
           <WorkspaceShell
             key={session.user.id}
             user={session.user}
+            sessionKey={session.csrf}
             view={view}
             projectCount={projects.length}
             onNavigate={navigate}
@@ -484,6 +498,7 @@ export default function App() {
                     initial={editing}
                     onBack={() => {
                       setEditing(undefined);
+                      location.hash = "projects";
                       void refresh();
                     }}
                     onSaved={(project) => {
@@ -593,6 +608,7 @@ export default function App() {
                         />
                       </label>
                     </div>
+                    <CompletedWorks />
                     {error && (
                       <Notice error>
                         {error}
@@ -715,6 +731,25 @@ export default function App() {
               </Suspense>
             </SectionBoundary>
           </WorkspaceShell>
+          {sourceWork && session.user.permissions.includes("projects") && (
+            <WorkPhotoPicker
+              key={sourceWork}
+              id={sourceWork}
+              onClose={() => {
+                setSourceWork(undefined);
+                location.hash = "projects";
+              }}
+              onCreated={(project) => {
+                setSourceWork(undefined);
+                setEditing(project);
+                setProjects((old) => [
+                  project,
+                  ...old.filter((p) => p.id !== project.id),
+                ]);
+                location.hash = `projects/${project.id}`;
+              }}
+            />
+          )}
         </div>
         <div id="workspace-overlays" />
       </div>

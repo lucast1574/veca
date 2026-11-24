@@ -8,6 +8,8 @@ import {
 import {
   workTeamSchema,
   workHandoffSchema,
+  matchPeruLocation,
+  formatPeruLocation,
   type SessionUser,
   type WorkTeam,
   type WorkPerson,
@@ -133,12 +135,20 @@ export class WorkAccess {
       participantIds: data.participantIds,
     });
     const now = new Date().toISOString();
+    const location = data.workLocation || row.workLocation || row.district;
+    const match = matchPeruLocation(location);
+    if (data.workLocation && !match)
+      throw new BadRequestException("Elige una ubicación válida para la obra.");
     const saved = await this.crm.change(
       id,
       data.version,
       {
         address: data.address,
         workPlan: data.workPlan,
+        workName: data.workName || row.workName || row.name,
+        workLocation: match
+          ? formatPeruLocation(match.region, match.locality)
+          : location,
         assignedTo: team.coordinatorName,
         workAssignment: team,
         workHandoff: {

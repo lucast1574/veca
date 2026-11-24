@@ -53,6 +53,8 @@ export const workTeamSchema = z
 export const workHandoffSchema = workTeamSchema
   .extend({
     version: z.number().int().positive(),
+    workName: z.string().trim().max(140).default(""),
+    workLocation: z.string().trim().max(100).default(""),
     address: z
       .string()
       .trim()

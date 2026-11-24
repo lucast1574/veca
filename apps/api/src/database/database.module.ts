@@ -23,6 +23,16 @@ export class Database implements OnModuleInit, OnModuleDestroy {
     this.db = this.client.db(config.MONGODB_DATABASE);
     await Promise.all([
       this.db
+        .collection("notifications")
+        .createIndex({ userId: 1, createdAt: -1 }),
+      this.db
+        .collection("notifications")
+        .createIndex({ pushState: 1, nextAttempt: 1 }),
+      this.db.collection("push_devices").createIndex({ userId: 1 }),
+      this.db
+        .collection("push_devices")
+        .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      this.db
         .collection("verification_challenges")
         .createIndex({ tokenHash: 1 }, { unique: true, sparse: true }),
       this.db
@@ -103,6 +113,12 @@ export class Database implements OnModuleInit, OnModuleDestroy {
         .collection("crm_files")
         .createIndex({ type: 1, createdAt: -1, _id: -1 }),
       this.db.collection("projects").createIndex({ slug: 1 }, { unique: true }),
+      this.db
+        .collection("projects")
+        .createIndex({ sourceOperationId: 1 }, { unique: true, sparse: true }),
+      this.db
+        .collection("projects")
+        .createIndex({ "sourceWork.id": 1, createdAt: -1 }),
       this.db
         .collection("projects")
         .createIndex({ "published.category": 1, "published.publishedAt": -1 }),

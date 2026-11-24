@@ -3,7 +3,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, createECDH } from "node:crypto";
 import { createRequire } from "node:module";
 import { MongoClient } from "mongodb";
 import { hash } from "argon2";
@@ -44,7 +44,20 @@ await db.collection("users").insertOne({
   passwordHash: await hash("Local-only-visual-test-2026!"),
 });
 const messages = [];
+const pushMessages = [];
 const mailServer = createServer(async (req, res) => {
+  if (req.method === "GET" && req.url === "/push-messages") {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify(pushMessages));
+    return;
+  }
+  if (req.method === "POST" && req.url === "/push") {
+    let data = "";
+    for await (const chunk of req) data += chunk;
+    pushMessages.push(JSON.parse(data));
+    res.writeHead(200).end("ok");
+    return;
+  }
   if (req.method === "GET" && req.url === "/messages") {
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(messages));
@@ -62,6 +75,9 @@ const mailServer = createServer(async (req, res) => {
 });
 await new Promise((resolve) => mailServer.listen(4510, "127.0.0.1", resolve));
 const guideMock = process.env.VECA_GUIDE_QA_MOCK === "1";
+const pushMock = process.env.VECA_PUSH_QA_MOCK === "1";
+const pushKey = createECDH("prime256v1");
+pushKey.generateKeys();
 const env = {
   ...process.env,
   NODE_ENV: "test",
@@ -73,6 +89,12 @@ const env = {
   APISUNAT_GUIDE_SERIES: "",
   EMAIL_TEST_ENDPOINT: "http://127.0.0.1:4510/send",
   FIREBASE_PROJECT_ID: "veca-local-qa",
+  FIREBASE_APP_ID: "1:123456789:web:localqa",
+  FIREBASE_WEB_PUSH_KEY: pushMock
+    ? pushKey.getPublicKey().toString("base64url")
+    : "",
+  FIREBASE_SERVICE_ACCOUNT: "",
+  FIREBASE_PUSH_TEST_ENDPOINT: pushMock ? "http://127.0.0.1:4510/push" : "",
   FIREBASE_API_KEY: "local-public-config-only",
   FIREBASE_AUTH_DOMAIN: "veca-local-qa.firebaseapp.com",
   ADMIN_BOOTSTRAP_KEY: "local-qa-bootstrap-key-only-at-least-32",

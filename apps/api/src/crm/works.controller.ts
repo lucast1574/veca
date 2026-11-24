@@ -65,7 +65,14 @@ export class WorksController {
       ],
       ...(pattern
         ? {
-            $or: ["name", "district", "address", "assignedTo"].map((field) => ({
+            $or: [
+              "name",
+              "workName",
+              "workLocation",
+              "district",
+              "address",
+              "assignedTo",
+            ].map((field) => ({
               [field]: { $regex: pattern, $options: "i" },
             })),
           }

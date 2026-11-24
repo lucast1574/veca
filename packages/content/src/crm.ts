@@ -132,6 +132,8 @@ export const leadUpdateSchema = z
     segment: segmentSchema.or(z.literal("")),
     stage: stageSchema,
     assignedTo: text(100),
+    workName: text(140).default(""),
+    workLocation: text(100).default(""),
     contactResult: text(1000),
     appointment: text(40),
     address: text(500),
@@ -342,6 +344,8 @@ export type LeadAttachment = PhotoMetadata & {
   createdAt: string;
 };
 export const crmLeadDefaults = {
+  workName: "",
+  workLocation: "",
   assignedTo: "",
   contactResult: "",
   appointment: "",

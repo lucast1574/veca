@@ -26,6 +26,8 @@ app.use(
           "https://securetoken.googleapis.com",
           "https://www.googleapis.com",
           "https://apis.google.com",
+          "https://firebaseinstallations.googleapis.com",
+          "https://fcmregistrations.googleapis.com",
           "https://*.firebaseapp.com",
         ],
         frameSrc: [
@@ -40,6 +42,8 @@ app.use(
   }),
 );
 app.use((req, res, next) => {
+  if (req.path.includes("firebase-messaging-sw") && req.path.endsWith(".js"))
+    res.setHeader("Service-Worker-Allowed", "/");
   res.set("X-Robots-Tag", "noindex, nofollow");
   next();
 });

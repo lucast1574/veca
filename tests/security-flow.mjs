@@ -15,6 +15,19 @@ if (!["localhost", "127.0.0.1"].includes(new URL(base).hostname))
   throw Error("Security fixtures are local-only.");
 const id = "000000000000000000000001";
 const routes = [
+  ["GET", "/account/notifications"],
+  ["GET", "/account/notifications/config"],
+  ["GET", "/account/notifications/events"],
+  ["GET", `/account/notifications/${id}`],
+  ["POST", "/account/notifications/read"],
+  ["POST", `/account/notifications/${id}/read`],
+  ["POST", "/account/notifications/push/register"],
+  ["POST", "/account/notifications/push/unregister"],
+  ["POST", "/account/notifications/push/test"],
+  ["GET", "/admin/project-sources/works"],
+  ["GET", `/admin/project-sources/works/${id}`],
+  ["GET", `/admin/project-sources/works/${id}/photos/${id}`],
+  ["POST", `/admin/project-sources/works/${id}/draft`],
   ["POST", `/admin/crm/leads/${id}/dispatches/${id}/discard`],
   ["POST", `/admin/accounting/guides/${id}/discard`],
   ["GET", `/admin/work-control/${id}/closeout`],

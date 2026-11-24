@@ -40,6 +40,8 @@ export function leadInput(lead: Lead): LeadInput {
     segment,
     stage,
     assignedTo,
+    workName = "",
+    workLocation = "",
     contactResult,
     appointment,
     address,
@@ -60,6 +62,8 @@ export function leadInput(lead: Lead): LeadInput {
     segment,
     stage,
     assignedTo,
+    workName,
+    workLocation,
     contactResult,
     appointment:
       appointment && Number.isFinite(Date.parse(appointment))

@@ -458,10 +458,21 @@ export function ProjectEditor({
                     onChange={(value) => patch("category", value)}
                   />
                 </Field>
-                <ProjectLocation
-                  value={draft.location}
-                  onChange={(location) => patch("location", location)}
-                />
+                {saved?.sourceWork ? (
+                  <Field
+                    label="Ubicación del proyecto"
+                    hint="Registrada en la obra de origen."
+                  >
+                    <p className="project-source-location">
+                      {saved.sourceWork.location}
+                    </p>
+                  </Field>
+                ) : (
+                  <ProjectLocation
+                    value={draft.location}
+                    onChange={(location) => patch("location", location)}
+                  />
+                )}
                 <Field
                   label="Etiquetas"
                   hint="Elige hasta 8 etiquetas de la lista."

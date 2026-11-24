@@ -64,6 +64,8 @@ export class DemoService {
   ) {
     if (lead.stage !== "prelead" && lead.stage !== "contacted") return lead;
     const state: LeadInput = {
+      workName: lead.workName || "",
+      workLocation: lead.workLocation || "",
       name: lead.name,
       email: lead.email,
       phone: lead.phone,

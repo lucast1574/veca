@@ -1,4 +1,5 @@
 import { WorkTasksController } from "./work-tasks.controller";
+import { WorkNotifications } from "./work-notifications";
 import { WorkStageRequests, WorkStageController } from "./work-stage-requests";
 import { WorkHandoffController } from "./work-handoff.controller";
 import { WorkAccess } from "./work-access.service";
@@ -242,6 +243,7 @@ class CrmController {
     CrmEvents,
   ],
   providers: [
+    WorkNotifications,
     WorkStageRequests,
     CrmRepository,
     CrmService,

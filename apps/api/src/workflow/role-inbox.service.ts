@@ -70,7 +70,7 @@ export class RoleInbox {
             "#works",
             (row) => ({
               id: String(row._id),
-              title: row.name,
+              title: row.workName || row.name,
               detail: "Pendiente de tu aceptación",
               href: workHref(row),
             }),
@@ -93,7 +93,7 @@ export class RoleInbox {
             "#works",
             (row) => ({
               id: String(row._id),
-              title: row.name,
+              title: row.workName || row.name,
               detail: `${row.stageRequest.requestedName} solicita pasar a ${LEAD_STAGES.find((stage) => stage.id === row.stageRequest.to)?.name}`,
               href: workHref(row),
             }),
@@ -118,7 +118,7 @@ export class RoleInbox {
             "#works",
             (row) => ({
               id: String(row._id),
-              title: row.name,
+              title: row.workName || row.name,
               detail: "Revisar pendientes y cerrar la obra",
               href: workHref(row) + "/closeout",
             }),
@@ -143,7 +143,7 @@ export class RoleInbox {
             "#works",
             (row) => ({
               id: String(row._id),
-              title: row.name,
+              title: row.workName || row.name,
               detail: row.stageRequest.observation,
               href: workHref(row),
             }),
@@ -234,7 +234,7 @@ export class RoleInbox {
           "#leads",
           (row) => ({
             id: String(row._id),
-            title: row.name,
+            title: row.workName || row.name,
             detail:
               row.workHandoff?.status === "returned"
                 ? `Entrega devuelta: ${row.workHandoff.observation}`
@@ -346,7 +346,7 @@ export class RoleInbox {
             "#inventory/equipos",
             (row) => ({
               id: String(row._id),
-              title: row.name,
+              title: row.workName || row.name,
               detail: `${row.assignment.workName} · ${row.assignment.responsible}`,
               href: `#inventory/equipos/${row._id}`,
             }),

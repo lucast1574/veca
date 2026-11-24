@@ -13,6 +13,7 @@ import {
 import type { SessionUser } from "@veca/content";
 import { Modal } from "../Modal";
 import { UserAvatar } from "./UserAvatar";
+import { NotificationBell } from "../../features/notifications/NotificationBell";
 import {
   canOpenWorkspace,
   WORKSPACE_ITEMS,
@@ -91,6 +92,7 @@ function NavigationItem({
 }
 export function WorkspaceShell({
   user,
+  sessionKey,
   view,
   projectCount,
   detail,
@@ -98,6 +100,7 @@ export function WorkspaceShell({
   children,
 }: {
   user: SessionUser;
+  sessionKey?: string;
   view: WorkspaceView;
   projectCount: number;
   detail?: string;
@@ -268,6 +271,7 @@ export function WorkspaceShell({
               </>
             )}
           </nav>
+          <NotificationBell key={sessionKey || user.id} user={user} />
           <button
             className="workspace-header-profile"
             aria-label="Abrir mi perfil"

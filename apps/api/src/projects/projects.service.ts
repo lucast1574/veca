@@ -1,5 +1,6 @@
 import {
   Injectable,
+  ConflictException,
   BadRequestException,
   NotFoundException,
   type MessageEvent,
@@ -32,6 +33,7 @@ export class ProjectsService {
   admin(d: ProjectDocument) {
     return {
       ...d.draft,
+      ...(d.sourceWork ? { sourceWork: d.sourceWork } : {}),
       id: String(d._id),
       slug: d.slug,
       status: d.published ? "published" : "draft",
@@ -113,13 +115,20 @@ export class ProjectsService {
     }
     return value;
   }
-  async create(input: unknown) {
+  async create(
+    input: unknown,
+    source?: Pick<
+      ProjectDocument,
+      "sourceWork" | "sourceOperationId" | "sourceOperationHash"
+    >,
+  ) {
     const value = await this.validated(input);
     const _id = new ObjectId();
     const slug =
       (slugify(value.title) || "proyecto") + "-" + String(_id).slice(-6);
     const now = new Date().toISOString();
     const d = {
+      ...source,
       _id,
       slug,
       draft: value,
@@ -128,11 +137,35 @@ export class ProjectsService {
       createdAt: now,
       updatedAt: now,
     };
-    await this.repo.collection.insertOne(d);
+    try {
+      await this.repo.collection.insertOne(d);
+    } catch (error) {
+      if (
+        (error as { code?: number }).code !== 11000 ||
+        !source?.sourceOperationId
+      )
+        throw error;
+      const previous = await this.repo.collection.findOne({
+        sourceOperationId: source.sourceOperationId,
+      });
+      if (
+        !previous ||
+        previous.sourceOperationHash !== source.sourceOperationHash
+      )
+        throw new ConflictException(
+          "Este borrador ya se preparó con otra selección de fotos. Vuelve a abrir la obra.",
+        );
+      return this.admin(previous);
+    }
     return this.admin(d);
   }
   async save(id: string, input: unknown) {
     const value = await this.validated(input);
+    const existing = await this.repo.get(id);
+    if (existing.sourceWork && value.location !== existing.sourceWork.location)
+      throw new BadRequestException(
+        "La ubicación de este proyecto viene de la obra y debe conservarse.",
+      );
     if (value.version === undefined)
       throw new BadRequestException("Falta la versión del proyecto.");
     return this.admin(

@@ -12,6 +12,7 @@ import { MediaModule } from "./media/media.module";
 import { AccountingModule } from "./accounting/accounting.module";
 import { DispatchModule } from "./dispatch/dispatch.module";
 import { CrmModule } from "./crm/crm.controller";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { PublicEndpoint, RequirePermission } from "./auth/route-access";
 import { StorageService } from "./media/storage.service";
 @Controller()
@@ -46,6 +47,7 @@ class HealthController {
     DatabaseModule,
     MailModule,
     AuthModule,
+    NotificationsModule,
     ProfileModule,
     AccessModule,
     ProjectsModule,

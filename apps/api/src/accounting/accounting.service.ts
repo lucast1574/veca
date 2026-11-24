@@ -111,11 +111,14 @@ export class AccountingService {
         name: { $not: /^\[demo\]/i },
         email: { $not: /\.invalid$/i },
       })
-      .project({ name: 1 })
+      .project({ name: 1, workName: 1 })
       .sort({ updatedAt: -1 })
       .limit(600)
       .toArray();
-    return rows.map((row) => ({ id: String(row._id), name: String(row.name) }));
+    return rows.map((row) => ({
+      id: String(row._id),
+      name: String(row.workName || row.name),
+    }));
   }
 
   private async work(id: string) {
@@ -819,7 +822,7 @@ export class AccountingService {
       .next();
     return {
       workId,
-      workName: work.name,
+      workName: work.workName || work.name,
       sales: sales?.sales || 0,
       paid: sales?.paid || 0,
       balance: sales?.balance || 0,

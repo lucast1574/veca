@@ -222,7 +222,7 @@ export function WorksWorkspace({
             {work.stageRequest?.status === "pending" && (
               <p className="hint">Avance solicitado · Por aprobar</p>
             )}
-            <h2>{work.name}</h2>
+            <h2>{work.workName || work.name}</h2>
             <p>{work.address || work.district || "Dirección por completar"}</p>
             <p>{work.workPlan || work.idea || "Alcance por completar"}</p>
             <footer>

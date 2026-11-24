@@ -56,6 +56,7 @@ import { WorkFinancials } from "../works/WorkFinancials";
 import { WorkTasksPanel } from "../works/WorkTasksPanel";
 import { SupplyRequests } from "../warehouse/SupplyRequests";
 import { WorkHandoffPanel } from "../works/WorkHandoffPanel";
+import { ProjectLocation } from "../editor/ProjectLocation";
 import { WorkStagePanel } from "../works/WorkStagePanel";
 import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
@@ -328,7 +329,9 @@ export function LeadDetail({
   const demoCase = demo
     ? DEMO_CASES.find((item) => item.name === lead.name)
     : undefined;
-  const displayName = lead.name.replace(/^\[demo\]\s*/i, "");
+  const displayName = (
+    workView ? lead.workName || lead.name : lead.name
+  ).replace(/^\[demo\]\s*/i, "");
   const request = REQUEST_TYPES.find(
     (item) => item.id === lead.requestType,
   )?.name;
@@ -405,7 +408,11 @@ export function LeadDetail({
           </div>
           <h1>{displayName}</h1>
           <p>
-            {[lead.district, request, lead.assignedTo]
+            {[
+              workView ? lead.workLocation || lead.district : lead.district,
+              request,
+              lead.assignedTo,
+            ]
               .filter(Boolean)
               .join(" · ") || LEAD_SOURCE_LABELS[lead.source]}
           </p>
@@ -483,6 +490,26 @@ export function LeadDetail({
           </li>
         ))}
       </ol>
+      {user?.permissions.includes("projects") &&
+        lead.stage === "completed" &&
+        !editing &&
+        !dirty && (
+          <section className="ops-card work-publication-entry">
+            <div>
+              <h2>Esta obra puede contar su historia</h2>
+              <p className="hint">
+                Elige sus fotos y continúa en Proyectos con el nombre y la
+                ubicación ya preparados.
+              </p>
+            </div>
+            <a
+              className="btn btn-primary"
+              href={`#projects/from-work/${lead.id}`}
+            >
+              Preparar proyecto <ArrowRight size={16} />
+            </a>
+          </section>
+        )}
       {user && !dirty && !editing && (
         <WorkStagePanel
           lead={lead}
@@ -712,6 +739,11 @@ export function LeadDetail({
               </>
             ) : (
               <>
+                {formField("workName", "Nombre de la obra")}
+                <ProjectLocation
+                  value={draft.workLocation || draft.district}
+                  onChange={(value) => patch("workLocation", value)}
+                />
                 <div className="ops-form-grid">
                   {formField(
                     "appointment",

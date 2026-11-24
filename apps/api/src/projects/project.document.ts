@@ -6,6 +6,9 @@ export interface ProjectDocument {
   slug: string;
   draft: ProjectInput;
   published: Project | null;
+  sourceWork?: Project["sourceWork"];
+  sourceOperationId?: string;
+  sourceOperationHash?: string;
   publishedVersion?: number | null;
   firstPublishedAt?: string | null;
   socialShare?: {
