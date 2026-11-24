@@ -38,6 +38,11 @@ globalThis.fetch = async (input, options = {}) => {
     return response({ configured: true });
   if (url.pathname.endsWith("/proposals") && options.method === "POST") {
     const { period, book } = JSON.parse(options.body);
+    if (period === "2026-05")
+      return new Response("<html>Servicio no disponible</html>", {
+        status: 503,
+        headers: { "Content-Type": "text/html" },
+      });
     const job = `v1.qa.${String(jobs.size)}.sire`;
     jobs.set(job, { period, book, polls: 0 });
     return response({ job, ruc, period, book, status: "pending" }, 201);

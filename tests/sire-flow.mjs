@@ -121,6 +121,13 @@ try {
     await request(emptyPath + "/" + empty.data.job);
     const emptyResult = await request(emptyPath + "/" + empty.data.job);
     assert.equal(emptyResult.data.result.count, 0);
+    const unavailable = await request(
+      root + "2026-05/reconcile/purchases/automatic",
+      "POST",
+    );
+    assert.equal(unavailable.status, 503);
+    assert.match(unavailable.data.message, /SUNAT no está disponible/);
+    assert.equal(JSON.stringify(unavailable.data).includes("<html>"), false);
     const admin = await db.collection("users").findOne({ username: "admin" });
     try {
       await db
@@ -137,7 +144,7 @@ try {
         .updateOne({ _id: admin._id }, { $set: { role: admin.role } });
     }
     console.log(
-      "PASS SIRE: conexión, compras/ventas automáticas, espera, comparación, libro/RUC, periodo vacío, sesión, CSRF y permisos.",
+      "PASS SIRE: conexión, compras/ventas automáticas, espera, comparación, libro/RUC, periodo vacío, caída del proveedor, sesión, CSRF y permisos.",
     );
   } finally {
     await db.collection("accounting_invoices").deleteOne({ _id: invoiceId });

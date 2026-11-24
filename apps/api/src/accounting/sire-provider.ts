@@ -71,6 +71,10 @@ export class SireProvider {
         "La consulta de SUNAT tardó demasiado o no está disponible. Puedes reintentar o comparar un archivo TXT.",
       );
     }
+    if (response.status >= 500)
+      throw new ServiceUnavailableException(
+        "SUNAT no está disponible en este momento. Vuelve a consultar en unos minutos o compara un archivo TXT del periodo.",
+      );
     let body: unknown;
     try {
       body = JSON.parse(bytes.toString("utf8"));
