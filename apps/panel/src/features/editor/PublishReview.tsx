@@ -5,7 +5,6 @@ import {
   Check,
   CheckCircle2,
   Globe,
-  House,
   SendHorizontal,
   Send,
 } from "lucide-react";
@@ -23,10 +22,6 @@ import {
 import { api, ApiError } from "../../lib/api";
 import { Button } from "../../components/ui";
 import { Modal } from "../../components/Modal";
-import {
-  publicationPlacementSummary,
-  type PublicationPlacement,
-} from "./PublicationPlacement";
 export function PublishReview({
   draft,
   slug,
@@ -36,8 +31,6 @@ export function PublishReview({
   updating,
   hasBeenPublished,
   saved,
-  placement,
-  onEditPlacement,
 }: {
   draft: ProjectInput;
   slug: string;
@@ -47,13 +40,8 @@ export function PublishReview({
   updating: boolean;
   hasBeenPublished: boolean;
   saved: Project | null;
-  placement?: PublicationPlacement;
-  onEditPlacement: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const placementChanges = placement
-    ? publicationPlacementSummary(placement)
-    : [];
   const issues = publicationRequirements(draft),
     cover = draft.images.find((image) => image.id === draft.coverId),
     seo = seoFor(draft, slug);
@@ -156,32 +144,6 @@ export function PublishReview({
               </li>
             </ul>
           )}
-          <section
-            className="publication-placement-review"
-            aria-label="Cambios en portada"
-          >
-            <div className="publication-placement-review-heading">
-              <House size={18} aria-hidden="true" />
-              <div>
-                <strong>Portada del sitio</strong>
-                <p>
-                  {placementChanges.length
-                    ? "Se actualizará al publicar."
-                    : "Sin cambios elegidos para la portada."}
-                </p>
-              </div>
-              <Button type="button" variant="ghost" onClick={onEditPlacement}>
-                Editar selección
-              </Button>
-            </div>
-            {placementChanges.length > 0 && (
-              <ul>
-                {placementChanges.map((description) => (
-                  <li key={description}>{description}</li>
-                ))}
-              </ul>
-            )}
-          </section>
           {saved?.socialShareQueuedAt && (
             <SocialDelivery project={saved} key={saved.version} />
           )}
@@ -216,7 +178,7 @@ export function PublishReview({
           description="La obra quedará visible en veca.com.pe. Su portada y descripción entrarán a la cola para Instagram, Facebook y LinkedIn. Puedes consultar el resultado de cada red después."
           onClose={() => setConfirming(false)}
           footer={
-            <footer className="ve-modal-actions">
+            <footer className="ve-modal-actions publication-confirm-actions">
               <Button variant="ghost" onClick={() => setConfirming(false)}>
                 Cancelar
               </Button>
@@ -233,16 +195,7 @@ export function PublishReview({
             </footer>
           }
         >
-          {placementChanges.length > 0 && (
-            <>
-              <p>La publicación también aplicará estos cambios en portada.</p>
-              <ul>
-                {placementChanges.map((location) => (
-                  <li key={location}>{location}</li>
-                ))}
-              </ul>
-            </>
-          )}
+          {null}
         </Modal>
       )}
     </section>
@@ -250,12 +203,10 @@ export function PublishReview({
 }
 export function PublishSuccess({
   project,
-  locations,
   onEdit,
   onBack,
 }: {
   project: Project;
-  locations: string[];
   onEdit: () => void;
   onBack: () => void;
 }) {
@@ -266,16 +217,6 @@ export function PublishSuccess({
       </div>
       <p>YA ES PARTE DE VECA</p>
       <h1>Tu proyecto está publicado.</h1>
-      {locations.length > 0 && (
-        <div className="publication-placement-summary">
-          <strong>Ubicación en portada actualizada</strong>
-          <ul>
-            {locations.map((location) => (
-              <li key={location}>{location}</li>
-            ))}
-          </ul>
-        </div>
-      )}
       <h2>{project.title}</h2>
       <span>
         La historia ya tiene su lugar en la web. Puedes compartirla o volver

@@ -16,7 +16,6 @@ import {
   seoFor,
   slugify,
   type Project,
-  type LandingProjectSelection,
   type ProjectInput,
   type PublicationRequirement,
   type RichNode,
@@ -24,7 +23,7 @@ import {
   type PageLayout,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
-import { api, ApiError, post } from "../../lib/api";
+import { api, post } from "../../lib/api";
 import { Button, Field, Notice, Status } from "../../components/ui";
 import { RichEditor } from "./RichEditor";
 import { ImageLibrary } from "./ImageLibrary";
@@ -32,12 +31,6 @@ import { StorySections } from "./StorySections";
 import { ProjectDesign } from "./ProjectDesign";
 import { ProjectLocation } from "./ProjectLocation";
 import { PublishReview, PublishSuccess } from "./PublishReview";
-import {
-  publicationPlacementInput,
-  publicationPlacementSummary,
-  PublicationPlacementEditor,
-  type PublicationPlacement,
-} from "./PublicationPlacement";
 import { legacySections, newSection, pruneSections } from "./sections";
 import "./editor-workflow.css";
 const toInput = (project: Project): ProjectInput => {
@@ -88,18 +81,10 @@ export function ProjectEditor({
   initial,
   onBack,
   onSaved,
-  landingSelection,
-  landingError,
-  onLandingSelection,
-  onRefreshLanding,
 }: {
   initial: Project | null;
   onBack: () => void;
   onSaved: (p: Project) => void;
-  landingSelection?: LandingProjectSelection;
-  landingError: string;
-  onLandingSelection: (selection: LandingProjectSelection) => void;
-  onRefreshLanding: () => void;
 }) {
   const [draft, setDraft] = useState<ProjectInput>(() =>
     initial
@@ -138,21 +123,11 @@ export function ProjectEditor({
     return () => cancelAnimationFrame(frame);
   }, [requirement, step]);
 
-  useEffect(() => {
-    onRefreshLanding();
-  }, [onRefreshLanding]);
-
   const [publishedResult, setPublishedResult] = useState<Project | null>(null);
-  const [placement, setPlacement] = useState<PublicationPlacement>();
-  const [appliedLocations, setAppliedLocations] = useState<string[]>([]);
   function goToStep(next: 0 | 1 | 2) {
     if (next !== 0) setRequirement(null);
     setStep(next);
     window.scrollTo({ top: 0, behavior: "instant" });
-  }
-  function editPlacement() {
-    setRequirement({ target: "project-landing-placement", message: "" });
-    goToStep(0);
   }
   function chooseLayout(layout: PageLayout) {
     setDraft((old) => ({
@@ -178,7 +153,7 @@ export function ProjectEditor({
   const ready = useCallback((fn: (image: Media, layout: string) => void) => {
     insert.current = fn;
   }, []);
-  useUnsavedChanges(dirty || Boolean(placement), busy);
+  useUnsavedChanges(dirty, busy);
   function accept(project: Project) {
     setSaved(project);
     setDraft(toInput(project));
@@ -196,23 +171,7 @@ export function ProjectEditor({
     accept(result);
     return result;
   }
-  async function savePlacement(
-    project: Project,
-    selection: PublicationPlacement,
-  ) {
-    const result = await api<LandingProjectSelection>(
-      "/admin/projects/landing",
-      {
-        method: "PUT",
-        body: JSON.stringify(publicationPlacementInput(project.id, selection)),
-        signal: AbortSignal.timeout(8_000),
-      },
-    );
-    onLandingSelection(result);
-    setAppliedLocations(publicationPlacementSummary(selection));
-    setPlacement(undefined);
-  }
-  async function action(kind: "save" | "publish" | "unpublish" | "placement") {
+  async function action(kind: "save" | "publish" | "unpublish") {
     if (
       kind === "unpublish" &&
       !confirm(
@@ -224,13 +183,6 @@ export function ProjectEditor({
     setError("");
     setNotice("");
     try {
-      if (kind === "placement") {
-        if (saved?.status === "published" && placement) {
-          await savePlacement(saved, placement);
-          setNotice("Ubicación en portada guardada.");
-        }
-        return;
-      }
       let result: Project;
       if (kind === "unpublish" && saved) {
         result = await post<Project>(`/admin/projects/${saved.id}/unpublish`, {
@@ -246,23 +198,6 @@ export function ProjectEditor({
             shareOnSocial: true,
           });
           accept(result);
-          setAppliedLocations([]);
-          if (placement) {
-            try {
-              await savePlacement(result, placement);
-            } catch (error) {
-              const conflict =
-                error instanceof ApiError && error.status === 409;
-              setPlacement(undefined);
-              onRefreshLanding();
-              setError(
-                conflict
-                  ? "El proyecto quedó publicado. La portada cambió durante la publicación. Vuelve a Contenido para revisar las ubicaciones y guardar tu selección."
-                  : "El proyecto quedó publicado. No pudimos confirmar su ubicación en portada. Vuelve a Contenido para revisar la selección actual.",
-              );
-              return;
-            }
-          } else onRefreshLanding();
           setPublishedResult(result);
           window.scrollTo({ top: 0, behavior: "instant" });
         }
@@ -275,10 +210,6 @@ export function ProjectEditor({
             : "Borrador guardado.",
       );
     } catch (e) {
-      if (kind === "placement") {
-        setPlacement(undefined);
-        onRefreshLanding();
-      }
       setError((e as Error).message);
     } finally {
       setSaving(false);
@@ -292,7 +223,6 @@ export function ProjectEditor({
     return (
       <PublishSuccess
         project={publishedResult}
-        locations={appliedLocations}
         onBack={onBack}
         onEdit={() => {
           setPublishedResult(null);
@@ -307,7 +237,7 @@ export function ProjectEditor({
           className="back-button"
           disabled={busy}
           onClick={() => {
-            if (confirmDiscard(dirty || Boolean(placement), busy)) onBack();
+            if (confirmDiscard(dirty, busy)) onBack();
           }}
         >
           <ArrowLeft size={18} />
@@ -322,13 +252,7 @@ export function ProjectEditor({
             }
           />
           <span>
-            {dirty
-              ? "Sin guardar"
-              : placement
-                ? "Cambios de portada pendientes"
-                : saved
-                  ? "Todo guardado"
-                  : "Nuevo proyecto"}
+            {dirty ? "Sin guardar" : saved ? "Todo guardado" : "Nuevo proyecto"}
           </span>
         </div>
         <div className="editor-actions">
@@ -397,8 +321,6 @@ export function ProjectEditor({
             )}
             saved={saved}
             onPublish={() => void action("publish")}
-            placement={placement}
-            onEditPlacement={editPlacement}
           />
         ) : (
           <div className="editor-columns">
@@ -440,23 +362,6 @@ export function ProjectEditor({
                   />
                 </Field>
               </section>
-              <PublicationPlacementEditor
-                selection={landingSelection}
-                error={landingError}
-                projectId={saved?.id}
-                value={placement}
-                onChange={setPlacement}
-                initiallyExpanded={
-                  requirement?.target === "project-landing-placement"
-                }
-                onApply={
-                  saved?.status === "published" &&
-                  !saved.hasUnpublishedChanges &&
-                  !dirty
-                    ? () => void action("placement")
-                    : undefined
-                }
-              />
               <section className="editor-card">
                 <ImageLibrary
                   initialPhoto={requirement?.photoId}

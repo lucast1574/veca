@@ -16,7 +16,11 @@ import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { LandingCarouselEditor } from "./LandingCarouselEditor";
 import "./landing-projects.css";
 
-import { landingBlocks as blocks } from "./PublicationPlacement";
+const blocks = [
+  { id: "quote", name: "Cotiza tu instalación" },
+  { id: "caseStudy", name: "Obra destacada" },
+  { id: "company", name: "Nosotros" },
+] as const;
 
 const sections = [
   {
