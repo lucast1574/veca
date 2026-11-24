@@ -1,3 +1,4 @@
+import { WorkTasksController } from "./work-tasks.controller";
 import { WorkHandoffController } from "./work-handoff.controller";
 import { WorkAccess } from "./work-access.service";
 import { CrmEvents } from "./crm.events";
@@ -23,7 +24,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { Readable } from "node:stream";
 import { z } from "zod";
-import { leadUpdateSchema } from "@veca/content";
+import { leadUpdateSchema, movementSchema } from "@veca/content";
 import { GalleryController } from "../gallery/gallery.controller";
 import { MobileGalleryController } from "../gallery/mobile-gallery.controller";
 import { GalleryService } from "../gallery/gallery.service";
@@ -171,8 +172,8 @@ class CrmController {
   material(@Param("id") id: string) {
     return this.inventory.detail(id);
   }
-  @RequirePermission("inventory")
   @Post("materials")
+  @RequirePermission("inventory_catalog", "inventory")
   createMaterial(@Body() body: unknown) {
     return this.inventory.create(body);
   }
@@ -195,7 +196,16 @@ class CrmController {
     @Body() body: unknown,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.inventory.move(id, body, req.session.user.username);
+    const data = parse(movementSchema, body);
+    const permission =
+      data.kind === "receipt"
+        ? "inventory_receive"
+        : data.kind === "return"
+          ? "inventory_receive"
+          : "works_manage";
+    if (!req.session.user.permissions.includes(permission))
+      throw new ForbiddenException();
+    return this.inventory.move(id, data, req.session.user.username);
   }
 }
 @Module({
@@ -205,10 +215,11 @@ class CrmController {
     CrmController,
     WorksController,
     WorkHandoffController,
+    WorkTasksController,
     GalleryController,
     MobileGalleryController,
   ],
-  exports: [CrmRepository, CrmService, InventoryService],
+  exports: [CrmRepository, CrmService, InventoryService, WorkAccess, CrmEvents],
   providers: [
     CrmRepository,
     CrmService,

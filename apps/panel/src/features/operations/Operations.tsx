@@ -72,6 +72,7 @@ export function Operations({
   if (view === "inventory")
     return (
       <InventoryWorkspace
+        user={user}
         tab={route.inventoryTab}
         selected={route.inventoryRecord}
         workId={route.workId}

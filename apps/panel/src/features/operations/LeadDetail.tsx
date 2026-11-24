@@ -51,6 +51,8 @@ import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
 import { WorkSupply } from "../warehouse/WorkSupply";
+import { WorkTasksPanel } from "../works/WorkTasksPanel";
+import { SupplyRequests } from "../warehouse/SupplyRequests";
 import { WorkHandoffPanel } from "../works/WorkHandoffPanel";
 import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
@@ -288,6 +290,12 @@ export function LeadDetail({
   const tabs = [
     ["overview", "Resumen"],
     ["work", "Obra"],
+    ...(workView
+      ? [
+          ["tasks", "Pendientes"],
+          ["supplies", "Solicitudes"],
+        ]
+      : []),
     ["files", "Archivos"],
     ["materials", "Materiales"],
     ["history", "Historial"],
@@ -778,6 +786,7 @@ export function LeadDetail({
           <LeadDispatches
             lead={lead}
             inventoryAccess={inventoryAccess}
+            canDepart={!!user?.permissions.includes("inventory_dispatch")}
             dispatchId={dispatchId}
           />
         </div>
@@ -786,7 +795,11 @@ export function LeadDetail({
         <>
           {!demo &&
             ["coordination", "execution", "completed"].includes(lead.stage) && (
-              <WorkSupply id={lead.id} />
+              <WorkSupply
+                id={lead.id}
+                canManage={!!user?.permissions.includes("works_manage")}
+                canRequest={!!user?.permissions.includes("inventory_request")}
+              />
             )}
           <section className="ops-card">
             <div className="ops-card-heading">
@@ -800,7 +813,8 @@ export function LeadDetail({
               <Button
                 disabled={
                   !["execution", "completed"].includes(lead.stage) ||
-                  !materials.length
+                  !materials.length ||
+                  !user?.permissions.includes("works_manage")
                 }
                 onClick={() => setMovement(true)}
               >
@@ -820,6 +834,7 @@ export function LeadDetail({
           </section>
           {movement && (
             <MaterialMovement
+              canReturn={!!user?.permissions.includes("inventory_receive")}
               materials={materials}
               leadId={id}
               onCancel={() => setMovement(false)}
@@ -836,6 +851,10 @@ export function LeadDetail({
           )}
         </>
       )}
+      {tab === "tasks" && user && (
+        <WorkTasksPanel id={id} user={user} onSaved={() => void refresh()} />
+      )}
+      {tab === "supplies" && user && <SupplyRequests workId={id} user={user} />}
       {tab === "history" && (
         <section className="ops-card">
           <h2>{workView ? "Avances e historial" : "Historial de atención"}</h2>

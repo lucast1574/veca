@@ -17,10 +17,12 @@ import "./dispatch.css";
 export function LeadDispatches({
   lead,
   inventoryAccess,
+  canDepart = false,
   dispatchId,
 }: {
   lead: Lead;
   inventoryAccess: boolean;
+  canDepart?: boolean;
   dispatchId?: string;
 }) {
   const path = `/admin/crm/leads/${lead.id}/dispatches`;
@@ -177,7 +179,7 @@ export function LeadDispatches({
                     Salida confirmada
                   </span>
                 )}
-                {inventoryAccess &&
+                {canDepart &&
                   !row.demo &&
                   !row.departedAt &&
                   ["accepted", "observed"].includes(row.status) && (

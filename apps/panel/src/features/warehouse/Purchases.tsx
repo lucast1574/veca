@@ -40,10 +40,14 @@ export function Purchases({
   selected,
   workId = "",
   accountingAccess = false,
+  canManage = false,
+  canReceive = false,
 }: {
   selected?: string;
   workId?: string;
   accountingAccess?: boolean;
+  canManage?: boolean;
+  canReceive?: boolean;
 }) {
   const [create, setCreate] = useState(false);
   const [requesting, setRequesting] = useState(Boolean(workId));
@@ -69,6 +73,8 @@ export function Purchases({
             row={query.data}
             refresh={query.refresh}
             accountingAccess={accountingAccess}
+            canManage={canManage}
+            canReceive={canReceive}
           />
         )}
       </QueryState>
@@ -79,9 +85,11 @@ export function Purchases({
         <h2 id="purchase-heading">Compras de materiales</h2>
         <div className="accounting-tools">
           <Refresh loading={list.loading} onClick={list.refresh} />
-          <Button type="button" onClick={() => setCreate(true)}>
-            <Plus size={16} /> Nueva compra
-          </Button>
+          {canManage && (
+            <Button type="button" onClick={() => setCreate(true)}>
+              <Plus size={16} /> Nueva compra
+            </Button>
+          )}
         </div>
       </header>
       <p className="hint">
@@ -472,10 +480,14 @@ function PurchaseDetail({
   row,
   refresh,
   accountingAccess,
+  canManage,
+  canReceive,
 }: {
   row: Purchase;
   refresh: () => void;
   accountingAccess: boolean;
+  canManage: boolean;
+  canReceive: boolean;
 }) {
   const [receiving, setReceiving] = useState<{
     item: Item;
@@ -502,7 +514,7 @@ function PurchaseDetail({
         </div>
         <div className="accounting-tools">
           <span className="ops-stock-status">{purchaseStatus[row.status]}</span>
-          {row.status === "requested" && (
+          {canManage && row.status === "requested" && (
             <Button type="button" onClick={() => setOrdering(true)}>
               Registrar compra
             </Button>
@@ -553,7 +565,8 @@ function PurchaseDetail({
                   )}
                 </small>
               </div>
-              {row.status !== "cancelled" &&
+              {canReceive &&
+                row.status !== "cancelled" &&
                 item.received + 0.0001 < item.ordered && (
                   <Button
                     type="button"
@@ -598,11 +611,13 @@ function PurchaseDetail({
           </ul>
         </section>
       )}
-      {["open", "requested"].includes(row.status) && !row.receipts.length && (
-        <Button type="button" variant="ghost" onClick={() => setCancel(true)}>
-          Cancelar compra
-        </Button>
-      )}
+      {canManage &&
+        ["open", "requested"].includes(row.status) &&
+        !row.receipts.length && (
+          <Button type="button" variant="ghost" onClick={() => setCancel(true)}>
+            Cancelar compra
+          </Button>
+        )}
       {ordering && (
         <PurchaseForm
           materials={[]}

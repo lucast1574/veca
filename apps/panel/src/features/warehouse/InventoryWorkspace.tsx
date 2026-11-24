@@ -1,9 +1,13 @@
+import type { SessionUser } from "@veca/content";
+import { SupplyRequests } from "./SupplyRequests";
 import { Inventory } from "../operations/Inventory";
 import { EquipmentList } from "./Equipment";
 import { Purchases } from "./Purchases";
+import "../accounting/accounting.css";
 import "./warehouse.css";
 
 const sections = [
+  ["solicitudes", "Solicitudes"],
   ["materiales", "Materiales"],
   ["compras", "Compras"],
   ["equipos", "Equipos"],
@@ -14,13 +18,17 @@ export function InventoryWorkspace({
   selected,
   workId,
   accountingAccess = false,
+  user,
 }: {
   tab?: string;
   selected?: string;
   workId?: string;
   accountingAccess?: boolean;
+  user?: SessionUser;
 }) {
-  const active = sections.some(([value]) => value === tab) ? tab : "materiales";
+  const active = sections.some(([value]) => value === tab)
+    ? tab
+    : "solicitudes";
   return (
     <div className="ops-page inventory-workspace">
       <header className="accounting-title">
@@ -37,19 +45,32 @@ export function InventoryWorkspace({
           </a>
         ))}
       </nav>
+      {active === "solicitudes" && user && <SupplyRequests user={user} />}
       {active === "materiales" && (
-        <Inventory key={selected || "catalog"} materialId={selected} />
+        <Inventory
+          canCatalog={!!user?.permissions.includes("inventory_catalog")}
+          canAdjust={!!user?.permissions.includes("inventory_adjust")}
+          canReceive={!!user?.permissions.includes("inventory_receive")}
+          key={selected || "catalog"}
+          materialId={selected}
+        />
       )}
       {active === "compras" && (
         <Purchases
           key={selected || "list"}
           accountingAccess={accountingAccess}
+          canManage={!!user?.permissions.includes("purchases_manage")}
+          canReceive={!!user?.permissions.includes("inventory_receive")}
           selected={selected === "nueva" ? undefined : selected}
           workId={selected === "nueva" ? workId : ""}
         />
       )}
       {active === "equipos" && (
-        <EquipmentList key={selected || "list"} selected={selected} />
+        <EquipmentList
+          canManage={!!user?.permissions.includes("inventory_equipment")}
+          key={selected || "list"}
+          selected={selected}
+        />
       )}
     </div>
   );

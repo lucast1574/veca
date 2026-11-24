@@ -276,6 +276,14 @@ export class CrmService {
       throw new ConflictException(
         "El coordinador debe aceptar la entrega antes de iniciar la obra.",
       );
+    if (
+      changed &&
+      data.stage === "completed" &&
+      old.workTasks?.some((task) => task.status !== "done")
+    )
+      throw new ConflictException(
+        "Completa los pendientes antes de confirmar el cierre.",
+      );
     const { version, ...set } = data;
     const at = new Date().toISOString();
     const saved = await this.repository.change(

@@ -94,7 +94,7 @@ class LeadDispatchController {
     );
   }
 
-  @RequirePermission("inventory")
+  @RequirePermission("inventory_dispatch", "inventory")
   @Post(":id/depart")
   depart(
     @Param("leadId") leadId: string,
@@ -213,5 +213,6 @@ class AccountingGuideController {
     DemoController,
   ],
   providers: [DispatchService, GuideProvider, DemoService, DemoInvoiceService],
+  exports: [DispatchService],
 })
 export class DispatchModule {}

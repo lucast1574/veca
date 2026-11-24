@@ -29,11 +29,13 @@ export function MaterialMovement({
   onSaved,
   onCancel,
   initialMaterial = "",
+  canReturn = false,
 }: {
   materials: Material[];
   leadId: string | null;
   onSaved: (movement: Movement) => void;
   initialMaterial?: string;
+  canReturn?: boolean;
   onCancel: () => void;
 }) {
   const [material, setMaterial] = useState(initialMaterial),
@@ -104,7 +106,7 @@ export function MaterialMovement({
             options={materials.map((m) => ({
               value: m.id,
               label: m.name,
-              description: `${m.sku} · Disponible: ${amount(m.balance)} ${unitName(m.unit)}`,
+              description: `${m.sku} · Disponible: ${amount(m.available ?? m.balance)} ${unitName(m.unit)}`,
             }))}
           />
         </Field>
@@ -123,11 +125,15 @@ export function MaterialMovement({
                   label: "Consumo en obra",
                   description: "Descontar del inventario",
                 },
-                {
-                  value: "return",
-                  label: "Devolución de obra",
-                  description: "Reintegrar material al inventario",
-                },
+                ...(canReturn
+                  ? [
+                      {
+                        value: "return",
+                        label: "Devolución de obra",
+                        description: "Reintegrar material al inventario",
+                      },
+                    ]
+                  : []),
               ]}
             />
           </Field>
@@ -167,7 +173,17 @@ export function MaterialMovement({
     </form>
   );
 }
-export function Inventory({ materialId }: { materialId?: string }) {
+export function Inventory({
+  materialId,
+  canCatalog = false,
+  canAdjust = false,
+  canReceive = false,
+}: {
+  materialId?: string;
+  canCatalog?: boolean;
+  canAdjust?: boolean;
+  canReceive?: boolean;
+}) {
   const [importing, setImporting] = useState(false);
   const [count, setCount] = useState<Material>();
   const [message, setMessage] = useState("");
@@ -239,9 +255,12 @@ export function Inventory({ materialId }: { materialId?: string }) {
           <h2>{selected.data?.name || "Materiales"}</h2>
         </div>
         <div className="ops-heading-actions">
-          <ImportCatalogButton onClick={() => setImporting(true)} />
+          {canCatalog && (
+            <ImportCatalogButton onClick={() => setImporting(true)} />
+          )}
           <Button
             variant="ghost"
+            disabled={!canCatalog}
             onClick={() => {
               if (!create || confirmDiscard(createDirty, busy)) {
                 setCreate(!create);
@@ -270,12 +289,17 @@ export function Inventory({ materialId }: { materialId?: string }) {
           <div>
             <span>Por reponer</span>
             <strong>
-              {items.filter((m) => m.balance <= m.minimum).length}
+              {
+                items.filter((m) => (m.available ?? m.balance) <= m.minimum)
+                  .length
+              }
             </strong>
           </div>
           <div>
             <span>Sin existencias</span>
-            <strong>{items.filter((m) => m.balance === 0).length}</strong>
+            <strong>
+              {items.filter((m) => (m.available ?? m.balance) === 0).length}
+            </strong>
           </div>
         </div>
       )}
@@ -465,16 +489,21 @@ export function Inventory({ materialId }: { materialId?: string }) {
                   <td>{m.category}</td>
                   <td>{m.location || "Sin ubicación"}</td>
                   <td>
-                    <strong>{amount(m.balance)}</strong> {unitName(m.unit)}
+                    <strong>{amount(m.available ?? m.balance)}</strong>{" "}
+                    {unitName(m.unit)}
+                    <small>
+                      En almacén {amount(m.balance)} · Reservado{" "}
+                      {amount(m.reserved || 0)}
+                    </small>
                   </td>
                   <td>{amount(m.minimum)}</td>
                   <td>
                     <span
-                      className={`ops-stock-status ${m.balance <= m.minimum ? "low" : ""}`}
+                      className={`ops-stock-status ${(m.available ?? m.balance) <= m.minimum ? "low" : ""}`}
                     >
-                      {m.balance === 0
+                      {(m.available ?? m.balance) === 0
                         ? "Sin stock"
-                        : m.balance <= m.minimum
+                        : (m.available ?? m.balance) <= m.minimum
                           ? "Reponer"
                           : "Disponible"}
                     </span>
@@ -483,6 +512,7 @@ export function Inventory({ materialId }: { materialId?: string }) {
                     <Button
                       type="button"
                       variant="ghost"
+                      disabled={!canAdjust}
                       onClick={() => setCount(m)}
                       aria-label={`Contar ${m.name}`}
                     >
@@ -492,6 +522,7 @@ export function Inventory({ materialId }: { materialId?: string }) {
                       type="button"
                       variant="ghost"
                       aria-label={`Registrar entrada de ${m.name}`}
+                      disabled={!canReceive}
                       onClick={() => setMovement(m.id)}
                     >
                       Entrada

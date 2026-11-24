@@ -180,4 +180,77 @@ export async function migrateAccess(db: Db) {
       { upsert: true },
     );
   }
+  if (!(await migrations.findOne({ name: "warehouse-actions-v1" }))) {
+    const roles = db.collection("roles");
+    await roles.updateMany(
+      { id: { $in: ["admin", "management"] }, permissions: "inventory" },
+      {
+        $addToSet: {
+          permissions: {
+            $each: [
+              "inventory_request",
+              "inventory_reserve",
+              "inventory_receive",
+              "inventory_dispatch",
+              "inventory_adjust",
+              "inventory_catalog",
+              "inventory_equipment",
+              "purchases_manage",
+            ],
+          },
+        },
+        $inc: { revision: 1 },
+      },
+    );
+    await roles.updateMany(
+      { id: "warehouse", permissions: "inventory" },
+      {
+        $addToSet: {
+          permissions: {
+            $each: [
+              "inventory_request",
+              "inventory_reserve",
+              "inventory_receive",
+              "inventory_dispatch",
+              "inventory_catalog",
+              "inventory_equipment",
+            ],
+          },
+        },
+        $inc: { revision: 1 },
+      },
+    );
+    await roles.updateMany(
+      { permissions: "works_manage" },
+      {
+        $addToSet: { permissions: "inventory_request" },
+        $inc: { revision: 1 },
+      },
+    );
+    await roles.updateOne(
+      { id: "purchasing" },
+      {
+        $setOnInsert: {
+          id: "purchasing",
+          name: "Compras",
+          description: "Gestiona solicitudes y autoriza compras de materiales.",
+          permissions: [
+            "dashboard",
+            "inventory",
+            "works",
+            "works_all",
+            "inventory_request",
+            "purchases_manage",
+          ],
+          revision: 1,
+        },
+      },
+      { upsert: true },
+    );
+    await migrations.updateOne(
+      { name: "warehouse-actions-v1" },
+      { $setOnInsert: { completedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

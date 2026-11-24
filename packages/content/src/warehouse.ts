@@ -118,6 +118,7 @@ export const equipmentAction = z.discriminatedUnion("action", [
       version: recordRevision,
       workId: accountingId,
       responsible: detail(100),
+      expectedReturn: z.iso.date().optional(),
       note: z.string().trim().max(500),
     })
     .strict(),
@@ -146,6 +147,7 @@ export type Equipment = z.infer<typeof equipmentInput> & {
     workId: string;
     workName: string;
     responsible: string;
+    expectedReturn?: string;
     at: string;
   } | null;
   events: {
@@ -156,6 +158,7 @@ export type Equipment = z.infer<typeof equipmentInput> & {
     workId?: string;
     workName?: string;
     responsible?: string;
+    expectedReturn?: string;
     location?: string;
     condition?: Equipment["condition"];
   }[];

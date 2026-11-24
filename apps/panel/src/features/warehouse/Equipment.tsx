@@ -31,7 +31,13 @@ const actions = {
   condition: "Actualización",
 };
 
-export function EquipmentList({ selected }: { selected?: string }) {
+export function EquipmentList({
+  selected,
+  canManage = false,
+}: {
+  selected?: string;
+  canManage?: boolean;
+}) {
   const [create, setCreate] = useState(false);
   const [search, setSearch] = useState("");
   const list = useAccountingQuery<Equipment[]>(selected ? "" : path);
@@ -42,7 +48,11 @@ export function EquipmentList({ selected }: { selected?: string }) {
     return (
       <QueryState {...detail}>
         {detail.data && (
-          <EquipmentDetail row={detail.data} refresh={detail.refresh} />
+          <EquipmentDetail
+            row={detail.data}
+            refresh={detail.refresh}
+            canManage={canManage}
+          />
         )}
       </QueryState>
     );
@@ -58,7 +68,11 @@ export function EquipmentList({ selected }: { selected?: string }) {
         <h2>Equipos y herramientas</h2>
         <div className="accounting-tools">
           <Refresh loading={list.loading} onClick={list.refresh} />
-          <Button type="button" onClick={() => setCreate(true)}>
+          <Button
+            type="button"
+            disabled={!canManage}
+            onClick={() => setCreate(true)}
+          >
             <Plus size={16} /> Nuevo equipo
           </Button>
         </div>
@@ -166,9 +180,11 @@ function NewEquipment({
 function EquipmentDetail({
   row,
   refresh,
+  canManage,
 }: {
   row: Equipment;
   refresh: () => void;
+  canManage: boolean;
 }) {
   const [action, setAction] = useState<keyof typeof actions>();
   return (
@@ -184,23 +200,24 @@ function EquipmentDetail({
           </p>
         </div>
         <div className="accounting-tools">
-          {row.assignment ? (
-            <Button onClick={() => setAction("return")}>
-              Registrar devolución
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" onClick={() => setAction("condition")}>
-                Actualizar estado
+          {canManage &&
+            (row.assignment ? (
+              <Button onClick={() => setAction("return")}>
+                Registrar devolución
               </Button>
-              <Button
-                disabled={row.condition !== "good"}
-                onClick={() => setAction("assign")}
-              >
-                Asignar a obra
-              </Button>
-            </>
-          )}
+            ) : (
+              <>
+                <Button variant="ghost" onClick={() => setAction("condition")}>
+                  Actualizar estado
+                </Button>
+                <Button
+                  disabled={row.condition !== "good"}
+                  onClick={() => setAction("assign")}
+                >
+                  Asignar a obra
+                </Button>
+              </>
+            ))}
         </div>
       </header>
       <div className="warehouse-preview">
@@ -213,6 +230,12 @@ function EquipmentDetail({
             : "Ubicación registrada"}
         </p>
       </div>
+      {row.assignment?.expectedReturn && (
+        <p className="hint">
+          Devolución prevista ·{" "}
+          {row.assignment.expectedReturn.split("-").reverse().join("/")}
+        </p>
+      )}
       <h3>Historial</h3>
       {row.events.length ? (
         <ul className="warehouse-list">
@@ -292,7 +315,11 @@ function EquipmentAction({
           version: row.version,
           note: stringField(form, "note"),
           ...(action === "assign"
-            ? { workId: work, responsible: stringField(form, "responsible") }
+            ? {
+                workId: work,
+                responsible: stringField(form, "responsible"),
+                expectedReturn: stringField(form, "expectedReturn"),
+              }
             : { location: stringField(form, "location"), condition }),
         });
         done();
@@ -308,6 +335,9 @@ function EquipmentAction({
           />
           <Field label="Responsable">
             <input name="responsible" maxLength={100} required />
+          </Field>
+          <Field label="Devolución prevista">
+            <input type="date" name="expectedReturn" required />
           </Field>
         </>
       ) : (

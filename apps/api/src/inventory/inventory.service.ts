@@ -23,12 +23,14 @@ type StoredMovement = Movement & {
   _id: string;
   fingerprint: string;
   returnedUse?: number;
+  reservationKey?: string;
 };
 type Stock = { quantity: number; valued: number; cents: number };
 type StockOrigin = {
   unitCents?: number;
   purchaseId?: string;
   dispatchId?: string;
+  reservationKey?: string;
   count?: { version: number; counted: number };
 };
 const emptyStock: Stock = { quantity: 0, valued: 0, cents: 0 };
@@ -66,6 +68,8 @@ type MaterialDocument = Omit<
   "id" | "balance" | "minimum" | "unitCostCents"
 > & {
   _id: ObjectId;
+  reservations?: Record<string, { workId: string; quantity: number }>;
+  reservationRevisions?: Record<string, number>;
   balanceMilli: number;
   minimumMilli: number;
   pending: StoredMovement[];
@@ -109,12 +113,26 @@ export class InventoryService
       pending,
       stockValue,
       workStock,
+      reservations,
+      reservationRevisions,
       ...rest
     } = doc;
     return {
       ...rest,
       id: String(_id),
       balance: balanceMilli / 1000,
+      reserved:
+        Object.values(reservations || {}).reduce(
+          (sum, row) => sum + row.quantity,
+          0,
+        ) / 1000,
+      available:
+        (balanceMilli -
+          Object.values(reservations || {}).reduce(
+            (sum, row) => sum + row.quantity,
+            0,
+          )) /
+        1000,
       minimum: minimumMilli / 1000,
       unitCostCents:
         balanceMilli > 0 && stockValue?.valued === balanceMilli
@@ -122,6 +140,52 @@ export class InventoryService
           : undefined,
     };
   }
+  async reserve(
+    materialId: string,
+    key: string,
+    workId: string,
+    quantity: number,
+    revision: number,
+  ) {
+    const id = this.id(materialId);
+    const target = Math.round(quantity * 1000);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const doc = await this.materials.findOne({ _id: id });
+      if (!doc) throw new NotFoundException("Material no encontrado.");
+      // Retain the revision after release so a delayed retry cannot recreate
+      // a reservation already delivered or cancelled by a later operation.
+      if ((doc.reservationRevisions?.[key] || 0) >= revision) return;
+      const reservations = { ...doc.reservations };
+      const previous = reservations[key]?.quantity || 0;
+      if (reservations[key] && reservations[key].workId !== workId)
+        throw new ConflictException();
+      const reserved = Object.values(reservations).reduce(
+        (sum, row) => sum + row.quantity,
+        0,
+      );
+      if (doc.balanceMilli - reserved + previous < target)
+        throw new ConflictException(
+          "No hay existencias disponibles para esa reserva.",
+        );
+      if (target) reservations[key] = { workId, quantity: target };
+      else delete reservations[key];
+      const changed = await this.materials.updateOne(
+        { _id: id, version: doc.version },
+        {
+          $set: { reservations, [`reservationRevisions.${key}`]: revision },
+          $inc: { version: 1 },
+        },
+      );
+      if (changed.modifiedCount) {
+        this.events.emit("inventory");
+        return;
+      }
+    }
+    throw new ConflictException(
+      "Las existencias cambiaron. Revisa la reserva.",
+    );
+  }
+
   /** Stock and its pending audit event commit together in one MongoDB document.
    * The outbox is drained idempotently to the append-only ledger. A crash between
    * writes cannot lose a movement or apply its stock change a second time. */
@@ -328,10 +392,30 @@ export class InventoryService
     let consumed = emptyStock;
     let kind: Movement["kind"] = data.kind;
     let reportedQuantity = milli;
+    const reservations = { ...doc.reservations };
+    const reserved = Object.values(reservations).reduce(
+      (sum, row) => sum + row.quantity,
+      0,
+    );
+    const own = origin.reservationKey
+      ? reservations[origin.reservationKey]
+      : undefined;
+    if (
+      origin.reservationKey &&
+      (!own || own.workId !== workId || own.quantity < milli)
+    )
+      throw new ConflictException(
+        "La reserva de esta solicitud ya no cubre la salida.",
+      );
+    const available = warehouse.quantity - reserved + (own?.quantity || 0);
 
     if (origin.count) {
       kind = "count";
       const counted = Math.round(origin.count.counted * 1000);
+      if (counted < reserved)
+        throw new ConflictException(
+          "Libera las reservas antes de ajustar por debajo de lo comprometido.",
+        );
       reportedQuantity = Math.abs(counted - warehouse.quantity);
       if (counted < warehouse.quantity)
         warehouse = withdraw(warehouse, warehouse.quantity - counted).remaining;
@@ -348,7 +432,7 @@ export class InventoryService
       }
     } else if (origin.dispatchId || data.kind === "consumption") {
       const fromWork = origin.dispatchId ? 0 : Math.min(held.quantity, milli);
-      if (warehouse.quantity < milli - fromWork)
+      if (available < milli - fromWork)
         throw new ConflictException("Stock insuficiente para este movimiento.");
       const workWithdrawal = withdraw(held, fromWork);
       const warehouseWithdrawal = withdraw(warehouse, milli - fromWork);
@@ -356,6 +440,15 @@ export class InventoryService
       warehouse = warehouseWithdrawal.remaining;
       measured = combine(workWithdrawal.taken, warehouseWithdrawal.taken);
       if (origin.dispatchId) {
+        if (origin.reservationKey && own) {
+          if (own.quantity === milli)
+            delete reservations[origin.reservationKey];
+          else
+            reservations[origin.reservationKey] = {
+              ...own,
+              quantity: own.quantity - milli,
+            };
+        }
         kind = "dispatch";
         held = combine(held, measured);
       } else {
@@ -487,6 +580,9 @@ export class InventoryService
       unvaluedQuantity: (consumed.quantity - consumed.valued) / 1000,
       valuedQuantity: consumed.valued / 1000,
       ...(origin.purchaseId ? { purchaseId: origin.purchaseId } : {}),
+      ...(origin.reservationKey
+        ? { reservationKey: origin.reservationKey }
+        : {}),
       ...(origin.dispatchId ? { dispatchId: origin.dispatchId } : {}),
       ...(origin.count
         ? {
@@ -504,6 +600,7 @@ export class InventoryService
           balanceMilli: warehouse.quantity,
           stockValue: { valued: warehouse.valued, cents: warehouse.cents },
           workStock,
+          reservations,
           updatedAt: event.at,
         },
         $push: { pending: event },

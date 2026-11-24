@@ -15,6 +15,12 @@ import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
 import { CrmModule } from "../crm/crm.controller";
 import { InventoryService } from "./inventory.service";
+import { SupplyRequests } from "./supply-requests.service";
+import {
+  SupplyRequestsController,
+  WorkSupplyRequestsController,
+} from "./supply-requests.controller";
+import { DispatchModule } from "../dispatch/dispatch.module";
 import { WarehouseService } from "./warehouse.service";
 
 @RequirePermission("inventory")
@@ -26,16 +32,19 @@ class WarehouseController {
   ) {}
 
   @Post("materials/import/preview")
+  @RequirePermission("inventory_catalog", "inventory")
   previewMaterials(@Body() raw: unknown) {
     return this.inventory.previewImport(raw);
   }
 
   @Post("materials/import")
+  @RequirePermission("inventory_catalog", "inventory")
   importMaterials(@Body() raw: unknown) {
     return this.inventory.importMaterials(raw);
   }
 
   @Post("materials/:id/count")
+  @RequirePermission("inventory_adjust", "inventory")
   count(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -55,6 +64,7 @@ class WarehouseController {
   }
 
   @Put("works/:id")
+  @RequirePermission("works_manage", "inventory")
   plan(@Param("id") id: string, @Body() raw: unknown) {
     return this.warehouse.savePlan(id, raw);
   }
@@ -83,16 +93,19 @@ class WarehouseController {
   }
 
   @Post("purchases")
+  @RequirePermission("purchases_manage", "inventory")
   createPurchase(@Body() raw: unknown, @Req() req: AuthenticatedRequest) {
     return this.warehouse.createPurchase(raw, req.session.user.username);
   }
 
   @Post("purchase-requests")
+  @RequirePermission("inventory_request", "inventory")
   requestPurchase(@Body() raw: unknown, @Req() req: AuthenticatedRequest) {
     return this.warehouse.requestPurchase(raw, req.session.user.username);
   }
 
   @Put("purchases/:id/order")
+  @RequirePermission("purchases_manage", "inventory")
   orderPurchase(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -102,6 +115,7 @@ class WarehouseController {
   }
 
   @Post("purchases/:id/receive")
+  @RequirePermission("inventory_receive", "inventory")
   receive(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -111,6 +125,7 @@ class WarehouseController {
   }
 
   @Post("purchases/:id/cancel")
+  @RequirePermission("purchases_manage", "inventory")
   cancel(@Param("id") id: string) {
     return this.warehouse.cancelPurchase(id);
   }
@@ -126,11 +141,13 @@ class WarehouseController {
   }
 
   @Post("equipment")
+  @RequirePermission("inventory_equipment", "inventory")
   createEquipment(@Body() raw: unknown) {
     return this.warehouse.createEquipment(raw);
   }
 
   @Post("equipment/:id")
+  @RequirePermission("inventory_equipment", "inventory")
   equipmentAction(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -141,9 +158,13 @@ class WarehouseController {
 }
 
 @Module({
-  imports: [CrmModule],
-  controllers: [WarehouseController],
-  providers: [WarehouseService],
+  imports: [CrmModule, DispatchModule],
+  controllers: [
+    WarehouseController,
+    SupplyRequestsController,
+    WorkSupplyRequestsController,
+  ],
+  providers: [WarehouseService, SupplyRequests],
   exports: [WarehouseService],
 })
 export class WarehouseModule {}

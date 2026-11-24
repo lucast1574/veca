@@ -534,6 +534,9 @@ export class WarehouseService {
         workId: String(work._id),
         workName: work.name,
         responsible: input.responsible,
+        ...(input.expectedReturn
+          ? { expectedReturn: input.expectedReturn }
+          : {}),
         at,
       };
       update = { assignment, condition: row.condition, location: row.location };

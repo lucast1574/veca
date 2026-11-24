@@ -46,6 +46,7 @@ type DispatchRecord = {
   externalId?: string;
   attemptKey?: string;
   departedAt?: string;
+  departureSource?: string;
   createdAt: string;
   updatedAt: string;
   events: { action: string; actor: string; at: string }[];
@@ -608,13 +609,48 @@ export class DispatchService {
     }));
   }
 
-  async depart(leadId: string, id: string, actor: string) {
+  async depart(
+    leadId: string,
+    id: string,
+    actor: string,
+    reservationKey?: string,
+  ) {
     const row = await this.get(id, leadId);
     if (row.demo || !accepted.includes(row.status))
       throw new ConflictException(
         "Confirma la salida con una guía emitida para una obra real.",
       );
-    if (row.departedAt) return view(row);
+    // A guide has one permanent departure route. Claiming it atomically keeps a
+    // direct departure and a reserved delivery from racing on the same ledger IDs.
+    const source = reservationKey || "direct";
+    const claimed = await this.collection.findOneAndUpdate(
+      {
+        _id: row._id,
+        $or: [
+          { departureSource: { $exists: false } },
+          { departureSource: source },
+        ],
+      },
+      { $set: { departureSource: source } },
+      { returnDocument: "after" },
+    );
+    if (!claimed)
+      throw new ConflictException(
+        "Confirma esta salida desde el recorrido donde se inició.",
+      );
+    if (row.departedAt) {
+      if (
+        reservationKey &&
+        !(await this.inventory.ledger.findOne({
+          dispatchId: id,
+          reservationKey,
+        }))
+      )
+        throw new ConflictException(
+          "La guía ya salió por otro recorrido. Revisa la entrega.",
+        );
+      return view(row);
+    }
     const stockLines = await this.stockLines(row.data.items);
     const lines = stockLines.map(({ materialId, quantity }) => {
       const hash = createHash("sha256")
@@ -651,7 +687,10 @@ export class DispatchService {
           reason: `Salida con guía ${row.guideNumber}`,
         },
         actor,
-        { dispatchId: String(row._id) },
+        {
+          dispatchId: String(row._id),
+          ...(reservationKey ? { reservationKey } : {}),
+        },
       );
     }
     const at = new Date().toISOString();

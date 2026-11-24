@@ -29,3 +29,38 @@ export const workHandoffSchema = workTeamSchema
   .strict();
 export type WorkTeam = z.infer<typeof workTeamSchema>;
 export type WorkPerson = { id: string; name: string; canCoordinate: boolean };
+export const workTaskInput = z
+  .object({
+    id: z.uuid(),
+    version: z.number().int().positive(),
+    title: z.string().trim().min(3).max(160),
+    assignedTo: personId,
+    dueDate: z.iso.date(),
+  })
+  .strict();
+export const workTaskState = z
+  .object({
+    assignedTo: personId.optional(),
+    version: z.number().int().positive(),
+    status: z.enum(["pending", "in_progress", "blocked", "done"]),
+    observation: z.string().trim().max(1000).default(""),
+  })
+  .strict()
+  .refine(
+    (data) => data.status !== "blocked" || data.observation.length >= 5,
+    "Explica qué impide continuar.",
+  );
+export type WorkTask = Omit<z.infer<typeof workTaskInput>, "version"> & {
+  assignedName: string;
+  status: "pending" | "in_progress" | "blocked" | "done";
+  observation: string;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export const workTaskStatusLabels: Record<WorkTask["status"], string> = {
+  pending: "Pendiente",
+  in_progress: "En curso",
+  blocked: "Bloqueado",
+  done: "Terminado",
+};

@@ -30,7 +30,9 @@ export class AdminGuard extends SessionGuard {
     ]);
     if (
       access?.kind !== "permission" ||
-      !user.permissions.includes(access.permission)
+      ![access.permission, ...(access.additional || [])].every((permission) =>
+        user.permissions.includes(permission),
+      )
     )
       throw new ForbiddenException("Tu rol no permite acceder a esta sección.");
     return true;

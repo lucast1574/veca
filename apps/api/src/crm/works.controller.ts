@@ -94,13 +94,13 @@ export class WorksController {
   }
 
   @Get("people")
-  @RequirePermission("works_manage")
+  @RequirePermission("works_manage", "works")
   people() {
     return this.access.people();
   }
 
   @Put(":id/team")
-  @RequirePermission("works_manage")
+  @RequirePermission("works_manage", "works")
   assign(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -116,7 +116,7 @@ export class WorksController {
   }
 
   @Post(":id/handoff")
-  @RequirePermission("works_manage")
+  @RequirePermission("works_manage", "works")
   decide(
     @Param("id") id: string,
     @Body() body: unknown,
@@ -146,7 +146,7 @@ export class WorksController {
   }
 
   @Put(":id")
-  @RequirePermission("works_manage")
+  @RequirePermission("works_manage", "works")
   async update(
     @Param("id") id: string,
     @Body() body: unknown,

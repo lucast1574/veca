@@ -22,7 +22,15 @@ import {
   WarehouseSelect,
 } from "./shared";
 
-export function WorkSupply({ id }: { id: string }) {
+export function WorkSupply({
+  id,
+  canManage = false,
+  canRequest = false,
+}: {
+  id: string;
+  canManage?: boolean;
+  canRequest?: boolean;
+}) {
   const path = warehousePath + "/works/" + id;
   const query = useAccountingQuery<Supply>(path);
   useLiveRefresh(query.refresh);
@@ -40,7 +48,7 @@ export function WorkSupply({ id }: { id: string }) {
           )}
         </div>
         <div className="accounting-tools">
-          {row && (
+          {row && canManage && (
             <Button
               type="button"
               variant="ghost"
@@ -49,7 +57,7 @@ export function WorkSupply({ id }: { id: string }) {
               Editar plan
             </Button>
           )}
-          {row && (
+          {row && canRequest && (
             <a
               className="warehouse-link"
               href={`#inventory/compras/nueva/${id}`}

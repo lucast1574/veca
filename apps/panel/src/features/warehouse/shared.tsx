@@ -1,6 +1,7 @@
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type FormEvent,
@@ -73,6 +74,7 @@ export function WarehouseForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const form = useRef<HTMLFormElement>(null);
+  const formId = useId();
   const [dirty, setDirty] = useState(false);
   const baseline = useRef("");
   const snapshot = () =>
@@ -123,8 +125,19 @@ export function WarehouseForm({
       size={wide ? "wide" : undefined}
       onClose={close}
       busy={busy}
+      footer={
+        <footer className="ve-modal-actions">
+          <Button type="button" variant="ghost" disabled={busy} onClick={close}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={formId} disabled={busy || !canSubmit}>
+            {busy ? "Guardando…" : action}
+          </Button>
+        </footer>
+      }
     >
       <form
+        id={formId}
         ref={form}
         onSubmit={submit}
         onChange={() => setDirty(true)}
@@ -135,14 +148,6 @@ export function WarehouseForm({
           {children}
         </fieldset>
         {error && <Notice error>{error}</Notice>}
-        <footer className="ve-modal-actions">
-          <Button type="button" variant="ghost" disabled={busy} onClick={close}>
-            Cancelar
-          </Button>
-          <Button disabled={busy || !canSubmit}>
-            {busy ? "Guardando…" : action}
-          </Button>
-        </footer>
       </form>
     </Modal>
   );
@@ -166,6 +171,7 @@ export function WarehouseSelect({
   return (
     <Field label={label}>
       <Select
+        floating
         label={label}
         name={name}
         value={value}

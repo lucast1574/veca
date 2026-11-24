@@ -160,6 +160,12 @@ export type LeadEvent = {
   to?: LeadStage;
 };
 export type Lead = Omit<LeadInput, "version"> & {
+  workTasks?: import("./works.js").WorkTask[];
+  completionReview?: {
+    requestedBy: string;
+    requestedAt: string;
+    note: string;
+  } | null;
   workAssignment?: {
     coordinatorId: string;
     participantIds: string[];
@@ -233,6 +239,8 @@ export const movementSchema = z
   })
   .strict();
 export type Material = z.infer<typeof materialSchema> & {
+  reserved?: number;
+  available?: number;
   id: string;
   balance: number;
   version: number;

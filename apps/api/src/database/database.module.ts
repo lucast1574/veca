@@ -68,6 +68,12 @@ export class Database implements OnModuleInit, OnModuleDestroy {
         .collection("warehouse_purchases")
         .createIndex({ workId: 1, _id: -1 }),
       this.db
+        .collection("supply_requests")
+        .createIndex({ workId: 1, neededBy: 1, createdAt: -1, _id: -1 }),
+      this.db
+        .collection("supply_requests")
+        .createIndex({ neededBy: 1, createdAt: -1, _id: -1 }),
+      this.db
         .collection("warehouse_equipment")
         .createIndex({ code: 1 }, { unique: true }),
       this.db
