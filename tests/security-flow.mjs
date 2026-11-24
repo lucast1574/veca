@@ -26,6 +26,8 @@ const routes = [
   ["POST", `/admin/works/${id}/tasks`],
   ["PUT", `/admin/works/${id}/tasks/${id}`],
   ["POST", `/admin/works/${id}/completion-review`],
+  ["POST", `/admin/works/${id}/stage-requests`],
+  ["POST", `/admin/works/${id}/stage-requests/${id}/decision`],
   ["GET", `/admin/works/${id}/supplies`],
   ["GET", `/admin/works/${id}/supplies/materials`],
   ["POST", `/admin/works/${id}/supplies`],

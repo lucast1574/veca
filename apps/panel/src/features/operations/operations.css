@@ -910,3 +910,12 @@
   position: relative;
   z-index: 1;
 }
+
+.ops-lead-card .lead-card-stage-request {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+  font-size: 11px;
+  line-height: 1.6;
+}

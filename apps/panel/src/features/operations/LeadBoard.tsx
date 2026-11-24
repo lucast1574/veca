@@ -362,6 +362,11 @@ function LeadCard({
       </button>
       {context && <p>{context}</p>}
       {lead.idea && <p className="ops-card-idea">{lead.idea}</p>}
+      {lead.stageRequest?.status === "pending" && (
+        <p className="lead-card-stage-request">
+          Avance solicitado · Por aprobar
+        </p>
+      )}
       <div className="lead-card-actions">
         {phone && !isDemoLead(lead) && (
           <>

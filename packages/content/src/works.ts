@@ -1,4 +1,42 @@
 import { z } from "zod";
+export type WorkStageRequest = {
+  id: string;
+  from: "coordination" | "execution";
+  to: "execution" | "completed";
+  status: "pending" | "approved" | "returned";
+  note: string;
+  requestedBy: string;
+  requestedName: string;
+  requestedAt: string;
+  decidedBy?: string;
+  decidedName?: string;
+  decidedAt?: string;
+  observation?: string;
+};
+export function nextWorkStage(stage: string) {
+  return stage === "coordination"
+    ? "execution"
+    : stage === "execution"
+      ? "completed"
+      : null;
+}
+export const workStageRequestInput = z
+  .object({
+    version: z.number().int().positive(),
+    note: z.string().trim().min(10).max(3000),
+  })
+  .strict();
+export const workStageDecisionInput = z
+  .object({
+    version: z.number().int().positive(),
+    action: z.enum(["approved", "returned"]),
+    observation: z.string().trim().max(3000).default(""),
+  })
+  .strict()
+  .refine(
+    (data) => data.action !== "returned" || data.observation.length >= 5,
+    "Indica qué debe completar el equipo antes de avanzar.",
+  );
 const personId = z.string().regex(/^[a-f0-9]{24}$/);
 export const workTeamSchema = z
   .object({

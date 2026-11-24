@@ -56,6 +56,7 @@ import { WorkFinancials } from "../works/WorkFinancials";
 import { WorkTasksPanel } from "../works/WorkTasksPanel";
 import { SupplyRequests } from "../warehouse/SupplyRequests";
 import { WorkHandoffPanel } from "../works/WorkHandoffPanel";
+import { WorkStagePanel } from "../works/WorkStagePanel";
 import { WorkInvoiceRequest } from "./WorkInvoiceRequest";
 import { LeadStageDialog, stageAction } from "./LeadStageDialog";
 import "./lead-detail.css";
@@ -140,6 +141,7 @@ export function LeadDetail({
     });
   const { error, setError, fail } = useMessage();
   const upload = useRef<HTMLInputElement>(null);
+  const hasLocalChanges = useRef(false);
   const detailPath =
     workView || readOnly ? `/admin/works/${id}` : `/admin/crm/leads/${id}`;
   const refresh = useCallback(async () => {
@@ -164,12 +166,24 @@ export function LeadDetail({
     const from = data.lead.stage;
     const next =
       from === "discarded" ? "prelead" : phases[phases.indexOf(from) + 1];
+    if (data.lead.stageRequest?.status === "pending") return;
+    if (
+      ["execution", "completed"].includes(proposal) &&
+      data.lead.workAssignment &&
+      data.lead.workAssignment.coordinatorId !== user?.id
+    )
+      return;
     if (proposal === next || (proposal === "discarded" && from !== "discarded"))
       setTransition(proposal as LeadInput["stage"]);
   }, [proposal, data?.lead.id, readOnly]);
   const refreshRelated = useCallback(() => {
     void api<LeadDetailData>(detailPath)
       .then((next) => {
+        if (!hasLocalChanges.current) {
+          setData(next);
+          setDraft(leadInput(next.lead));
+          return;
+        }
         setData((old) =>
           old
             ? {
@@ -203,6 +217,8 @@ export function LeadDetail({
     !!data &&
     !!draft &&
     JSON.stringify(draft) !== JSON.stringify(leadInput(data.lead));
+  hasLocalChanges.current =
+    dirty || Boolean(note.trim()) || editing || Boolean(transition) || busy;
   useUnsavedChanges(dirty || Boolean(note.trim()), busy);
   function patch<K extends keyof LeadInput>(key: K, value: LeadInput[K]) {
     setDraft((old) => (old ? { ...old, [key]: value } : old));
@@ -411,6 +427,10 @@ export function LeadDetail({
         {nextStage &&
           !readOnly &&
           !commercialLocked &&
+          lead.stageRequest?.status !== "pending" &&
+          (!lead.workAssignment ||
+            !["execution", "completed"].includes(nextStage) ||
+            lead.workAssignment.coordinatorId === user?.id) &&
           (!user ||
             user.permissions.includes("works_manage") ||
             !["execution", "completed"].includes(nextStage)) && (
@@ -463,6 +483,14 @@ export function LeadDetail({
           </li>
         ))}
       </ol>
+      {user && !dirty && !editing && (
+        <WorkStagePanel
+          lead={lead}
+          user={user}
+          workView={workView}
+          onSaved={() => void refresh()}
+        />
+      )}
       <nav className="lead-detail-tabs" aria-label="Secciones de la ficha">
         {tabs.map(([value, label]) => (
           <button
@@ -891,7 +919,10 @@ export function LeadDetail({
       {tab === "supplies" && user && <SupplyRequests workId={id} user={user} />}
       {tab === "closeout" && <WorkCloseout id={id} />}
       {tab === "financials" && user?.permissions.includes("accounting") && (
-        <WorkFinancials id={id} canManage={user.permissions.includes("accounting_write")} />
+        <WorkFinancials
+          id={id}
+          canManage={user.permissions.includes("accounting_write")}
+        />
       )}
       {tab === "history" && (
         <section className="ops-card">

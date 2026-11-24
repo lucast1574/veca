@@ -1,4 +1,5 @@
 import { WorkTasksController } from "./work-tasks.controller";
+import { WorkStageRequests, WorkStageController } from "./work-stage-requests";
 import { WorkHandoffController } from "./work-handoff.controller";
 import { WorkAccess } from "./work-access.service";
 import { CrmEvents } from "./crm.events";
@@ -119,7 +120,9 @@ class CrmController {
       throw new ForbiddenException(
         "El inicio y cierre de obra corresponden a Operaciones.",
       );
-    return this.crm.update(id, data, req.session.user.username);
+    return this.crm.update(id, data, req.session.user.username, {
+      user: req.session.user,
+    });
   }
   @Post("leads/:id/notes") note(
     @Param("id") id: string,
@@ -224,6 +227,7 @@ class CrmController {
     WorksController,
     WorkHandoffController,
     WorkTasksController,
+    WorkStageController,
     GalleryController,
     MobileGalleryController,
   ],
@@ -238,6 +242,7 @@ class CrmController {
     CrmEvents,
   ],
   providers: [
+    WorkStageRequests,
     CrmRepository,
     CrmService,
     WorkAccess,

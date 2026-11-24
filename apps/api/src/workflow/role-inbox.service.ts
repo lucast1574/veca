@@ -1,6 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import type { Document } from "mongodb";
-import type { InboxItem, InboxSection, SessionUser } from "@veca/content";
+import {
+  LEAD_STAGES,
+  type InboxItem,
+  type InboxSection,
+  type SessionUser,
+} from "@veca/content";
 import { Database } from "../database/database.module";
 import { WorkAccess } from "../crm/work-access.service";
 @Injectable()
@@ -73,6 +78,29 @@ export class RoleInbox {
         );
         sections.push(
           this.queue(
+            "stage_requests",
+            "Solicitudes de avance",
+            "crm_leads",
+            [
+              {
+                $match: {
+                  ...workScope,
+                  "stageRequest.status": "pending",
+                  "workAssignment.coordinatorId": user.id,
+                },
+              },
+            ],
+            "#works",
+            (row) => ({
+              id: String(row._id),
+              title: row.name,
+              detail: `${row.stageRequest.requestedName} solicita pasar a ${LEAD_STAGES.find((stage) => stage.id === row.stageRequest.to)?.name}`,
+              href: workHref(row),
+            }),
+          ),
+        );
+        sections.push(
+          this.queue(
             "reviews",
             "Revisiones finales solicitadas",
             "crm_leads",
@@ -81,6 +109,8 @@ export class RoleInbox {
                 $match: {
                   ...workScope,
                   stage: "execution",
+                  stageRequest: { $exists: false },
+                  "workAssignment.coordinatorId": user.id,
                   completionReview: { $ne: null, $exists: true },
                 },
               },
@@ -96,6 +126,29 @@ export class RoleInbox {
         );
       }
       if (can("works_manage") || can("works_report")) {
+        sections.push(
+          this.queue(
+            "stage_returns",
+            "Avances por corregir",
+            "crm_leads",
+            [
+              {
+                $match: {
+                  ...workScope,
+                  "stageRequest.status": "returned",
+                  "stageRequest.requestedBy": user.id,
+                },
+              },
+            ],
+            "#works",
+            (row) => ({
+              id: String(row._id),
+              title: row.name,
+              detail: row.stageRequest.observation,
+              href: workHref(row),
+            }),
+          ),
+        );
         sections.push(
           this.queue(
             "tasks",

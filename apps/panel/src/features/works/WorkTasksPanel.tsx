@@ -5,7 +5,7 @@ import {
   type SessionUser,
   type WorkTask,
 } from "@veca/content";
-import { Plus, ClipboardCheck } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button, Field } from "../../components/ui";
 import { Select } from "@veca/ui/src/Select";
 import { api } from "../../lib/api";
@@ -23,6 +23,7 @@ type TaskPage = {
   people: { id: string; name: string }[];
   stage: string;
   review?: Lead["completionReview"];
+  stageRequest?: Lead["stageRequest"];
 };
 export function WorkTasksPanel({
   id,
@@ -38,13 +39,11 @@ export function WorkTasksPanel({
   useLiveRefresh(query.refresh, false, true, "/admin/works/events");
   const [create, setCreate] = useState(false);
   const [selected, setSelected] = useState<WorkTask>();
-  const [review, setReview] = useState(false);
   const manage = user.permissions.includes("works_manage");
   const report = user.permissions.includes("works_report") || manage;
   const done = () => {
     setCreate(false);
     setSelected(undefined);
-    setReview(false);
     query.refresh();
     onSaved();
   };
@@ -94,17 +93,9 @@ export function WorkTasksPanel({
             </li>
           ))}
         </ul>
-        {data?.review && (
+        {data?.review && !data.stageRequest && (
           <p className="hint">Revisión final solicitada · {data.review.note}</p>
         )}
-        {report &&
-          data?.stage === "execution" &&
-          !data.review &&
-          data.items.every((task) => task.status === "done") && (
-            <Button variant="ghost" onClick={() => setReview(true)}>
-              <ClipboardCheck size={16} /> Solicitar revisión final
-            </Button>
-          )}
       </QueryState>
       {create && data && (
         <NewTask
@@ -124,33 +115,6 @@ export function WorkTasksPanel({
           close={() => setSelected(undefined)}
           done={done}
         />
-      )}
-      {review && data && (
-        <WarehouseForm
-          title="Solicitar revisión final"
-          action="Enviar a revisión"
-          onClose={() => setReview(false)}
-          save={async (form) => {
-            await api(path + "/completion-review", {
-              method: "POST",
-              body: JSON.stringify({
-                version: data.version,
-                note: stringField(form, "note"),
-              }),
-            });
-            done();
-          }}
-        >
-          <Field label="Trabajo realizado y observaciones">
-            <textarea
-              name="note"
-              rows={4}
-              required
-              minLength={10}
-              maxLength={3000}
-            />
-          </Field>
-        </WarehouseForm>
       )}
     </section>
   );

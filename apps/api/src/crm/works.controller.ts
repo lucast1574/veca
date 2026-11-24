@@ -158,7 +158,9 @@ export class WorksController {
       throw new ForbiddenException(
         "Gestiona el seguimiento comercial desde Leads.",
       );
-    return this.service.update(id, data, req.session.user.username);
+    return this.service.update(id, data, req.session.user.username, {
+      user: req.session.user,
+    });
   }
 
   @Post(":id/notes")

@@ -219,6 +219,9 @@ export function WorksWorkspace({
             {work.workHandoff?.status === "returned" && (
               <p className="hint">Devuelta a Comercial</p>
             )}
+            {work.stageRequest?.status === "pending" && (
+              <p className="hint">Avance solicitado · Por aprobar</p>
+            )}
             <h2>{work.name}</h2>
             <p>{work.address || work.district || "Dirección por completar"}</p>
             <p>{work.workPlan || work.idea || "Alcance por completar"}</p>

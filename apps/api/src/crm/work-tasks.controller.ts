@@ -14,13 +14,13 @@ import {
   workTaskState,
   workTaskStatusLabels,
 } from "@veca/content";
-import { z } from "zod";
 import { RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
 import { WorkAccess } from "./work-access.service";
 import { CrmRepository } from "./crm.repository";
 import { CrmEvents } from "./crm.events";
+import { WorkStageRequests } from "./work-stage-requests";
 
 @Controller("admin/works/:id")
 @RequirePermission("works")
@@ -29,6 +29,7 @@ export class WorkTasksController {
     private readonly access: WorkAccess,
     private readonly crm: CrmRepository,
     private readonly events: CrmEvents,
+    private readonly stages: WorkStageRequests,
   ) {}
 
   @Get("tasks")
@@ -39,6 +40,7 @@ export class WorkTasksController {
       version: row.version,
       stage: row.stage,
       review: row.completionReview,
+      stageRequest: row.stageRequest,
       people: row.workAssignment
         ? [
             {
@@ -186,49 +188,6 @@ export class WorkTasksController {
     @Body() input: unknown,
     @Req() req: AuthenticatedRequest,
   ) {
-    const data = parse(
-      z
-        .object({
-          version: z.number().int().positive(),
-          note: z.string().trim().min(10).max(3000),
-        })
-        .strict(),
-      input,
-    );
-    const user = req.session.user;
-    const row = await this.access.get(id, user);
-    if (
-      !user.permissions.some(
-        (p) => p === "works_manage" || p === "works_report",
-      )
-    )
-      throw new ForbiddenException();
-    if (
-      row.stage !== "execution" ||
-      row.workTasks?.some((task) => task.status !== "done")
-    )
-      throw new ConflictException(
-        "Completa los pendientes de la obra antes de solicitar la revisión final.",
-      );
-    const now = new Date().toISOString();
-    const saved = await this.crm.change(
-      id,
-      data.version,
-      {
-        completionReview: {
-          requestedBy: user.id,
-          requestedAt: now,
-          note: data.note,
-        },
-      },
-      {
-        at: now,
-        actor: user.username,
-        kind: "review",
-        text: `Revisión final solicitada · ${data.note}`,
-      },
-    );
-    this.events.emit("works");
-    return saved;
+    return this.stages.request(id, input, req.session.user, "completed");
   }
 }

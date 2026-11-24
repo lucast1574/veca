@@ -129,7 +129,7 @@ export class WorkReadiness {
   async close(
     id: string,
     version: number,
-    set: Partial<LeadInput>,
+    set: Partial<LeadInput> & Record<string, unknown>,
     event: LeadEvent,
   ) {
     await this.gate.reconcile(id);

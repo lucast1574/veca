@@ -8,6 +8,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  ForbiddenException,
 } from "@nestjs/common";
 import { ObjectId } from "mongodb";
 import type { Filter } from "mongodb";
@@ -23,6 +24,8 @@ import {
   publicLeadSchema,
   leadWorkSchema,
   type LeadInput,
+  type SessionUser,
+  type WorkStageRequest,
 } from "@veca/content";
 import { parse } from "../common/validation";
 import { CrmRepository, type LeadDocument } from "./crm.repository";
@@ -193,7 +196,15 @@ export class CrmService {
   async get(id: string) {
     return this.repository.view(await this.repository.get(id));
   }
-  async update(id: string, input: unknown, actor: string) {
+  async update(
+    id: string,
+    input: unknown,
+    actor: string,
+    context?: {
+      user: SessionUser;
+      approval?: { requestId: string; observation: string };
+    },
+  ) {
     const data = parse(leadUpdateSchema, input);
     // A datetime-local value from the panel represents Lima, not the server timezone.
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.appointment))
@@ -218,6 +229,41 @@ export class CrmService {
       "completed",
     ];
     const changed = data.stage !== old.stage;
+    let approvedRequest: WorkStageRequest | undefined;
+    if (changed && ["execution", "completed"].includes(data.stage)) {
+      if (
+        old.workAssignment &&
+        (context?.user.id !== old.workAssignment.coordinatorId ||
+          !context.user.permissions.includes("works_manage"))
+      )
+        throw new ForbiddenException(
+          "Solo el coordinador asignado puede aprobar el avance de esta obra.",
+        );
+    }
+    if (changed && old.stageRequest?.status === "pending") {
+      const request = old.stageRequest;
+      if (
+        !context?.approval ||
+        context.approval.requestId !== request.id ||
+        request.from !== old.stage ||
+        request.to !== data.stage
+      )
+        throw new ConflictException(
+          "Hay una solicitud de avance pendiente. Revísala desde Obras antes de cambiar la etapa.",
+        );
+      approvedRequest = {
+        ...request,
+        status: "approved",
+        decidedBy: context.user.id,
+        decidedName: context.user.name,
+        decidedAt: new Date().toISOString(),
+        observation: context.approval.observation,
+      };
+    } else if (context?.approval) {
+      throw new ConflictException(
+        "Esta solicitud ya fue atendida. Actualiza la ficha.",
+      );
+    }
     if (changed) {
       const next = stages.indexOf(old.stage) + 1;
       if (old.stage === "discarded" && data.stage !== "prelead")
@@ -302,13 +348,16 @@ export class CrmService {
         ...set,
         ...(changed && data.stage === "contacted" ? { contactedAt: at } : {}),
         ...(changed && data.stage === "completed" ? { completedAt: at } : {}),
+        ...(approvedRequest
+          ? { stageRequest: approvedRequest, completionReview: null }
+          : {}),
       },
       {
         at,
         actor,
         kind: changed ? "stage" : "updated",
         text: changed
-          ? `Etapa: ${LEAD_STAGES.find((s) => s.id === data.stage)!.name}.`
+          ? `${approvedRequest ? "Avance aprobado" : "Etapa"}: ${LEAD_STAGES.find((s) => s.id === data.stage)!.name}.${approvedRequest?.observation ? " " + approvedRequest.observation : ""}`
           : "Datos de la ficha actualizados.",
         ...(changed ? { from: old.stage, to: data.stage } : {}),
       },

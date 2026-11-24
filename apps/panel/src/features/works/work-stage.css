@@ -1,0 +1,119 @@
+.work-stage-panel {
+  margin-top: 24px;
+  display: grid;
+  gap: 16px;
+}
+.work-stage-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.work-stage-label {
+  margin: 0 0 10px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+  color: var(--panel-accent);
+}
+.work-stage-panel h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  line-height: 1.5;
+}
+.work-stage-panel h2 > span {
+  color: var(--panel-secondary);
+  font-weight: 500;
+}
+.work-stage-panel h2 > svg {
+  flex-shrink: 0;
+  color: var(--panel-accent);
+}
+.work-stage-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--panel-accent);
+  background: var(--panel-accent-soft);
+}
+.work-stage-status[data-state="approved"] {
+  color: var(--panel-secondary);
+  background: var(--panel-soft);
+}
+.work-stage-note {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--panel-ink);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.work-stage-meta,
+.work-stage-help {
+  margin: 0;
+  color: var(--panel-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.work-stage-meta {
+  font-size: 11px;
+}
+.work-stage-observation {
+  border-left: 3px solid var(--panel-brand);
+  padding: 12px 16px;
+  border-radius: 0 10px 10px 0;
+  background: var(--panel-soft);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.work-stage-observation p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+.work-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.work-stage-actions:empty {
+  display: none;
+}
+.work-stage-route {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--panel-secondary);
+}
+.work-stage-route strong,
+.work-stage-route svg {
+  color: var(--panel-accent);
+}
+@media (max-width: 600px) {
+  .work-stage-panel > header {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .work-stage-actions {
+    justify-content: stretch;
+  }
+  .work-stage-actions > .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}

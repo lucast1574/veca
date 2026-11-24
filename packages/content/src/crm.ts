@@ -160,6 +160,7 @@ export type LeadEvent = {
   to?: LeadStage;
 };
 export type Lead = Omit<LeadInput, "version"> & {
+  stageRequest?: import("./works.js").WorkStageRequest;
   workTasks?: import("./works.js").WorkTask[];
   completionReview?: {
     requestedBy: string;
