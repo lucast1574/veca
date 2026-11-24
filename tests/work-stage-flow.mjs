@@ -201,14 +201,12 @@ try {
     ).count,
     1,
   );
-  await db
-    .collection("roles")
-    .insertOne({
-      id: tag,
-      name: "Coordinación sin Obras",
-      permissions: ["leads", "works_manage", "dashboard"],
-      revision: 1,
-    });
+  await db.collection("roles").insertOne({
+    id: tag,
+    name: "Coordinación sin Obras",
+    permissions: ["leads", "works_manage", "dashboard"],
+    revision: 1,
+  });
   await db
     .collection("users")
     .updateOne({ _id: ids.coordinator }, { $set: { role: tag } });
