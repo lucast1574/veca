@@ -10,6 +10,8 @@ export type LeadDocument = Omit<Lead, "id"> & {
   _id: ObjectId;
   submissionId: string;
   workHandoffRequired?: boolean;
+  activeOperations?: string[];
+  closingOperation?: string;
 };
 @Injectable()
 export class CrmRepository {
@@ -28,7 +30,14 @@ export class CrmRepository {
     return doc;
   }
   view(doc: LeadDocument): Lead {
-    const { _id, submissionId, workHandoffRequired, ...rest } = doc;
+    const {
+      _id,
+      submissionId,
+      workHandoffRequired,
+      activeOperations,
+      closingOperation,
+      ...rest
+    } = doc;
     return { ...rest, id: String(_id) };
   }
   async change(
@@ -38,7 +47,7 @@ export class CrmRepository {
     event: LeadEvent,
   ) {
     const doc = await this.collection.findOneAndUpdate(
-      { _id: this.id(id), version },
+      { _id: this.id(id), version, closingOperation: { $exists: false } },
       {
         $set: { ...set, updatedAt: new Date().toISOString() },
         $inc: { version: 1 },

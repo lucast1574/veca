@@ -97,7 +97,11 @@ try {
   await migrateAccess(db);
   await migrateAccess(db);
   const workerRole = await db.collection("roles").findOne({ id: "worker" });
-  assert.deepEqual(workerRole.permissions, ["works", "works_report"]);
+  assert.deepEqual(workerRole.permissions, [
+    "works",
+    "works_report",
+    "dashboard",
+  ]);
   await db.collection("crm_leads").insertMany(
     [workId, otherWork].map((_id) => ({
       ...crmLeadDefaults,

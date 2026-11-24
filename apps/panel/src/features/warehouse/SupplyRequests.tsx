@@ -7,7 +7,7 @@ import {
   type SupplyRequest,
   type SupplyAction,
 } from "@veca/content";
-import { Button, Field } from "../../components/ui";
+import { Button, Field, Notice } from "../../components/ui";
 import { api } from "../../lib/api";
 import {
   QueryState,
@@ -64,13 +64,17 @@ function actions(
 export function SupplyRequests({
   user,
   workId,
+  selected: selectedId,
 }: {
   user: SessionUser;
   workId?: string;
+  selected?: string;
 }) {
   const path = workId
     ? `/admin/works/${workId}/supplies`
-    : "/admin/supply-requests";
+    : selectedId
+      ? `/admin/supply-requests/${selectedId}`
+      : "/admin/supply-requests";
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState(workId ? "all" : "open");
   const query = useAccountingQuery<{
@@ -106,6 +110,11 @@ export function SupplyRequests({
           </Button>
         )}
       </header>
+      {selectedId && (
+        <a className="warehouse-link" href="#inventory/solicitudes">
+          Ver todas las solicitudes
+        </a>
+      )}
       <div className="accounting-tools supply-filters">
         <Select
           label="Mostrar solicitudes"
@@ -145,9 +154,15 @@ export function SupplyRequests({
                     <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
                     {row.materialName}
                   </strong>
-                  {!workId && (
-                    <a href={`#works/${row.workId}`}>{row.workName}</a>
-                  )}
+                  {!workId &&
+                    (user.permissions.includes("works") &&
+                    user.permissions.some(
+                      (p) => p === "works_all" || p === "works_manage",
+                    ) ? (
+                      <a href={`#works/${row.workId}`}>{row.workName}</a>
+                    ) : (
+                      <span>{row.workName}</span>
+                    ))}
                   <small>
                     Necesario el {row.neededBy.split("-").reverse().join("/")} ·{" "}
                     {unitName(row.unit)}
@@ -349,9 +364,16 @@ function RequestAction({
   const id = useRef(row.pending?.operationId || crypto.randomUUID());
   const [guideId, setGuide] = useState(row.pending?.guideId || "");
   const guides = useAccountingQuery<
-    { id: string; number: string; quantity: number }[]
+    {
+      id: string;
+      number: string;
+      quantity: number;
+      items: { name: string; quantity: number }[];
+    }[]
   >(action === "deliver" ? `/admin/supply-requests/${row.id}/guides` : "");
   const pending = row.pending;
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const warehouse = !["receive", "request_return"].includes(action);
   const path = warehouse
     ? `/admin/supply-requests/${row.id}/actions`
@@ -371,7 +393,9 @@ function RequestAction({
       title={supplyActionLabels[action]}
       action="Confirmar"
       onClose={close}
-      canSubmit={action !== "deliver" || !!guideId || !!pending}
+      canSubmit={
+        !cancelling && (action !== "deliver" || !!guideId || !!pending)
+      }
       save={async (form) => {
         const selected = guides.data?.find((guide) => guide.id === guideId);
         const body: SupplyAction = pending
@@ -403,12 +427,58 @@ function RequestAction({
       <p className="hint">
         {row.materialName} · {row.workName}
       </p>
+      {pending?.action === "deliver" && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={cancelling}
+            onClick={async () => {
+              setCancelling(true);
+              setCancelError("");
+              try {
+                await api(`/admin/supply-requests/${row.id}/cancel-delivery`, {
+                  method: "POST",
+                  body: JSON.stringify({ version: row.version }),
+                });
+                done();
+              } catch (e) {
+                setCancelError((e as Error).message);
+              } finally {
+                setCancelling(false);
+              }
+            }}
+          >
+            Cancelar preparación sin salida
+          </Button>
+          {cancelError && <Notice error>{cancelError}</Notice>}
+        </>
+      )}
       {action === "cancel" && (
         <p className="hint">
           Se liberará la reserva pendiente. Las entregas y compras registradas
           conservan su seguimiento.
         </p>
       )}
+      {action === "deliver" &&
+        guideId &&
+        guides.data?.find((guide) => guide.id === guideId) && (
+          <div className="warehouse-preview">
+            <strong>Contenido completo de la guía</strong>
+            <p className="hint">
+              Se entregarán todos sus materiales con las reservas de esta obra.
+            </p>
+            <ul>
+              {guides.data
+                .find((guide) => guide.id === guideId)!
+                .items.map((item, index) => (
+                  <li key={index}>
+                    {item.name} · {amount(item.quantity)}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
       {action === "deliver" && !pending && (
         <QueryState {...guides}>
           <Field label="Guía aceptada">

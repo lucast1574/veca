@@ -104,6 +104,22 @@ class LeadDispatchController {
     return this.dispatches.depart(leadId, id, req.session.user.username);
   }
 
+  @Post(":id/discard")
+  discard(
+    @Param("leadId") leadId: string,
+    @Param("id") id: string,
+    @Body() input: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = parse(sendBack, input);
+    return this.dispatches.discard(
+      id,
+      data.version,
+      data.observation,
+      req.session.user.username,
+      leadId,
+    );
+  }
   @Get(":id/pdf")
   async pdf(
     @Param("leadId") leadId: string,
@@ -139,17 +155,34 @@ class AccountingGuideController {
   }
 
   @Post()
+  @RequirePermission("accounting_write", "accounting")
   create(@Body() input: unknown, @Req() req: AuthenticatedRequest) {
     const { id, leadId, data } = parse(guideDraft, input);
     return this.dispatches.create(leadId, data, req.session.user.username, id);
   }
 
+  @Post(":id/discard")
+  @RequirePermission("accounting_write", "accounting")
+  discard(
+    @Param("id") id: string,
+    @Body() input: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = parse(sendBack, input);
+    return this.dispatches.discard(
+      id,
+      data.version,
+      data.observation,
+      req.session.user.username,
+    );
+  }
   @Get(":id")
   detail(@Param("id") id: string) {
     return this.dispatches.detail(id);
   }
 
   @Put(":id")
+  @RequirePermission("accounting_write", "accounting")
   updateDraft(
     @Param("id") id: string,
     @Body() input: unknown,
@@ -165,6 +198,7 @@ class AccountingGuideController {
   }
 
   @Post(":id/return")
+  @RequirePermission("accounting_write", "accounting")
   return(
     @Param("id") id: string,
     @Body() input: unknown,
@@ -180,6 +214,7 @@ class AccountingGuideController {
   }
 
   @Post(":id/issue")
+  @RequirePermission("accounting_issue", "accounting")
   issue(
     @Param("id") id: string,
     @Body() input: unknown,
@@ -190,6 +225,7 @@ class AccountingGuideController {
   }
 
   @Post(":id/check")
+  @RequirePermission("accounting_issue", "accounting")
   check(
     @Param("id") id: string,
     @Body() input: unknown,

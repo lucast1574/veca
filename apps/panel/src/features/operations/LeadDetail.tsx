@@ -51,6 +51,8 @@ import { PhotoMetadataFields } from "../gallery/PhotoMetadataFields";
 import "../gallery/gallery.css";
 import { MaterialMovement } from "./Inventory";
 import { WorkSupply } from "../warehouse/WorkSupply";
+import { WorkCloseout } from "../works/WorkCloseout";
+import { WorkFinancials } from "../works/WorkFinancials";
 import { WorkTasksPanel } from "../works/WorkTasksPanel";
 import { SupplyRequests } from "../warehouse/SupplyRequests";
 import { WorkHandoffPanel } from "../works/WorkHandoffPanel";
@@ -94,9 +96,36 @@ export function LeadDetail({
   dispatchAccess?: boolean;
   back: () => void;
 }) {
+  useEffect(() => {
+    if (!workView) return;
+    const update = () => {
+      const tab = location.hash.split("/")[2];
+      if (
+        [
+          "work",
+          "tasks",
+          "supplies",
+          "closeout",
+          "financials",
+          "files",
+          "history",
+          "overview",
+        ].includes(tab)
+      )
+        setTab(tab);
+    };
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, [workView]);
   const [data, setData] = useState<LeadDetailData | null>(null),
     [draft, setDraft] = useState<LeadInput | null>(null),
-    [tab, setTab] = useState(workView || dispatchId ? "work" : "overview"),
+    [tab, setTab] = useState(
+      workView
+        ? location.hash.split("/")[2] || "work"
+        : dispatchId
+          ? "work"
+          : "overview",
+    ),
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState(false),
     [transition, setTransition] = useState<LeadInput["stage"] | null>(null),
@@ -294,6 +323,10 @@ export function LeadDetail({
       ? [
           ["tasks", "Pendientes"],
           ["supplies", "Solicitudes"],
+          ["closeout", "Cierre"],
+          ...(user?.permissions.includes("accounting")
+            ? [["financials", "Contabilidad"]]
+            : []),
         ]
       : []),
     ["files", "Archivos"],
@@ -444,6 +477,7 @@ export function LeadDetail({
       </nav>
       {transition && !readOnly && (
         <LeadStageDialog
+          workId={id}
           stage={transition}
           initial={draft}
           onClose={() => setTransition(null)}
@@ -855,6 +889,10 @@ export function LeadDetail({
         <WorkTasksPanel id={id} user={user} onSaved={() => void refresh()} />
       )}
       {tab === "supplies" && user && <SupplyRequests workId={id} user={user} />}
+      {tab === "closeout" && <WorkCloseout id={id} />}
+      {tab === "financials" && user?.permissions.includes("accounting") && (
+        <WorkFinancials id={id} canManage={user.permissions.includes("accounting_write")} />
+      )}
       {tab === "history" && (
         <section className="ops-card">
           <h2>{workView ? "Avances e historial" : "Historial de atención"}</h2>

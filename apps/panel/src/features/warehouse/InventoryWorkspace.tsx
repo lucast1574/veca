@@ -45,7 +45,9 @@ export function InventoryWorkspace({
           </a>
         ))}
       </nav>
-      {active === "solicitudes" && user && <SupplyRequests user={user} />}
+      {active === "solicitudes" && user && (
+        <SupplyRequests user={user} selected={selected} />
+      )}
       {active === "materiales" && (
         <Inventory
           canCatalog={!!user?.permissions.includes("inventory_catalog")}

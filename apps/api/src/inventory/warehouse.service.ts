@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { WorkGate } from "../crm/work-gate.service";
 import { literalSearch } from "../common/literal-search";
 import {
   BadRequestException,
@@ -32,7 +34,13 @@ type PurchaseRecord = Omit<Purchase, "id" | "status"> & {
   requestedAt?: string;
   requestedBy?: string;
 };
-type EquipmentRecord = Omit<Equipment, "id"> & { _id: ObjectId };
+type EquipmentRecord = Omit<Equipment, "id" | "events"> & {
+  _id: ObjectId;
+  events: (Equipment["events"][number] & {
+    operationId?: string;
+    requestHash?: string;
+  })[];
+};
 type PlanRecord = WorkPlan & { _id: ObjectId };
 const emptyPlan: WorkPlan = {
   revision: 0,
@@ -67,6 +75,7 @@ function purchaseView({
 const equipmentView = ({ _id, ...row }: EquipmentRecord): Equipment => ({
   id: String(_id),
   ...row,
+  events: row.events.map(({ operationId, requestHash, ...event }) => event),
 });
 
 @Injectable()
@@ -75,6 +84,7 @@ export class WarehouseService {
     private readonly db: Database,
     private readonly crm: CrmRepository,
     private readonly inventory: InventoryService,
+    private readonly gate: WorkGate,
   ) {}
   private get orders() {
     return this.db.db.collection<PurchaseRecord>("warehouse_purchases");
@@ -198,6 +208,13 @@ export class WarehouseService {
   }
 
   async createPurchase(raw: unknown, actor: string) {
+    const data = parse(purchaseInput, raw);
+    const action = () => this.createPurchaseRecord(data, actor);
+    return data.workId
+      ? this.gate.run(data.workId, `purchase:${data.id}`, action)
+      : action();
+  }
+  private async createPurchaseRecord(raw: unknown, actor: string) {
     const { id, items, ...data } = parse(purchaseInput, raw);
     const work = data.workId ? await this.work(data.workId) : null;
     const orderItems = await Promise.all(
@@ -253,6 +270,13 @@ export class WarehouseService {
   }
 
   async requestPurchase(raw: unknown, actor: string) {
+    const data = parse(purchaseRequest, raw);
+    const action = () => this.requestPurchaseRecord(data, actor);
+    return data.workId
+      ? this.gate.run(data.workId, `purchase:${data.id}`, action)
+      : action();
+  }
+  private async requestPurchaseRecord(raw: unknown, actor: string) {
     const input = parse(purchaseRequest, raw);
     const work = await this.work(input.workId);
     if (work.stage === "completed")
@@ -516,12 +540,51 @@ export class WarehouseService {
   }
 
   async equipmentAction(id: string, raw: unknown, actor: string) {
+    const data = parse(equipmentAction, raw);
+    const current = await this.equipmentDetail(id);
+    const operation = `equipment:${id}:${data.version}` as const;
+    const receipt = (
+      await this.equipment.findOne({ _id: safeId(id) })
+    )?.events.find((event) => event.operationId === operation);
+    if (receipt) {
+      if (
+        receipt.requestHash !==
+        createHash("sha256").update(JSON.stringify(data)).digest("hex")
+      )
+        throw new ConflictException(
+          "La operación ya se registró con otros datos.",
+        );
+      return receipt.workId
+        ? this.gate.run(receipt.workId, operation, async () => current, true)
+        : current;
+    }
+    const workId =
+      data.action === "assign" ? data.workId : current.assignment?.workId;
+    const action = () => this.applyEquipmentAction(id, data, actor);
+    return workId
+      ? this.gate.run(
+          workId,
+          `equipment:${id}:${data.version}`,
+          action,
+          data.action === "return",
+        )
+      : action();
+  }
+  private async applyEquipmentAction(id: string, raw: unknown, actor: string) {
     const input = parse(equipmentAction, raw);
     const row = await this.equipmentDetail(id);
     const at = new Date().toISOString();
-    const base = { at, actor, note: input.note };
+    const base = {
+      at,
+      actor,
+      note: input.note,
+      operationId: `equipment:${id}:${input.version}`,
+      requestHash: createHash("sha256")
+        .update(JSON.stringify(input))
+        .digest("hex"),
+    };
     let update: Pick<Equipment, "assignment" | "location" | "condition">;
-    let event: Equipment["events"][number];
+    let event: EquipmentRecord["events"][number];
     if (input.action === "assign") {
       if (row.assignment || row.condition !== "good")
         throw new ConflictException(

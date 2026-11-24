@@ -24,6 +24,9 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import { Readable } from "node:stream";
 import { z } from "zod";
+import { WorkGate } from "./work-gate.service";
+import { WorkReadiness } from "./work-readiness.service";
+import { SupplyDispatches } from "../inventory/supply-dispatch.service";
 import { leadUpdateSchema, movementSchema } from "@veca/content";
 import { GalleryController } from "../gallery/gallery.controller";
 import { MobileGalleryController } from "../gallery/mobile-gallery.controller";
@@ -60,6 +63,7 @@ class CrmController {
     private readonly crm: CrmService,
     private readonly files: CrmFiles,
     private readonly inventory: InventoryService,
+    private readonly gate: WorkGate,
     private readonly events: CrmEvents,
   ) {}
   @RequirePermission("dashboard")
@@ -205,7 +209,11 @@ class CrmController {
           : "works_manage";
     if (!req.session.user.permissions.includes(permission))
       throw new ForbiddenException();
-    return this.inventory.move(id, data, req.session.user.username);
+    const action = () =>
+      this.inventory.move(id, data, req.session.user.username);
+    return data.leadId
+      ? this.gate.run(data.leadId, `movement:${data.operationId}`, action, true)
+      : action();
   }
 }
 @Module({
@@ -219,13 +227,25 @@ class CrmController {
     GalleryController,
     MobileGalleryController,
   ],
-  exports: [CrmRepository, CrmService, InventoryService, WorkAccess, CrmEvents],
+  exports: [
+    CrmRepository,
+    CrmService,
+    InventoryService,
+    SupplyDispatches,
+    WorkGate,
+    WorkReadiness,
+    WorkAccess,
+    CrmEvents,
+  ],
   providers: [
     CrmRepository,
     CrmService,
     WorkAccess,
     CrmFiles,
     InventoryService,
+    SupplyDispatches,
+    WorkGate,
+    WorkReadiness,
     CrmEvents,
     GalleryService,
     GalleryUploads,

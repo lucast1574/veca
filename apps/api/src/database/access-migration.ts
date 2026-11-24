@@ -253,4 +253,28 @@ export async function migrateAccess(db: Db) {
       { upsert: true },
     );
   }
+  if (!(await migrations.findOne({ name: "connected-workflows-v1" }))) {
+    await db.collection("roles").updateMany(
+      { permissions: "accounting" },
+      {
+        $addToSet: {
+          permissions: {
+            $each: ["accounting_write", "accounting_issue", "accounting_labor"],
+          },
+        },
+        $inc: { revision: 1 },
+      },
+    );
+    await db
+      .collection("roles")
+      .updateOne(
+        { id: "worker", permissions: "works" },
+        { $addToSet: { permissions: "dashboard" }, $inc: { revision: 1 } },
+      );
+    await migrations.updateOne(
+      { name: "connected-workflows-v1" },
+      { $setOnInsert: { completedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

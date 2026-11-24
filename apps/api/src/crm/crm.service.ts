@@ -1,3 +1,4 @@
+import { WorkReadiness } from "./work-readiness.service";
 import { literalSearch } from "../common/literal-search";
 import { MailService } from "../mail/mail.service";
 import { panelAction } from "../mail/templates";
@@ -31,6 +32,7 @@ export class CrmService {
     readonly repository: CrmRepository,
     private readonly events: CrmEvents,
     private readonly mail: MailService,
+    private readonly readiness: WorkReadiness,
   ) {}
   async create(
     input: unknown,
@@ -286,7 +288,14 @@ export class CrmService {
       );
     const { version, ...set } = data;
     const at = new Date().toISOString();
-    const saved = await this.repository.change(
+    const save =
+      changed &&
+      (data.stage === "completed" ||
+        (data.stage === "discarded" &&
+          ["coordination", "execution"].includes(old.stage)))
+        ? this.readiness.close.bind(this.readiness)
+        : this.repository.change.bind(this.repository);
+    const saved = await save(
       id,
       version,
       {

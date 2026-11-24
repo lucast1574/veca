@@ -1,3 +1,4 @@
+import { useAccountingPermission } from "./AccountingAccess";
 import { useUnsavedChanges } from "../../lib/unsaved";
 import { useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
@@ -51,11 +52,13 @@ export function AccountingInvoices({
   selected: string;
   queue?: "" | "requested" | "collect";
 }) {
+  const canWrite = useAccountingPermission("accounting_write");
+  const canIssue = useAccountingPermission("accounting_issue");
   const [page, setPage] = useState(1);
   const query = useAccountingQuery<InvoicePage>(
     selected ? "" : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
   );
-  if (selected === "nueva") return <InvoiceForm />;
+  if (selected === "nueva" && canWrite) return <InvoiceForm />;
   if (selected) return <InvoiceDetail id={selected} />;
   const rows = query.data?.items || [];
   return (
@@ -64,12 +67,14 @@ export function AccountingInvoices({
         <h2 id="accounting-invoices">Facturas y cobros</h2>
         <div className="accounting-tools">
           <Refresh loading={query.loading} onClick={query.refresh} />
-          <a
-            className="btn btn-primary accounting-inline"
-            href={baseHash + "/nueva"}
-          >
-            <Plus size={16} /> Nueva factura
-          </a>
+          {canWrite && (
+            <a
+              className="btn btn-primary accounting-inline"
+              href={baseHash + "/nueva"}
+            >
+              <Plus size={16} /> Nueva factura
+            </a>
+          )}
         </div>
       </header>
       <nav className="accounting-tabs" aria-label="Filtrar facturas">
@@ -403,6 +408,8 @@ function InvoiceForm({
 }
 
 function InvoiceDetail({ id }: { id: string }) {
+  const canWrite = useAccountingPermission("accounting_write");
+  const canIssue = useAccountingPermission("accounting_issue");
   const path = `${root}/${id}`;
   const query = useAccountingQuery<{
     invoice: AccountingInvoice;
@@ -530,12 +537,13 @@ function InvoiceDetail({ id }: { id: string }) {
               <Notice>Emisión electrónica pendiente de configuración.</Notice>
             )}
             <div className="accounting-form-actions">
-              {["requested", "draft", "rejected"].includes(row.status) && (
-                <Button variant="ghost" onClick={() => setEdit(true)}>
-                  Editar
-                </Button>
-              )}
-              {row.status === "draft" && query.data?.enabled && (
+              {canWrite &&
+                ["requested", "draft", "rejected"].includes(row.status) && (
+                  <Button variant="ghost" onClick={() => setEdit(true)}>
+                    Editar
+                  </Button>
+                )}
+              {canIssue && row.status === "draft" && query.data?.enabled && (
                 <Button
                   onClick={() => {
                     setError("");
@@ -545,7 +553,7 @@ function InvoiceDetail({ id }: { id: string }) {
                   Revisar y emitir
                 </Button>
               )}
-              {row.canCheck && (
+              {canIssue && row.canCheck && (
                 <Button
                   variant="ghost"
                   disabled={busy}
@@ -565,7 +573,7 @@ function InvoiceDetail({ id }: { id: string }) {
                       {type.toUpperCase()}
                     </a>
                   ))}
-                  {row.paidCents < row.totalCents && (
+                  {canWrite && row.paidCents < row.totalCents && (
                     <Button
                       onClick={() => {
                         setError("");

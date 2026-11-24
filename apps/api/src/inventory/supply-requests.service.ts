@@ -5,6 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { SupplyDispatches } from "./supply-dispatch.service";
+import { WorkGate } from "../crm/work-gate.service";
 import { ObjectId } from "mongodb";
 import {
   type SessionUser,
@@ -38,6 +40,8 @@ export class SupplyRequests {
     private readonly warehouse: WarehouseService,
     private readonly dispatches: DispatchService,
     private readonly events: CrmEvents,
+    private readonly gate: WorkGate,
+    private readonly supplyDispatches: SupplyDispatches,
   ) {}
   get collection() {
     return this.db.db.collection<Document>("supply_requests");
@@ -46,6 +50,55 @@ export class SupplyRequests {
     return { ...row, id: String(_id) };
   }
 
+  private async coverage(workId: string) {
+    const reservations = await this.collection
+      .find({
+        workId,
+        cancelled: false,
+        reserved: { $gt: 0 },
+        pending: { $exists: false },
+      })
+      .project({ materialId: 1, reserved: 1 })
+      .toArray();
+    const covered = new Map<string, number>();
+    for (const r of reservations)
+      covered.set(
+        r.materialId,
+        (covered.get(r.materialId) || 0) + Math.round(r.reserved * 1000),
+      );
+    return covered;
+  }
+  async cancelDelivery(id: string, version: number, user: SessionUser) {
+    this.authorize("deliver", user, true);
+    const row = await this.collection.findOne({
+      _id: this.inventory.id(id),
+      version,
+    });
+    if (!row?.pending || row.pending.action !== "deliver")
+      throw new ConflictException("La solicitud cambió. Actualízala.");
+    await this.gate.run(
+      row.workId,
+      `cancel-delivery:${row.pending.operationId}`,
+      () =>
+        this.supplyDispatches.cancelPreparation(
+          row.pending!.guideId!,
+          id,
+          row.pending!,
+          row.workId,
+        ),
+      true,
+    );
+    return this.view((await this.collection.findOne({ _id: row._id }))!);
+  }
+  async detail(id: string) {
+    const row = await this.collection.findOne({ _id: this.inventory.id(id) });
+    if (!row) throw new NotFoundException();
+    const material = await this.inventory.detail(row.materialId);
+    return {
+      items: [{ ...this.view(row), available: material.available }],
+      hasMore: false,
+    };
+  }
   async list(workId?: string, page = 1, filter: "open" | "all" = "open") {
     if (workId) workId = String(new ObjectId(workId));
     const rows = await this.collection
@@ -110,27 +163,72 @@ export class SupplyRequests {
       })
       .limit(100)
       .toArray();
+    const covered = await this.coverage(request.workId);
     return rows.flatMap((row) => {
       const items: { materialId?: string; quantity: number }[] =
         row.data?.items || [];
+      const totals = new Map<string, number>();
+      for (const item of items)
+        if (item.materialId)
+          totals.set(
+            item.materialId,
+            (totals.get(item.materialId) || 0) +
+              Math.round(item.quantity * 1000),
+          );
+      if (
+        items.some((item) => !item.materialId) ||
+        [...totals].some(([id, total]) => total > (covered.get(id) || 0))
+      )
+        return [];
       if (
         !items.length ||
-        items.some((item) => item.materialId !== request.materialId)
+        !items.some((item) => item.materialId === request.materialId)
       )
         return [];
       return [
         {
           id: String(row._id),
           number: String(row.guideNumber || "Guía aceptada"),
+          items: items.map((item) => ({
+            name: String(
+              row.data.items.find(
+                (line: { materialId?: string }) =>
+                  line.materialId === item.materialId,
+              )?.description || "Material",
+            ),
+            quantity: item.quantity,
+          })),
           quantity:
             Math.round(
-              items.reduce((sum, item) => sum + item.quantity, 0) * 1000,
+              Math.min(
+                request.reserved,
+                items
+                  .filter((item) => item.materialId === request.materialId)
+                  .reduce((sum, item) => sum + item.quantity, 0),
+              ) * 1000,
             ) / 1000,
         },
       ];
     });
   }
   async create(workId: string, input: unknown, user: SessionUser) {
+    if (
+      !user.permissions.some(
+        (p) => p === "works_manage" || p === "inventory_request",
+      )
+    )
+      throw new ForbiddenException();
+    await this.access.get(workId, user);
+    const data = parse(supplyRequestInput, input);
+    return this.gate.run(workId, `request:${data.id}`, () =>
+      this.createRequest(workId, data, user),
+    );
+  }
+  private async createRequest(
+    workId: string,
+    input: unknown,
+    user: SessionUser,
+  ) {
     if (
       !user.permissions.some(
         (p) => p === "works_manage" || p === "inventory_request",
@@ -217,6 +315,29 @@ export class SupplyRequests {
     user: SessionUser,
     warehouse: boolean,
   ) {
+    const data = parse(supplyActionInput, input);
+    this.authorize(data.action, user, warehouse);
+    const row = await this.collection.findOne({ _id: this.inventory.id(id) });
+    if (!row) throw new NotFoundException();
+    if (!warehouse) await this.access.get(row.workId, user);
+    const cleanup =
+      ["receive", "request_return", "accept_return", "cancel"].includes(
+        data.action,
+      ) ||
+      (data.action === "reserve" && data.quantity === 0);
+    return this.gate.run(
+      row.workId,
+      `supply:${data.operationId}`,
+      () => this.applyAction(id, data, user, warehouse),
+      cleanup,
+    );
+  }
+  private async applyAction(
+    id: string,
+    input: unknown,
+    user: SessionUser,
+    warehouse: boolean,
+  ) {
     if (!ObjectId.isValid(id)) throw new NotFoundException();
     id = String(new ObjectId(id));
     const data = parse(supplyActionInput, input);
@@ -239,7 +360,21 @@ export class SupplyRequests {
       throw new ConflictException(
         "Revisa la solicitud y registra una nueva operación.",
       );
-    if (previous?.completed) return this.view(row);
+    if (previous?.completed) {
+      if (
+        previous.action === "deliver" &&
+        row.pending?.operationId === previous.operationId
+      ) {
+        await this.dispatches.depart(
+          row.workId,
+          previous.guideId!,
+          previous.actor,
+          id,
+        );
+        row = (await this.collection.findOne({ _id: row._id }))!;
+      }
+      return this.view(row);
+    }
     if (!previous) {
       if (row.pending || row.version !== data.version)
         throw new ConflictException(
@@ -344,8 +479,7 @@ export class SupplyRequests {
       }
       if (op.action === "deliver") {
         await this.dispatches.depart(row.workId, op.guideId!, op.actor, id);
-        fields.delivered = quantity(row.delivered + op.quantity);
-        fields.reserved = quantity(row.reserved - op.quantity);
+        return this.view((await this.collection.findOne({ _id: row._id }))!);
       }
       if (op.action === "receive")
         fields.received = quantity(row.received + op.quantity);
@@ -445,12 +579,28 @@ export class SupplyRequests {
         { departureSource: String(row._id) },
       ],
     });
+    if (guide) await this.dispatches.stockLines(guide.data.items);
     const items: {
       materialId?: string;
       quantity: number;
       code: string;
       unitCode: string;
     }[] = guide?.data?.items || [];
+    const covered = await this.coverage(row.workId);
+    const totals = new Map<string, number>();
+    for (const item of items)
+      if (item.materialId)
+        totals.set(
+          item.materialId,
+          (totals.get(item.materialId) || 0) + Math.round(item.quantity * 1000),
+        );
+    if (
+      items.some((item) => !item.materialId) ||
+      [...totals].some(([id, total]) => total > (covered.get(id) || 0))
+    )
+      throw new ConflictException(
+        "Reserva todos los materiales y cantidades de la guía antes de confirmar esta entrega.",
+      );
     const material = await this.inventory.materials.findOne({
       _id: new ObjectId(row.materialId),
     });
@@ -458,18 +608,24 @@ export class SupplyRequests {
       !guide ||
       !material ||
       !items.length ||
-      items.some(
-        (item) =>
-          item.materialId !== row.materialId ||
-          item.code !== material.sku ||
-          item.unitCode !== guideUnitForMaterial[material.unit],
-      ) ||
+      items
+        .filter((item) => item.materialId === row.materialId)
+        .some(
+          (item) =>
+            item.code !== material.sku ||
+            item.unitCode !== guideUnitForMaterial[material.unit],
+        ) ||
       Math.abs(
-        items.reduce((sum, item) => sum + item.quantity, 0) - action.quantity,
+        Math.min(
+          row.reserved,
+          items
+            .filter((item) => item.materialId === row.materialId)
+            .reduce((sum, item) => sum + item.quantity, 0),
+        ) - action.quantity,
       ) > 0.00001
     )
       throw new BadRequestException(
-        "La guía debe corresponder a esta obra, este material y la cantidad de la entrega.",
+        "La guía debe incluir esta obra y la cantidad reservada de este material.",
       );
   }
 }

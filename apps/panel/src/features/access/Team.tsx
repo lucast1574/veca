@@ -295,7 +295,10 @@ export function Team({ currentId }: { currentId: string }) {
                     inventory_equipment: "Gestionar equipos",
                     purchases_manage: "Autorizar compras",
                     dispatches: "Despachos",
-                    accounting: "Contabilidad",
+                    accounting: "Consultar Contabilidad",
+                    accounting_write: "Gestionar documentos, gastos y cobros",
+                    accounting_issue: "Emitir y verificar documentos fiscales",
+                    accounting_labor: "Acceder a planilla y honorarios",
                     users: "Equipo",
                   })[p],
               )

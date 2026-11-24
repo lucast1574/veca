@@ -99,19 +99,6 @@ export function WorksWorkspace({
             location.hash = "works";
           }}
         />
-        {accountingAccess && (
-          <nav
-            className="ops-page works-accounting"
-            aria-label="Documentos de la obra"
-          >
-            <a href="#accounting/guias">
-              Revisar guías de remisión <ArrowUpRight size={16} />
-            </a>
-            <a href="#accounting/facturas">
-              Revisar facturas y cobros <ArrowUpRight size={16} />
-            </a>
-          </nav>
-        )}
       </>
     );
 

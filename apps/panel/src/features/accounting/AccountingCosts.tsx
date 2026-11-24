@@ -1,3 +1,4 @@
+import { useAccountingPermission } from "./AccountingAccess";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
@@ -36,6 +37,7 @@ export function AccountingCosts({
   purchaseId?: string;
   inventoryAccess: boolean;
 }) {
+  const canWrite = useAccountingPermission("accounting_write");
   const [page, setPage] = useState(1);
   const [month, setMonth] = useState("");
   const query = useAccountingQuery<CostPage>(
@@ -80,7 +82,7 @@ export function AccountingCosts({
         <h2 id="accounting-costs">Compras y gastos</h2>
         <div className="accounting-tools">
           <Refresh loading={query.loading} onClick={query.refresh} />
-          <Button onClick={() => setEntry("new")}>
+          <Button disabled={!canWrite} onClick={() => setEntry("new")}>
             <Plus size={16} /> Registrar gasto o compra
           </Button>
         </div>
@@ -230,8 +232,8 @@ export function AccountingCosts({
               <input
                 className="accounting-file"
                 type="file"
+                disabled={!canWrite || busy}
                 accept="application/pdf"
-                disabled={busy}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) void apply("proof", file);
@@ -246,7 +248,7 @@ export function AccountingCosts({
             <div className="accounting-form-actions">
               <Button
                 variant="ghost"
-                disabled={busy}
+                disabled={!canWrite || busy}
                 onClick={() => {
                   setEntry(active);
                   setActive(undefined);
@@ -255,7 +257,7 @@ export function AccountingCosts({
                 Editar registro
               </Button>
               <Button
-                disabled={busy || !active.proof}
+                disabled={!canWrite || busy || !active.proof}
                 onClick={() => void apply("review")}
               >
                 Marcar como revisado

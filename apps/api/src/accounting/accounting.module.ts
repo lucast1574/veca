@@ -80,6 +80,7 @@ class AccountingController {
   }
 
   @Post("invoices")
+  @RequirePermission("accounting_write", "accounting")
   createInvoice(@Body() raw: unknown, @Req() request: AuthenticatedRequest) {
     const { id, data } = parse(entry, raw);
     return this.accounts.createInvoice(
@@ -90,6 +91,7 @@ class AccountingController {
   }
 
   @Put("invoices/:id")
+  @RequirePermission("accounting_write", "accounting")
   editInvoice(@Param("id") id: string, @Body() raw: unknown) {
     const { version, data } = parse(
       revision.extend({ data: invoiceInput }),
@@ -99,6 +101,7 @@ class AccountingController {
   }
 
   @Post("invoices/:id/issue")
+  @RequirePermission("accounting_issue", "accounting")
   issue(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -112,6 +115,7 @@ class AccountingController {
   }
 
   @Post("invoices/:id/check")
+  @RequirePermission("accounting_issue", "accounting")
   check(@Param("id") id: string, @Body() raw: unknown) {
     return this.accounts.check(
       parse(accountingId, id),
@@ -120,6 +124,7 @@ class AccountingController {
   }
 
   @Post("invoices/:id/payment")
+  @RequirePermission("accounting_write", "accounting")
   payment(@Param("id") id: string, @Body() raw: unknown) {
     const { version, ...payment } = parse(invoicePayment, raw);
     return this.accounts.payment(parse(accountingId, id), version, payment);
@@ -157,6 +162,7 @@ class AccountingController {
   }
 
   @Post("costs")
+  @RequirePermission("accounting_write", "accounting")
   createCost(@Body() raw: unknown, @Req() request: AuthenticatedRequest) {
     const { id, data } = parse(entry, raw);
     return this.accounts.createCost(
@@ -167,12 +173,14 @@ class AccountingController {
   }
 
   @Put("costs/:id")
+  @RequirePermission("accounting_write", "accounting")
   editCost(@Param("id") id: string, @Body() raw: unknown) {
     const { version, data } = parse(revision.extend({ data: costInput }), raw);
     return this.accounts.editCost(parse(accountingId, id), version, data);
   }
 
   @Post("costs/:id/proof")
+  @RequirePermission("accounting_write", "accounting")
   @UseInterceptors(
     FileInterceptor("file", { limits: { fileSize: 8_000_000, files: 1 } }),
   )
@@ -196,6 +204,7 @@ class AccountingController {
   }
 
   @Post("costs/:id/review")
+  @RequirePermission("accounting_write", "accounting")
   review(@Param("id") id: string, @Body() raw: unknown) {
     return this.accounts.reviewCost(
       parse(accountingId, id),
@@ -204,6 +213,7 @@ class AccountingController {
   }
 
   @Post("period/:month/reconcile/:book")
+  @RequirePermission("accounting_write", "accounting")
   @UseInterceptors(
     FileInterceptor("file", { limits: { fileSize: 8_000_000, files: 1 } }),
   )
@@ -299,6 +309,7 @@ class FiscalConnectionController {
     FiscalConnectionController,
     LaborController,
   ],
+  exports: [AccountingService],
   providers: [
     AccountingService,
     InvoiceProvider,

@@ -463,7 +463,10 @@ export default function App() {
                     accountingAccess={can("accounting")}
                   />
                 ) : view === "accounting" ? (
-                  <AccountingWorkspace inventoryAccess={can("inventory")} />
+                  <AccountingWorkspace
+                    user={session.user}
+                    inventoryAccess={can("inventory")}
+                  />
                 ) : view === "leads" || view === "inventory" ? (
                   <Operations
                     user={session.user}

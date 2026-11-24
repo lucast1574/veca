@@ -1,3 +1,4 @@
+import { useAccountingPermission } from "./AccountingAccess";
 import { useState } from "react";
 import { FileCheck2 } from "lucide-react";
 import type { SireBook, SireReconciliation as Result } from "@veca/content";
@@ -46,6 +47,7 @@ const exportRows = (result: Result) => {
 };
 
 export function SireReconciliation({ month }: { month: string }) {
+  const canWrite = useAccountingPermission("accounting_write");
   const [open, setOpen] = useState(false);
   const [book, setBook] = useState<SireBook>("purchases");
   const [result, setResult] = useState<Result>();
@@ -104,7 +106,13 @@ export function SireReconciliation({ month }: { month: string }) {
             ]}
           />
           <Field label="Archivo de la propuesta (TXT)">
-            <input type="file" accept=".txt" name="file" required />
+            <input
+              type="file"
+              disabled={!canWrite}
+              accept=".txt"
+              name="file"
+              required
+            />
           </Field>
           <p className="hint">
             Periodo {month}. Descarga la propuesta en SUNAT y extrae el archivo

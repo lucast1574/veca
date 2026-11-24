@@ -1,3 +1,4 @@
+import { RoleInbox } from "./RoleInbox";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowUpRight,
@@ -159,6 +160,7 @@ export function Dashboard({ user }: { user: SessionUser }) {
         </button>
       </div>
       {error && <Notice error>{error}</Notice>}
+      <RoleInbox />
       <div className="workspace-metrics">
         {cards.map(({ label, value, detail, href, Icon }) => (
           <a
@@ -327,18 +329,21 @@ export function Dashboard({ user }: { user: SessionUser }) {
             ))}
           </section>
         )}
-        {!can("leads") && !can("inventory") && !can("accounting") && (
-          <section className="workspace-section">
-            <h2>Tu espacio en el equipo</h2>
-            <p>
-              Tu cuenta tiene acceso al resumen. Si necesitas otra sección,
-              solicita al administrador que revise tus permisos.
-            </p>
-            <p>
-              <strong>{user.roleName}</strong> · {user.email}
-            </p>
-          </section>
-        )}
+        {!can("leads") &&
+          !can("inventory") &&
+          !can("accounting") &&
+          !can("works") && (
+            <section className="workspace-section">
+              <h2>Tu espacio en el equipo</h2>
+              <p>
+                Tu cuenta tiene acceso al resumen. Si necesitas otra sección,
+                solicita al administrador que revise tus permisos.
+              </p>
+              <p>
+                <strong>{user.roleName}</strong> · {user.email}
+              </p>
+            </section>
+          )}
       </div>
     </main>
   );

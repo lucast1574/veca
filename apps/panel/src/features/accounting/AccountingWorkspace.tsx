@@ -1,3 +1,5 @@
+import type { SessionUser } from "@veca/content";
+import { AccountingAccess } from "./AccountingAccess";
 import { useEffect, useState } from "react";
 import { GuideAccounting } from "../dispatch/GuideAccounting";
 import { AccountingInvoices } from "./AccountingInvoices";
@@ -23,8 +25,10 @@ function locationSection() {
 
 export function AccountingWorkspace({
   inventoryAccess,
+  user,
 }: {
   inventoryAccess: boolean;
+  user: SessionUser;
 }) {
   const [route, setRoute] = useState(locationSection);
   useEffect(() => {
@@ -34,56 +38,65 @@ export function AccountingWorkspace({
   }, []);
 
   return (
-    <main className="ops-page accounting-workspace">
-      <header className="accounting-title">
-        <h1>Contabilidad</h1>
-      </header>
-      <nav className="accounting-tabs" aria-label="Secciones de Contabilidad">
-        {tabs.map(([id, label]) => (
-          <a
-            key={id}
-            href={`#accounting/${id}`}
-            aria-current={route.tab === id ? "page" : undefined}
-          >
-            {label}
-          </a>
-        ))}
-      </nav>
-      {route.tab === "guias" && (
-        <GuideAccounting
-          selected={route.id === "revision" ? "" : route.id || ""}
-          inventoryAccess={inventoryAccess}
-          initialFilter={route.id === "revision" ? "review" : "all"}
-          key={route.id === "revision" ? "review" : "default"}
-        />
-      )}
-      {route.tab === "facturas" && (
-        <AccountingInvoices
-          selected={
-            ["solicitadas", "por-cobrar"].includes(route.id || "")
-              ? ""
-              : route.id || ""
-          }
-          queue={
-            route.id === "solicitadas"
-              ? "requested"
-              : route.id === "por-cobrar"
-                ? "collect"
-                : ""
-          }
-          key={route.id || "list"}
-        />
-      )}
-      {route.tab === "gastos" && (
-        <AccountingCosts
-          key={route.id || "all"}
-          purchaseId={route.id}
-          inventoryAccess={inventoryAccess}
-        />
-      )}
-      {route.tab === "personal" && <LaborWorkspace />}
-      {route.tab === "impuestos" && <TaxPeriod />}
-      {route.tab === "margen" && <Margin />}
-    </main>
+    <AccountingAccess.Provider value={user.permissions}>
+      <main className="ops-page accounting-workspace">
+        <header className="accounting-title">
+          <h1>Contabilidad</h1>
+        </header>
+        <nav className="accounting-tabs" aria-label="Secciones de Contabilidad">
+          {tabs
+            .filter(
+              ([id]) =>
+                id !== "personal" ||
+                user.permissions.includes("accounting_labor"),
+            )
+            .map(([id, label]) => (
+              <a
+                key={id}
+                href={`#accounting/${id}`}
+                aria-current={route.tab === id ? "page" : undefined}
+              >
+                {label}
+              </a>
+            ))}
+        </nav>
+        {route.tab === "guias" && (
+          <GuideAccounting
+            selected={route.id === "revision" ? "" : route.id || ""}
+            inventoryAccess={inventoryAccess}
+            initialFilter={route.id === "revision" ? "review" : "all"}
+            key={route.id === "revision" ? "review" : "default"}
+          />
+        )}
+        {route.tab === "facturas" && (
+          <AccountingInvoices
+            selected={
+              ["solicitadas", "por-cobrar"].includes(route.id || "")
+                ? ""
+                : route.id || ""
+            }
+            queue={
+              route.id === "solicitadas"
+                ? "requested"
+                : route.id === "por-cobrar"
+                  ? "collect"
+                  : ""
+            }
+            key={route.id || "list"}
+          />
+        )}
+        {route.tab === "gastos" && (
+          <AccountingCosts
+            key={route.id || "all"}
+            purchaseId={route.id}
+            inventoryAccess={inventoryAccess}
+          />
+        )}
+        {route.tab === "personal" &&
+          user.permissions.includes("accounting_labor") && <LaborWorkspace />}
+        {route.tab === "impuestos" && <TaxPeriod />}
+        {route.tab === "margen" && <Margin />}
+      </main>
+    </AccountingAccess.Provider>
   );
 }

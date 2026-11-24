@@ -19,6 +19,9 @@ export const PERMISSIONS = [
   "purchases_manage",
   "dispatches",
   "accounting",
+  "accounting_write",
+  "accounting_issue",
+  "accounting_labor",
   "users",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];

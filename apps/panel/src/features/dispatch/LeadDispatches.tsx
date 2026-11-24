@@ -1,3 +1,5 @@
+import { DiscardGuideDialog } from "./DiscardGuideDialog";
+import { recordId } from "../accounting/accounting-shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Truck } from "lucide-react";
 import {
@@ -27,11 +29,13 @@ export function LeadDispatches({
 }) {
   const path = `/admin/crm/leads/${lead.id}/dispatches`;
   const [rows, setRows] = useState<Dispatch[] | null>(null);
+  const [discarding, setDiscarding] = useState<Dispatch>();
   const [departing, setDeparting] = useState<Dispatch>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [initial, setInitial] = useState<DispatchInput | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const creation = useRef(recordId());
   const editing = useRef<Dispatch | null>(null);
   const mayPrepare = ["coordination", "execution"].includes(lead.stage);
   const load = useCallback(async () => {
@@ -60,6 +64,7 @@ export function LeadDispatches({
 
   function open(row?: Dispatch) {
     editing.current = row || null;
+    if (!row) creation.current = recordId();
     setInitial(row ? dispatchInput(row) : newDispatch(lead));
     if (inventoryAccess && !materials.length)
       void api<Material[]>("/admin/crm/materials")
@@ -81,7 +86,7 @@ export function LeadDispatches({
             method: "PUT",
             body: JSON.stringify({ version: current.version, data }),
           })
-      : await post<Dispatch>(path, data);
+      : await post<Dispatch>(path, { ...data, creationId: creation.current });
     editing.current = draft;
     if (submit) {
       try {
@@ -174,6 +179,18 @@ export function LeadDispatches({
                     Editar despacho
                   </Button>
                 )}
+                {!row.createdInAccounting &&
+                  ["draft", "review", "returned", "rejected"].includes(
+                    row.status,
+                  ) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setDiscarding(row)}
+                    >
+                      Descartar preparación
+                    </Button>
+                  )}
                 {row.departedAt && (
                   <span className="dispatch-pill" data-state="accepted">
                     Salida confirmada
@@ -204,6 +221,17 @@ export function LeadDispatches({
             </li>
           ))}
         </ul>
+      )}
+      {discarding && (
+        <DiscardGuideDialog
+          path={`${path}/${discarding.id}/discard`}
+          version={discarding.version}
+          close={() => setDiscarding(undefined)}
+          done={() => {
+            setDiscarding(undefined);
+            void load();
+          }}
+        />
       )}
       {departing && (
         <WarehouseForm

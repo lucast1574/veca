@@ -1,3 +1,8 @@
+import { useAccountingQuery } from "../accounting/accounting-shared";
+import { QueryState } from "../accounting/accounting-shared";
+import { useLiveRefresh } from "./shared";
+import { WorkCloseoutChecks } from "../works/WorkCloseout";
+import type { WorkCloseout as Closeout } from "@veca/content";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useState } from "react";
 import { LEAD_STAGES, REQUEST_TYPES, type LeadInput } from "@veca/content";
@@ -51,16 +56,29 @@ export function stageAction(stage: Stage) {
 
 export function LeadStageDialog({
   stage,
+  workId,
   initial,
   onClose,
   onSave,
 }: {
   stage: Stage;
+  workId?: string;
   initial: LeadInput;
   onClose: () => void;
   onSave: (next: LeadInput) => Promise<void>;
 }) {
   const id = useId();
+  const closeout = useAccountingQuery<Closeout>(
+    stage === "completed" && workId
+      ? `/admin/work-control/${workId}/closeout`
+      : "",
+  );
+  useLiveRefresh(
+    closeout.refresh,
+    false,
+    stage === "completed" && !!workId,
+    "/admin/works/events",
+  );
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -89,7 +107,10 @@ export function LeadStageDialog({
       draft.requestType &&
       draft.idea.trim().length >= 10,
     );
-  const ready = completeFields && completeWork;
+  const ready =
+    completeFields &&
+    completeWork &&
+    (stage !== "completed" || !workId || !!closeout.data?.ready);
   useUnsavedChanges(draft !== initial, busy);
 
   function close() {
@@ -107,19 +128,37 @@ export function LeadStageDialog({
           <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button type="submit" form={id} disabled={busy}>
+          <Button
+            type="submit"
+            form={id}
+            disabled={
+              busy ||
+              (stage === "completed" && !!workId && !closeout.data?.ready)
+            }
+          >
             {busy ? "Guardando…" : "Confirmar cambio"}
           </Button>
         </footer>
       }
     >
+      {stage === "completed" && workId && (
+        <QueryState {...closeout}>
+          {closeout.data && (
+            <WorkCloseoutChecks id={workId} data={closeout.data} />
+          )}
+        </QueryState>
+      )}
       <form
         id={id}
         onSubmit={async (event) => {
           event.preventDefault();
           if (busy) return;
           if (!ready) {
-            setError("Completa los campos de esta etapa para continuar.");
+            setError(
+              stage === "completed" && workId && !closeout.data?.ready
+                ? "Resuelve los pendientes del cierre antes de continuar."
+                : "Completa los campos de esta etapa para continuar.",
+            );
             event.currentTarget
               .querySelector<HTMLElement>('[aria-required="true"]')
               ?.focus();
@@ -215,7 +254,11 @@ export function LeadStageDialog({
           );
         })}
         {!ready && (
-          <p className="hint">Completa los campos obligatorios para avanzar.</p>
+          <p className="hint">
+            {stage === "completed" && workId && !closeout.data?.ready
+              ? "Resuelve los pendientes del cierre antes de continuar."
+              : "Completa los campos obligatorios para avanzar."}
+          </p>
         )}
         {error && <Notice error>{error}</Notice>}
       </form>

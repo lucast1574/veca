@@ -32,7 +32,7 @@ const idSchema = z.uuid();
 const revision = z.number().int().nonnegative();
 
 @Controller("admin/accounting/labor")
-@RequirePermission("accounting")
+@RequirePermission("accounting_labor", "accounting")
 export class LaborController {
   constructor(
     private readonly labor: LaborCostsService,

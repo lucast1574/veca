@@ -1,3 +1,8 @@
+import { WorkGate } from "../crm/work-gate.service";
+import {
+  SupplyDispatches,
+  stableOperation,
+} from "../inventory/supply-dispatch.service";
 import { literalSearch } from "../common/literal-search";
 import {
   BadRequestException,
@@ -6,6 +11,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
+import { z } from "zod";
 import { ObjectId } from "mongodb";
 import {
   dispatchSchema,
@@ -37,6 +43,7 @@ type DispatchRecord = {
   leadId: string;
   workName: string;
   accountingCreationHash?: string;
+  creationHash?: string;
   demo: boolean;
   data: DispatchInput;
   status: DispatchStatus;
@@ -47,6 +54,7 @@ type DispatchRecord = {
   attemptKey?: string;
   departedAt?: string;
   departureSource?: string;
+  departureEpoch?: number;
   createdAt: string;
   updatedAt: string;
   events: { action: string; actor: string; at: string }[];
@@ -146,6 +154,8 @@ export class DispatchService {
     private readonly leads: CrmRepository,
     private readonly provider: GuideProvider,
     private readonly inventory: InventoryService,
+    private readonly supplies: SupplyDispatches,
+    private readonly gate: WorkGate,
   ) {}
 
   private get collection() {
@@ -291,6 +301,7 @@ export class DispatchService {
         "accepted",
         "observed",
         "rejected",
+        "discarded",
       ],
       draft: ["draft"],
       review: ["review", "sending", "pending", "rejected"],
@@ -375,6 +386,27 @@ export class DispatchService {
     actor: string,
     accountingId?: string,
   ) {
+    const { creationId, ...data } = parse(
+      dispatchSchema.extend({
+        creationId: z
+          .string()
+          .regex(/^[a-f0-9]{24}$/)
+          .optional(),
+      }),
+      input,
+    );
+    const id = accountingId || creationId || String(new ObjectId());
+    return this.gate.run(leadId, `guide:${id}`, () =>
+      this.createRecord(leadId, data, actor, accountingId, id),
+    );
+  }
+  private async createRecord(
+    leadId: string,
+    input: unknown,
+    actor: string,
+    accountingId?: string,
+    creationId?: string,
+  ) {
     const data = parse(dispatchSchema, input);
     const lead = await this.leads.get(leadId);
     if (!operationalStages.includes(lead.stage))
@@ -386,7 +418,7 @@ export class DispatchService {
       throw new ConflictException("Elige una obra real para preparar la guía.");
     const now = new Date().toISOString();
     const record: DispatchRecord = {
-      _id: accountingId ? idOf(accountingId) : new ObjectId(),
+      _id: idOf(accountingId || creationId!),
       leadId: lead._id.toHexString(),
       workName: lead.name,
       data,
@@ -414,8 +446,17 @@ export class DispatchService {
         );
       return view(stored);
     }
-    await this.collection.insertOne(record);
-    return view(record);
+    const creationHash = createHash("sha256")
+      .update(JSON.stringify([record.leadId, actor, data]))
+      .digest("hex");
+    const saved = await this.collection.findOneAndUpdate(
+      { _id: record._id },
+      { $setOnInsert: { ...record, creationHash } },
+      { upsert: true, returnDocument: "after" },
+    );
+    if (saved?.creationHash !== creationHash)
+      throw new ConflictException("La guía ya se registró con otros datos.");
+    return view(saved);
   }
 
   async updateDraft(
@@ -465,6 +506,16 @@ export class DispatchService {
   }
 
   async submit(leadId: string, id: string, version: number, actor: string) {
+    return this.gate.run(leadId, `submit:${id}:${version}`, () =>
+      this.submitRecord(leadId, id, version, actor),
+    );
+  }
+  private async submitRecord(
+    leadId: string,
+    id: string,
+    version: number,
+    actor: string,
+  ) {
     const doc = await this.operationsDraft(leadId, id);
     const lead = await this.leads.get(leadId);
     if (!operationalStages.includes(lead.stage))
@@ -488,6 +539,24 @@ export class DispatchService {
     );
   }
 
+  async discard(
+    id: string,
+    version: number,
+    observation: string,
+    actor: string,
+    leadId?: string,
+  ) {
+    const doc = leadId
+      ? await this.operationsDraft(leadId, id)
+      : await this.get(id);
+    return this.change(
+      doc,
+      version,
+      ["draft", "review", "returned", "rejected"],
+      { status: "discarded", observation },
+      actor,
+    );
+  }
   async sendBack(
     id: string,
     version: number,
@@ -507,6 +576,12 @@ export class DispatchService {
   }
 
   async issue(id: string, version: number, actor: string) {
+    const doc = await this.get(id);
+    return this.gate.run(doc.leadId, `issue-guide:${id}:${version}`, () =>
+      this.issueRecord(id, version, actor),
+    );
+  }
+  private async issueRecord(id: string, version: number, actor: string) {
     const doc = await this.get(id);
     const ready = doc.accountingCreationHash ? "draft" : "review";
     if (doc.version !== version || doc.status !== ready)
@@ -581,7 +656,7 @@ export class DispatchService {
     return this.recordResult(doc, version, ["pending"], result, actor);
   }
 
-  private async stockLines(items: DispatchInput["items"]) {
+  async stockLines(items: DispatchInput["items"]) {
     const totals = new Map<string, number>();
     for (const item of items) {
       if (!item.materialId) continue;
@@ -615,17 +690,40 @@ export class DispatchService {
     actor: string,
     reservationKey?: string,
   ) {
+    return this.gate.run(leadId, `departure:${id.toLowerCase()}`, () =>
+      this.departRecord(leadId, id, actor, reservationKey),
+    );
+  }
+  private async departRecord(
+    leadId: string,
+    id: string,
+    actor: string,
+    reservationKey?: string,
+  ) {
     const row = await this.get(id, leadId);
     if (row.demo || !accepted.includes(row.status))
       throw new ConflictException(
         "Confirma la salida con una guía emitida para una obra real.",
       );
+    const departureAttempt = reservationKey
+      ? await this.supplies.deliveryAttempt(String(row._id), reservationKey)
+      : undefined;
+    if (reservationKey && !departureAttempt)
+      throw new ConflictException("Reabre la entrega desde su solicitud.");
     // A guide has one permanent departure route. Claiming it atomically keeps a
     // direct departure and a reserved delivery from racing on the same ledger IDs.
-    const source = reservationKey || "direct";
+    const source =
+      reservationKey &&
+      row.departureSource &&
+      (await this.supplies.isLinked(String(row._id), reservationKey))
+        ? row.departureSource
+        : reservationKey || "direct";
     const claimed = await this.collection.findOneAndUpdate(
       {
         _id: row._id,
+        $expr: {
+          $eq: [{ $ifNull: ["$departureEpoch", 0] }, row.departureEpoch || 0],
+        },
         $or: [
           { departureSource: { $exists: false } },
           { departureSource: source },
@@ -649,17 +747,40 @@ export class DispatchService {
         throw new ConflictException(
           "La guía ya salió por otro recorrido. Revisa la entrega.",
         );
+      await this.supplies.recoverLegacy(
+        String(row._id),
+        row.leadId,
+        reservationKey,
+      );
+      await this.supplies.release(String(row._id));
       return view(row);
     }
     const stockLines = await this.stockLines(row.data.items);
-    const lines = stockLines.map(({ materialId, quantity }) => {
-      const hash = createHash("sha256")
-        .update(`dispatch:${row._id}:${materialId}`)
-        .digest("hex");
-      const operationId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-      return { materialId, quantity, operationId };
-    });
+    const batch = await this.supplies.prepare(
+      String(row._id),
+      row.leadId,
+      stockLines,
+      actor,
+      reservationKey,
+    );
+    const lines = this.supplies.pieces(batch);
+    const legacyPieces = new Set<string>();
     for (const item of lines) {
+      const legacy = item.reservationKey
+        ? await this.inventory.ledger.findOne({
+            _id: `${item.materialId}:${stableOperation(`dispatch:${row._id}:${item.materialId}`)}`,
+            dispatchId: String(row._id),
+            reservationKey: item.reservationKey,
+            leadId: row.leadId,
+          })
+        : null;
+      if (
+        legacy &&
+        Math.round(legacy.quantity * 1000) === Math.round(item.quantity * 1000)
+      ) {
+        legacyPieces.add(item.operationId);
+        continue;
+      }
       await this.inventory.flush(idOf(item.materialId));
       const material = await this.inventory.materials.findOne({
         _id: idOf(item.materialId),
@@ -677,6 +798,7 @@ export class DispatchService {
         );
     }
     for (const item of lines) {
+      if (legacyPieces.has(item.operationId)) continue;
       await this.inventory.move(
         item.materialId,
         {
@@ -689,10 +811,13 @@ export class DispatchService {
         actor,
         {
           dispatchId: String(row._id),
-          ...(reservationKey ? { reservationKey } : {}),
+          ...(item.reservationKey
+            ? { reservationKey: item.reservationKey }
+            : {}),
         },
       );
     }
+    await this.supplies.complete(batch);
     const at = new Date().toISOString();
     await this.collection.updateOne(
       { _id: row._id, departedAt: { $exists: false } },
@@ -702,6 +827,7 @@ export class DispatchService {
         $push: { events: { action: "depart", actor, at } },
       },
     );
+    await this.supplies.release(String(row._id));
     return view(await this.get(id, leadId));
   }
 

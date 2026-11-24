@@ -1,0 +1,31 @@
+.role-inbox {
+  margin: 24px 0 32px;
+}
+.role-inbox h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+.role-inbox .inbox-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+  font-size: 12px;
+}
+.role-inbox .workspace-row small {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--panel-secondary);
+}
+.role-inbox .workspace-row strong {
+  font-size: 13px;
+}
+.role-inbox .workspace-row > svg {
+  flex-shrink: 0;
+}

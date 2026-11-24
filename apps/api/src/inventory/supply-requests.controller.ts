@@ -88,9 +88,25 @@ export class SupplyRequestsController {
       parse(z.enum(["open", "all"]), filter),
     );
   }
+  @Get(":id")
+  detail(@Param("id") id: string) {
+    return this.requests.detail(id);
+  }
   @Get(":id/guides")
   guides(@Param("id") id: string) {
     return this.requests.guides(id);
+  }
+  @Post(":id/cancel-delivery")
+  cancelDelivery(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const { version } = parse(
+      z.object({ version: z.number().int().positive() }).strict(),
+      body,
+    );
+    return this.requests.cancelDelivery(id, version, req.session.user);
   }
   @Post(":id/actions")
   action(

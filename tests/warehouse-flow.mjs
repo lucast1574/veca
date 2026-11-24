@@ -200,11 +200,20 @@ try {
       note: "",
     });
     assert.equal(assign.assignment.workId, String(workId));
-    await call(toolPath, 409, {
+    const repeatedAssignment = await call(toolPath, 201, {
       action: "assign",
       version: tool.version,
       workId: String(workId),
       responsible: "Instalador QA",
+      note: "",
+    });
+    assert.equal(repeatedAssignment.version, assign.version);
+    assert.equal(repeatedAssignment.events.length, 1);
+    await call(toolPath, 409, {
+      action: "assign",
+      version: tool.version,
+      workId: String(workId),
+      responsible: "Otro instalador QA",
       note: "",
     });
 

@@ -73,7 +73,8 @@ export type DispatchStatus =
   | "pending"
   | "accepted"
   | "observed"
-  | "rejected";
+  | "rejected"
+  | "discarded";
 
 export type Dispatch = DispatchInput & {
   id: string;
@@ -98,4 +99,5 @@ export const DISPATCH_STATUS: Record<DispatchStatus, string> = {
   accepted: "Aceptada",
   observed: "Aceptada con observaciones",
   rejected: "Requiere corrección",
+  discarded: "Preparación descartada",
 };

@@ -1,3 +1,5 @@
+import { DiscardGuideDialog } from "./DiscardGuideDialog";
+import { useAccountingPermission } from "../accounting/AccountingAccess";
 import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
@@ -45,6 +47,7 @@ export function GuideAccounting({
   initialFilter?: string;
   inventoryAccess: boolean;
 }) {
+  const canWrite = useAccountingPermission("accounting_write");
   const [filter, setFilter] = useState(initialFilter);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -67,7 +70,11 @@ export function GuideAccounting({
     <section aria-labelledby="accounting-guides">
       <div className="accounting-section-head">
         <h2 id="accounting-guides">Guías de remisión</h2>
-        <Button type="button" onClick={() => setCreating(true)}>
+        <Button
+          type="button"
+          disabled={!canWrite}
+          onClick={() => setCreating(true)}
+        >
           <Plus size={16} aria-hidden="true" /> Nueva guía
         </Button>
       </div>
@@ -169,10 +176,13 @@ function GuideReview({
   id: string;
   inventoryAccess: boolean;
 }) {
+  const canWrite = useAccountingPermission("accounting_write");
+  const mayIssue = useAccountingPermission("accounting_issue");
   const path = `${guidePath}/${id}`;
   const [data, setData] = useState<GuideDetail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [discarding, setDiscarding] = useState<{ version: number }>();
   const [returning, setReturning] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -211,12 +221,16 @@ function GuideReview({
 
   const row = data?.dispatch;
   const mayEdit =
-    row?.createdInAccounting && ["draft", "rejected"].includes(row.status);
+    canWrite &&
+    row?.createdInAccounting &&
+    ["draft", "rejected"].includes(row.status);
   const mayReturn =
+    canWrite &&
     row &&
     !row.createdInAccounting &&
     ["review", "rejected"].includes(row.status);
   const canIssue =
+    mayIssue &&
     row &&
     row.status === (row.createdInAccounting ? "draft" : "review") &&
     !row.demo &&
@@ -224,6 +238,17 @@ function GuideReview({
   const external = row?.transportMode === "01";
   return (
     <section className="dispatch-review accounting-guide-review">
+      {discarding && (
+        <DiscardGuideDialog
+          path={`${path}/discard`}
+          version={discarding.version}
+          close={() => setDiscarding(undefined)}
+          done={() => {
+            setDiscarding(undefined);
+            void load();
+          }}
+        />
+      )}
       <a className="dispatch-link" href="#accounting/guias">
         <ArrowLeft size={16} /> Volver a guías
       </a>
@@ -392,7 +417,11 @@ function GuideReview({
                   >
                     Cancelar
                   </Button>
-                  <Button type="button" onClick={() => void action("issue")}>
+                  <Button
+                    type="button"
+                    disabled={!canIssue}
+                    onClick={() => void action("issue")}
+                  >
                     Confirmar y emitir
                   </Button>
                 </footer>
@@ -445,11 +474,25 @@ function GuideReview({
           )}
           {!returning && (
             <div className="dispatch-actions">
+              {canWrite &&
+                ["draft", "review", "returned", "rejected"].includes(
+                  row.status,
+                ) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => setDiscarding({ version: row.version })}
+                  >
+                    Descartar preparación
+                  </Button>
+                )}
+
               {mayEdit && (
                 <Button
                   type="button"
                   variant={canIssue ? "ghost" : "primary"}
-                  disabled={busy}
+                  disabled={busy || !canWrite}
                   onClick={() => setEditing(true)}
                 >
                   {row.status === "rejected"
@@ -476,10 +519,10 @@ function GuideReview({
                   {busy ? "Enviando…" : "Emitir guía"}
                 </Button>
               )}
-              {row.canCheckStatus && (
+              {mayIssue && row.canCheckStatus && (
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !mayIssue}
                   onClick={() => void action("check")}
                 >
                   Actualizar estado
