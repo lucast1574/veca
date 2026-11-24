@@ -147,6 +147,7 @@ export function GalleryUploadDialog({
         </Field>
         <Field label="Categoría" htmlFor={categoryId}>
           <Select
+            floating
             id={categoryId}
             label="Categoría"
             options={categories}

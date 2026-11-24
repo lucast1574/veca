@@ -1,5 +1,12 @@
 "use client";
-import { useEffect, useId, useRef, useState, type Ref } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useId,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 export type SelectOption = {
   value: string;
   label: string;
@@ -17,6 +24,7 @@ export function Select({
   error,
   disabled,
   triggerRef,
+  floating = false,
 }: {
   id?: string;
   name?: string;
@@ -28,15 +36,60 @@ export function Select({
   error?: string;
   disabled?: boolean;
   triggerRef?: Ref<HTMLButtonElement>;
+  floating?: boolean;
 }) {
   const uid = useId();
   const listId = `${uid}-options`;
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement | null>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const search = useRef({ text: "", at: 0 });
   const selected = options.findIndex((o) => o.value === value);
+  useLayoutEffect(() => {
+    const panel = menu.current;
+    const trigger = button.current;
+    if (!open || !floating || !panel || !trigger) return;
+    panel.showPopover();
+    function position() {
+      if (!panel || !trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const top = viewport?.offsetTop ?? 0;
+      const left = viewport?.offsetLeft ?? 0;
+      const width = viewport?.width ?? window.innerWidth;
+      const height = viewport?.height ?? window.innerHeight;
+      const below = Math.max(0, top + height - rect.bottom - 16);
+      const above = Math.max(0, rect.top - top - 16);
+      const upwards =
+        below < Math.min(panel.scrollHeight, 300) && above > below;
+      panel.style.width = Math.min(rect.width, width - 24) + "px";
+      panel.style.maxHeight = Math.min(300, upwards ? above : below) + "px";
+      panel.style.left =
+        Math.max(
+          left + 12,
+          Math.min(rect.left, left + width - panel.offsetWidth - 12),
+        ) + "px";
+      panel.style.top =
+        (upwards ? rect.top - panel.offsetHeight - 8 : rect.bottom + 8) + "px";
+    }
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(trigger);
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    window.visualViewport?.addEventListener("resize", position);
+    window.visualViewport?.addEventListener("scroll", position);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+      window.visualViewport?.removeEventListener("resize", position);
+      window.visualViewport?.removeEventListener("scroll", position);
+      panel.hidePopover();
+    };
+  }, [open, floating]);
   useEffect(() => {
     if (!open) return;
     const dismiss = (e: PointerEvent) => {
@@ -156,6 +209,8 @@ export function Select({
       </button>
       {open && (
         <div
+          ref={menu}
+          popover={floating ? "manual" : undefined}
           className="veca-select-menu"
           id={listId}
           role="listbox"

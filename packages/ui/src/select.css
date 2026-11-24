@@ -82,6 +82,14 @@
   scrollbar-width: thin;
   scroll-padding: 7px;
 }
+.veca-select-menu[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  color: var(--select-text);
+  font: inherit;
+}
 .veca-select-option {
   display: flex;
   align-items: center;

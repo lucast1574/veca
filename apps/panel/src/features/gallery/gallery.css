@@ -80,12 +80,6 @@
   font-weight: 500;
   overflow-wrap: anywhere;
 }
-.gallery-upload-form .veca-select-menu {
-  position: relative;
-  inset: auto;
-  margin-top: 8px;
-  box-shadow: none;
-}
 .gallery-tools {
   background: var(--panel-surface);
   border: 1px solid var(--panel-edge);
