@@ -23,6 +23,8 @@ import { photoMetadataSchema } from "@veca/content";
 import { GalleryController } from "../gallery/gallery.controller";
 import { MobileGalleryController } from "../gallery/mobile-gallery.controller";
 import { GalleryService } from "../gallery/gallery.service";
+import { GalleryUploads } from "../gallery/gallery-uploads";
+import { MobileGalleryAccess } from "../gallery/mobile-gallery-access";
 import { PublicEndpoint, RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { AuthModule } from "../auth/auth.module";
@@ -202,6 +204,8 @@ class CrmController {
     InventoryService,
     CrmEvents,
     GalleryService,
+    GalleryUploads,
+    MobileGalleryAccess,
   ],
 })
 export class CrmModule {}

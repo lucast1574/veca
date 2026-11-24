@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { CATEGORIES } from "@veca/content";
 import type {
   GalleryLeadPhoto,
   GalleryPhoto,
@@ -40,7 +41,7 @@ export function GalleryViewer({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [draft, setDraft] = useState<PhotoMetadata>({
-    caption: initial.caption,
+    caption: initial.source === "lead" ? initial.caption : "",
     tags: initial.source === "lead" ? initial.tags : [],
     sharing: initial.source === "lead" ? initial.sharing : "internal",
   });
@@ -103,10 +104,16 @@ export function GalleryViewer({
   }
   const publication = photo.source === "publication" ? photo.publication : null;
   const title =
-    photo.caption ||
-    (photo.source === "publication"
-      ? photo.alt || photo.publication.title
-      : "Fotografía de obra");
+    photo.source === "upload"
+      ? photo.name
+      : photo.caption ||
+        (photo.source === "publication"
+          ? photo.alt || photo.publication.title
+          : "Fotografía de obra");
+  const uploadCategory =
+    photo.source === "upload"
+      ? CATEGORIES.find(({ id }) => id === photo.category)?.name
+      : undefined;
   return (
     <Modal
       size="wide"
@@ -118,7 +125,9 @@ export function GalleryViewer({
             ? publication.status === "published"
               ? "Publicación web"
               : "Borrador de publicación"
-            : "Fotografía del lead · Galería del equipo"
+            : photo.source === "upload"
+              ? [uploadCategory, "Uso interno"].filter(Boolean).join(" · ")
+              : "Fotografía del lead · Galería del equipo"
       }
       onClose={close}
       busy={busy}
@@ -170,7 +179,7 @@ export function GalleryViewer({
         )}
         {presenting ? (
           <div className="gallery-presentation-caption">
-            <p>{photo.caption}</p>
+            <p>{photo.source === "lead" ? photo.caption : ""}</p>
             <Button variant="ghost" onClick={() => setPresenting(false)}>
               Volver a la galería privada
             </Button>

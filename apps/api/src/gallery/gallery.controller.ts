@@ -3,20 +3,36 @@ import {
   Controller,
   Get,
   Param,
+  Post,
   Put,
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
 import type { Response } from "express";
 import { Readable } from "node:stream";
 import { RequirePermission } from "../auth/route-access";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { GalleryService } from "./gallery.service";
+import { GalleryPhotoFile, GalleryUploads } from "./gallery-uploads";
 @RequirePermission("gallery")
 @Controller("admin/gallery")
 export class GalleryController {
-  constructor(private readonly gallery: GalleryService) {}
+  constructor(
+    private readonly gallery: GalleryService,
+    private readonly uploads: GalleryUploads,
+  ) {}
+  @Post("photos")
+  @UseInterceptors(GalleryPhotoFile)
+  upload(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.uploads.create(file, body, req.session.user.username);
+  }
   @Get("photos") list(
     @Query() query: unknown,
     @Req() req: AuthenticatedRequest,
@@ -36,7 +52,7 @@ export class GalleryController {
     return this.gallery.update(id, body, req.session.user.username);
   }
   @Get("photos/:id") async read(@Param("id") id: string, @Res() res: Response) {
-    const { file } = await this.gallery.read(id);
+    const file = await this.gallery.read(id);
     res.set({
       "Content-Type": "image/webp",
       "Cache-Control": "private, no-store",

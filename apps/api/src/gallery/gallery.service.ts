@@ -19,6 +19,7 @@ import {
 import { parse } from "../common/validation";
 import { CrmFiles, type AttachmentDocument } from "../crm/crm.files";
 import { publicationPhotos } from "./publication-photos";
+import { GalleryUploads, type GalleryUploadDocument } from "./gallery-uploads";
 const filtersSchema = z
   .object({
     search: z.string().trim().max(120).default(""),
@@ -27,7 +28,7 @@ const filtersSchema = z
     stage: z.union([z.literal(""), stageSchema]).default(""),
     segment: z.union([z.literal(""), segmentSchema]).default(""),
     requestType: z.union([z.literal(""), requestSchema]).default(""),
-    source: z.enum(["", "lead", "publication"]).default(""),
+    source: z.enum(["", "lead", "publication", "upload"]).default(""),
     status: z.enum(["", "draft", "published"]).default(""),
     category: z.union([z.literal(""), z.enum(categoryIds)]).default(""),
     sort: z.enum(["newest", "oldest"]).default("newest"),
@@ -43,7 +44,10 @@ type JoinedPhoto = AttachmentDocument & {
 };
 @Injectable()
 export class GalleryService {
-  constructor(private readonly files: CrmFiles) {}
+  constructor(
+    private readonly files: CrmFiles,
+    private readonly uploads: GalleryUploads,
+  ) {}
   view(doc: JoinedPhoto): GalleryLeadPhoto {
     return {
       ...this.files.view(doc),
@@ -61,9 +65,14 @@ export class GalleryService {
       data.segment ||
       data.requestType,
     );
-    const publicationOnly = Boolean(data.status || data.category);
-    const includeLeads = data.source !== "publication" && !publicationOnly;
-    const includePublications = data.source !== "lead" && !leadOnly;
+    const includeLeads =
+      (!data.source || data.source === "lead") &&
+      !data.status &&
+      !data.category;
+    const includePublications =
+      (!data.source || data.source === "publication") && !leadOnly;
+    const includeUploads =
+      (!data.source || data.source === "upload") && !leadOnly && !data.status;
     const match: Record<string, unknown> = { type: "photo" };
     if (!includeLeads) match._id = { $exists: false };
     if (data.sharing === "internal") match.sharing = { $ne: "clients" };
@@ -73,10 +82,15 @@ export class GalleryService {
     for (const field of ["stage", "segment", "requestType"] as const)
       if (data[field]) after[`lead.${field}`] = data[field];
     const publicationMatch: Record<string, unknown> = {};
+    const uploadMatch: Record<string, unknown> = {};
     if (data.status) publicationMatch["publication.status"] = data.status;
-    if (data.category) publicationMatch["publication.category"] = data.category;
+    if (data.category) {
+      publicationMatch["publication.category"] = data.category;
+      uploadMatch.category = data.category;
+    }
     if (data.search) {
       const regex = data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      uploadMatch.name = { $regex: regex, $options: "i" };
       after.$or = ["caption", "name", "lead.name", "lead.district"].map(
         (field) => ({ [field]: { $regex: regex, $options: "i" } }),
       );
@@ -89,7 +103,11 @@ export class GalleryService {
     }
     const [result] = await this.files.collection
       .aggregate<{
-        items: (JoinedPhoto | GalleryPublicationPhoto)[];
+        items: (
+          | JoinedPhoto
+          | GalleryPublicationPhoto
+          | (GalleryUploadDocument & { source: "upload" })
+        )[];
         count: { total: number }[];
       }>(
         [
@@ -143,6 +161,19 @@ export class GalleryService {
                 },
               ]
             : []),
+          ...(includeUploads
+            ? [
+                {
+                  $unionWith: {
+                    coll: this.uploads.collection.collectionName,
+                    pipeline: [
+                      { $match: uploadMatch },
+                      { $set: { source: "upload" } },
+                    ],
+                  },
+                },
+              ]
+            : []),
           {
             $facet: {
               items: [
@@ -170,6 +201,7 @@ export class GalleryService {
     return {
       items: (result?.items || []).map((photo) => {
         if (photo.source === "lead") return this.view(photo);
+        if (photo.source === "upload") return this.uploads.view(photo);
         const { id, source, url, caption, alt, createdAt, publication } = photo;
         return { id, source, url, caption, alt, createdAt, publication };
       }),
@@ -208,13 +240,12 @@ export class GalleryService {
   async read(id: string) {
     if (!ObjectId.isValid(id)) throw new NotFoundException();
     // Check the kind before retrieving an object: gallery permission never grants access to contracts.
-    if (
-      !(await this.files.collection.findOne({
-        _id: new ObjectId(id),
-        type: "photo",
-      }))
-    )
-      throw new NotFoundException();
-    return this.files.read(id);
+    const photoId = new ObjectId(id);
+    const leadPhoto = await this.files.collection.findOne({
+      _id: photoId,
+      type: "photo",
+    });
+    if (leadPhoto) return (await this.files.read(id)).file;
+    return this.uploads.read(photoId);
   }
 }

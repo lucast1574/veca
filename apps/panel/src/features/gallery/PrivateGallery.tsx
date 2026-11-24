@@ -6,11 +6,12 @@ import {
   REQUEST_TYPES,
   type GalleryPhoto,
 } from "@veca/content";
-import { Images, ArrowLeft, ArrowRight, RefreshCw } from "lucide-react";
+import { Images, ArrowLeft, ArrowRight, RefreshCw, Upload } from "lucide-react";
 import { Button, Notice } from "../../components/ui";
 import { GalleryControls } from "./GalleryControls";
 import { GalleryPhotoCard } from "./GalleryPhotoCard";
 import { GalleryViewer } from "./GalleryViewer";
+import { GalleryUploadDialog } from "./GalleryUploadDialog";
 import {
   emptyGalleryFilters,
   useGallery,
@@ -27,6 +28,8 @@ export function PrivateGallery({
   const [filters, setFilters] = useState(emptyGalleryFilters),
     [page, setPage] = useState(1),
     [selected, setSelected] = useState<GalleryPhoto | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState("");
   const { source, sort, search } = filters;
   const criteria = {
     ...emptyGalleryFilters,
@@ -42,14 +45,21 @@ export function PrivateGallery({
           requestType: filters.requestType,
         }
       : {}),
-    ...(source === "publication"
-      ? { status: filters.status, category: filters.category }
+    ...(source === "publication" || source === "upload"
+      ? {
+          status: source === "publication" ? filters.status : "",
+          category: filters.category,
+        }
       : {}),
   };
   const { data, current, loading, error, refresh } = useGallery(criteria, page);
   const close = useCallback(() => setSelected(null), []);
   function change(key: keyof GalleryFilters, value: string) {
-    setFilters((old) => ({ ...old, [key]: value }));
+    setFilters((old) => ({
+      ...old,
+      ...(key === "source" ? { category: "" } : {}),
+      [key]: value,
+    }));
     setPage(1);
   }
   const stage = LEAD_STAGES.find((item) => item.id === criteria.stage)?.name;
@@ -92,14 +102,23 @@ export function PrivateGallery({
   return (
     <main className="ops-page private-gallery">
       <header className="gallery-heading">
-        <h1>
-          Galería<span>.</span>
-        </h1>
-        <p>
-          Encuentra fotos de obra y del sitio web. Cada foto indica cómo puedes
-          usarla.
-        </p>
+        <div>
+          <h1>
+            Galería<span>.</span>
+          </h1>
+          <p>Encuentra fotos del equipo, de obra y del sitio web.</p>
+        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            setUploaded("");
+            setUploading(true);
+          }}
+        >
+          <Upload size={18} /> Subir foto
+        </Button>
       </header>
+      {uploaded && <Notice>«{uploaded}» se guardó en la galería.</Notice>}
       <GalleryControls
         filters={filters}
         change={change}
@@ -195,15 +214,15 @@ export function PrivateGallery({
                   ? "Las fotos aparecerán aquí al adjuntarlas a un lead."
                   : source === "publication"
                     ? "Las imágenes de los proyectos aparecerán aquí al guardarlas."
-                    : "Añade fotos a un lead o guarda imágenes en una publicación para verlas aquí."}
+                    : "Usa «Subir foto» para agregar una fotografía a la galería."}
             </p>
             <div className="gallery-empty-actions">
-              {canOpenLead && filters.source !== "publication" && (
+              {canOpenLead && (!source || source === "lead") && (
                 <a href="#leads" className="btn btn-primary">
                   Ir a los leads
                 </a>
               )}
-              {canOpenProjects && filters.source !== "lead" && (
+              {canOpenProjects && (!source || source === "publication") && (
                 <a href="#projects" className="btn btn-ghost">
                   Ir a Publicaciones
                 </a>
@@ -242,6 +261,18 @@ export function PrivateGallery({
           canOpenProjects={canOpenProjects}
           onClose={close}
           onSaved={refresh}
+        />
+      )}
+      {uploading && (
+        <GalleryUploadDialog
+          onClose={() => setUploading(false)}
+          onUploaded={(photo) => {
+            setUploading(false);
+            setUploaded(photo.name);
+            setFilters({ ...emptyGalleryFilters, source: "upload" });
+            setPage(1);
+            refresh();
+          }}
         />
       )}
     </main>

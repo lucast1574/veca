@@ -288,7 +288,20 @@ export type GalleryPublicationPhoto = {
     href?: string;
   };
 };
-export type GalleryPhoto = GalleryLeadPhoto | GalleryPublicationPhoto;
+export const GALLERY_PHOTO_MAX_BYTES = 12 * 1024 * 1024;
+export const GALLERY_PHOTO_NAME_MAX = 120;
+export type GalleryUploadPhoto = {
+  source: "upload";
+  id: string;
+  name: string;
+  category: ProjectInput["category"];
+  url: string;
+  createdAt: string;
+};
+export type GalleryPhoto =
+  | GalleryLeadPhoto
+  | GalleryPublicationPhoto
+  | GalleryUploadPhoto;
 export type GalleryPage = {
   items: GalleryPhoto[];
   total: number;

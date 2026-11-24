@@ -56,6 +56,21 @@ function mobileGet(path, token) {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 }
+function galleryUpload(file, { name, category, submissionId = randomUUID() }) {
+  const form = new FormData();
+  if (file) form.append("file", new Blob([file]), "foto.webp");
+  form.append("name", name);
+  form.append("category", category);
+  form.append("submissionId", submissionId);
+  return form;
+}
+function mobileUpload(token, form) {
+  return fetch(base + "/mobile/photos", {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+}
 const invalidGoogle = await req(
   "/mobile/auth/google/native",
   "POST",
@@ -385,6 +400,119 @@ try {
   assert.equal((await req(pdf.url)).status, 403);
   assert.equal((await req("/admin/crm/leads")).status, 403);
   assert.equal((await req(`${gallery}/${pdf.id}`)).status, 404);
+  const image = await sharp("assets/mamparas.webp")
+    .resize(400)
+    .avif()
+    .toBuffer();
+  const metadata = {
+    name: "  Mampara del taller  ",
+    category: "interiores",
+    submissionId: randomUUID(),
+  };
+  const form = () => galleryUpload(image, metadata);
+  assert.equal((await req(gallery, "POST", form(), false)).status, 401);
+  assert.equal((await mobileUpload(null, form())).status, 401);
+  const previousCsrf = csrf;
+  csrf = "invalid";
+  assert.equal((await req(gallery, "POST", form())).status, 403);
+  csrf = previousCsrf;
+  for (const invalid of [
+    galleryUpload(image, { ...metadata, category: "inventada" }),
+    galleryUpload(image, { ...metadata, name: "  " }),
+    galleryUpload(null, metadata),
+    galleryUpload(Buffer.from("%PDF-1.4\n%%EOF"), metadata),
+  ])
+    assert.equal((await req(gallery, "POST", invalid)).status, 400);
+  assert.equal(
+    (
+      await req(
+        gallery,
+        "POST",
+        galleryUpload(Buffer.alloc(12 * 1024 * 1024 + 1), metadata),
+      )
+    ).status,
+    413,
+  );
+  const uploads = await Promise.all([
+    req(gallery, "POST", form()),
+    req(gallery, "POST", form()),
+  ]);
+  assert.ok(uploads.every((item) => item.status === 201));
+  const webPhoto = uploads[0].body;
+  assert.deepEqual(uploads[1].body, webPhoto);
+  assert.equal(webPhoto.name, metadata.name.trim());
+  assert.equal(webPhoto.category, "interiores");
+  assert.equal(webPhoto.source, "upload");
+  assert.equal(webPhoto.uploadedBy, undefined);
+  assert.equal(
+    (await req(webPhoto.url)).headers.get("content-type"),
+    "image/webp",
+  );
+  assert.equal((await req(webPhoto.url, "GET", null, false)).status, 401);
+  assert.equal(
+    (await req(`/media/${webPhoto.id}`, "GET", null, false)).status,
+    404,
+  );
+  const endpoint = "/mobile/photos";
+  const mobileSaved = await mobileUpload(
+    galleryToken,
+    galleryUpload(image, { name: "Ventana del taller", category: "viviendas" }),
+  );
+  assert.equal(mobileSaved.status, 201);
+  const mobilePhoto = await mobileSaved.json();
+  const photosSubidos = await mobileGet(
+    endpoint + "?source=upload",
+    galleryToken,
+  );
+  const mobileItems = (await photosSubidos.json()).items;
+  assert.deepEqual(
+    mobileItems.map(({ id }) => id).sort(),
+    [webPhoto.id, mobilePhoto.id].sort(),
+  );
+  const mobileWebPhoto = mobileItems.find(({ id }) => id === webPhoto.id);
+  assert.equal(mobileWebPhoto.subtitle, "Interiores y mamparas");
+  assert.equal((await mobileGet(mobileWebPhoto.url, galleryToken)).status, 200);
+  assert.equal((await mobileGet(mobileWebPhoto.url)).status, 401);
+  const filteredUpload = (
+    await req(gallery + "?source=upload&search=VENTANA&category=viviendas")
+  ).body.items;
+  assert.deepEqual(
+    filteredUpload.map(({ id }) => id),
+    [mobilePhoto.id],
+  );
+  assert.ok(
+    (await req(gallery)).body.items.some(({ id }) => id === mobilePhoto.id),
+  );
+  const filteredMobile = await mobileGet(
+    endpoint + "?source=upload&category=interiores",
+    galleryToken,
+  );
+  assert.deepEqual(
+    (await filteredMobile.json()).items.map(({ id }) => id),
+    [webPhoto.id],
+  );
+  const activeAccount = await mobileGet("/mobile/auth/me", galleryToken);
+  assert.ok(
+    (await activeAccount.json()).photoCategories.some(
+      ({ id }) => id === "interiores",
+    ),
+  );
+  await db
+    .collection("users")
+    .updateOne(
+      { username: "gallery-local-test" },
+      { $set: { mobileReview: true } },
+    );
+  assert.equal((await mobileUpload(galleryToken, form())).status, 403);
+  assert.equal((await mobileGet(mobileWebPhoto.url, galleryToken)).status, 403);
+  const reviewAccount = await mobileGet("/mobile/auth/me", galleryToken);
+  assert.deepEqual((await reviewAccount.json()).photoCategories, []);
+  await db
+    .collection("users")
+    .updateOne(
+      { username: "gallery-local-test" },
+      { $unset: { mobileReview: "" } },
+    );
   await db
     .collection("roles")
     .updateOne(
@@ -393,10 +521,12 @@ try {
     );
   assert.equal((await req(gallery)).status, 403);
   assert.equal((await mobileGet(mobileProjects, galleryToken)).status, 403);
+  assert.equal((await mobileUpload(galleryToken, form())).status, 403);
+  assert.equal((await req(gallery, "POST", form())).status, 403);
   assert.equal((await req(`${gallery}/${approved.id}`)).status, 403);
 } finally {
   await mongo.close();
 }
 console.log(
-  "PASS: lead and publication gallery, draft permissions, ordering, filters, pagination, legacy defaults, contract isolation, CSRF and concurrent edits.",
+  "PASS: private photo uploads in web and mobile, validation, retries, review isolation, lead and publication gallery, permissions, filters, pagination, legacy data and concurrent edits.",
 );

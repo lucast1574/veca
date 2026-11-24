@@ -9,10 +9,13 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import type { ObjectId } from "mongodb";
-import type { SessionUser } from "@veca/content";
+import { CATEGORIES, categoryIds } from "@veca/content";
 import { Readable } from "node:stream";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
@@ -24,6 +27,11 @@ import { parse } from "../common/validation";
 import { Database } from "../database/database.module";
 import { GalleryService } from "./gallery.service";
 import { MediaService } from "../media/media.service";
+import { GalleryPhotoFile, GalleryUploads } from "./gallery-uploads";
+import {
+  MobileGalleryAccess,
+  type MobileGalleryUploadRequest,
+} from "./mobile-gallery-access";
 
 const secret = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const photos = [
@@ -48,6 +56,8 @@ export class MobileGalleryController {
     private readonly database: Database,
     private readonly gallery: GalleryService,
     private readonly media: MediaService,
+    private readonly uploads: GalleryUploads,
+    private readonly access: MobileGalleryAccess,
   ) {}
 
   private get codes() {
@@ -57,32 +67,6 @@ export class MobileGalleryController {
       userId: ObjectId;
       expiresAt: Date;
     }>("mobile_login_codes");
-  }
-
-  private token(req: Request) {
-    return (
-      req.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1] || ""
-    );
-  }
-
-  private async galleryAccess(user: SessionUser, userId: ObjectId) {
-    if (user.status !== "active" || !user.emailVerified)
-      throw new ForbiddenException("Tu cuenta de VECA no tiene acceso activo.");
-    const review = !!(await this.auth.users.findOne({
-      _id: userId,
-      mobileReview: true,
-    }));
-    if (!review && !user.permissions.includes("gallery"))
-      throw new ForbiddenException("Tu cuenta no tiene acceso a Galería.");
-    return { user, review };
-  }
-
-  private async access(req: Request) {
-    const { user, userId } = await this.auth.authenticate(
-      this.token(req),
-      true,
-    );
-    return this.galleryAccess(user, userId);
   }
 
   @Post("auth/login")
@@ -150,7 +134,7 @@ export class MobileGalleryController {
     const userId = await this.auth.googleUser(idToken, true);
     const user = await this.auth.users.findOne({ _id: userId });
     if (!user) throw new UnauthorizedException();
-    await this.galleryAccess(await this.auth.view(user), userId);
+    await this.access.forUser(await this.auth.view(user), userId);
     const { token } = await this.auth.session(userId, true);
     return { token };
   }
@@ -181,21 +165,40 @@ export class MobileGalleryController {
   @Get("auth/me")
   async me(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     res.set("Cache-Control", "no-store");
-    const { user, review } = await this.access(req);
+    const { user, review } = await this.access.resolve(req);
     return {
       name: user.name,
       email: user.email,
       review,
       hasPassword: user.authMethods.includes("password"),
+      photoCategories: review
+        ? []
+        : CATEGORIES.map(({ id, name }) => ({ id, name })),
     };
   }
 
   @Post("auth/logout")
   async logout(@Req() req: Request) {
-    const token = this.token(req);
+    const token = this.access.token(req);
     await this.auth.authenticate(token, true);
     await this.auth.logout(token);
     return { ok: true };
+  }
+
+  @Post("photos")
+  @UseGuards(MobileGalleryAccess)
+  @UseInterceptors(GalleryPhotoFile)
+  async upload(
+    @Req() req: MobileGalleryUploadRequest,
+    @Body() body: unknown,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    const photo = await this.uploads.create(
+      file,
+      body,
+      req.galleryUser.username,
+    );
+    return { id: photo.id };
   }
 
   @Get("photos")
@@ -205,21 +208,25 @@ export class MobileGalleryController {
     @Res({ passthrough: true }) res: Response,
   ) {
     res.set("Cache-Control", "private, no-store");
-    const { user, review } = await this.access(req);
-    const { search, page, source } = parse(
+    const { user, review } = await this.access.resolve(req);
+    const { search, page, source, category } = parse(
       z
         .object({
           search: z.string().trim().max(120).default(""),
           page: z.coerce.number().int().min(1).max(10000).default(1),
-          source: z.enum(["", "publication", "lead"]).default(""),
+          source: z.enum(["", "publication", "lead", "upload"]).default(""),
+          category: z.union([z.literal(""), z.enum(categoryIds)]).default(""),
         })
         .strict(),
       input,
     );
     if (review) {
-      const items = photos.filter((p) =>
-        p.title.toLowerCase().includes(search.toLowerCase()),
-      );
+      const items =
+        source === "upload" || category
+          ? []
+          : photos.filter((p) =>
+              p.title.toLowerCase().includes(search.toLowerCase()),
+            );
       return {
         items: page === 1 ? items : [],
         total: items.length,
@@ -227,10 +234,18 @@ export class MobileGalleryController {
       };
     }
     const result = await this.gallery.list(
-      { search, page, source },
+      { search, page, source, category },
       user.permissions.includes("projects"),
     );
     const items = result.items.map((photo) => {
+      if (photo.source === "upload")
+        return {
+          id: photo.id,
+          url: "/mobile/photos/" + photo.id,
+          title: photo.name,
+          subtitle:
+            CATEGORIES.find(({ id }) => id === photo.category)?.name || "",
+        };
       if (photo.source === "lead")
         return {
           id: photo.id,
@@ -260,8 +275,8 @@ export class MobileGalleryController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    if ((await this.access(req)).review) throw new ForbiddenException();
-    this.send(res, (await this.gallery.read(id)).file);
+    if ((await this.access.resolve(req)).review) throw new ForbiddenException();
+    this.send(res, await this.gallery.read(id));
   }
 
   @Get("media/:id")
@@ -270,8 +285,8 @@ export class MobileGalleryController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    if ((await this.access(req)).review) throw new ForbiddenException();
-    this.send(res, await this.media.read(id, this.token(req), true));
+    if ((await this.access.resolve(req)).review) throw new ForbiddenException();
+    this.send(res, await this.media.read(id, this.access.token(req), true));
   }
 
   private send(
@@ -282,6 +297,7 @@ export class MobileGalleryController {
       "Content-Type": "image/webp",
       "Cache-Control": "private, no-store",
       "X-Robots-Tag": "noindex",
+      "X-Content-Type-Options": "nosniff",
     });
     if (file.ContentLength)
       res.set("Content-Length", String(file.ContentLength));

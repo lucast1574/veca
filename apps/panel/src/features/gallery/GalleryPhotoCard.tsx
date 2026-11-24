@@ -18,29 +18,38 @@ export function GalleryPhotoCard({
   onOpen: () => void;
 }) {
   const isLead = photo.source === "lead";
-  const published = !isLead && photo.publication.status === "published";
+  const publication = photo.source === "publication" ? photo.publication : null;
+  const published = publication?.status === "published";
   const clients = isLead && photo.sharing === "clients";
-  const BadgeIcon = isLead
-    ? clients
-      ? ShieldCheck
-      : LockKeyhole
+  const BadgeIcon = clients
+    ? ShieldCheck
     : published
       ? Globe
-      : FileText;
-  const label = isLead
-    ? clients
-      ? "Para clientes"
-      : "Uso interno"
+      : publication
+        ? FileText
+        : LockKeyhole;
+  const label = clients
+    ? "Para clientes"
     : published
       ? "En la web"
-      : "En borrador";
+      : publication
+        ? "En borrador"
+        : "Uso interno";
   const title =
-    photo.caption ||
-    (isLead ? photo.name : photo.alt || photo.publication.title);
+    photo.source === "publication"
+      ? photo.caption || photo.alt || photo.publication.title
+      : (isLead && photo.caption) || photo.name;
   const category = isLead
     ? REQUEST_TYPES.find((item) => item.id === photo.lead.requestType)?.name
-    : CATEGORIES.find((item) => item.id === photo.publication.category)?.name;
-  const location = isLead ? photo.lead.district : photo.publication.location;
+    : CATEGORIES.find(
+        (item) =>
+          item.id ===
+          (photo.source === "upload"
+            ? photo.category
+            : photo.publication.category),
+      )?.name;
+  const origin = isLead ? "Obra" : publication ? "Sitio web" : "Foto subida";
+  const location = isLead ? photo.lead.district : publication?.location;
 
   return (
     <button
@@ -56,11 +65,7 @@ export function GalleryPhotoCard({
         </span>
       </div>
       <div className="gallery-card-copy">
-        <p>
-          {[isLead ? "Obra" : "Sitio web", category, location]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
+        <p>{[origin, category, location].filter(Boolean).join(" · ")}</p>
         <h2>{title}</h2>
         {isLead && photo.tags.length > 0 && (
           <div className="gallery-photo-tags">
@@ -69,16 +74,18 @@ export function GalleryPhotoCard({
             ))}
           </div>
         )}
-        <footer>
-          <span>{isLead ? photo.lead.name : photo.publication.title}</span>
-          <span>
-            {isLead
-              ? LEAD_STAGES.find((item) => item.id === photo.lead.stage)?.name
-              : photo.publication.cover
-                ? "Portada"
-                : "Foto del proyecto"}
-          </span>
-        </footer>
+        {(isLead || publication) && (
+          <footer>
+            <span>{isLead ? photo.lead.name : publication?.title}</span>
+            <span>
+              {isLead
+                ? LEAD_STAGES.find((item) => item.id === photo.lead.stage)?.name
+                : publication?.cover
+                  ? "Portada"
+                  : "Foto del proyecto"}
+            </span>
+          </footer>
+        )}
       </div>
     </button>
   );

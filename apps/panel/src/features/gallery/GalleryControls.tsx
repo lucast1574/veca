@@ -24,6 +24,7 @@ export function GalleryControls({
   const [advanced, setAdvanced] = useState(false);
   const lead = filters.source === "lead";
   const publication = filters.source === "publication";
+  const upload = filters.source === "upload";
 
   return (
     <section
@@ -35,7 +36,7 @@ export function GalleryControls({
         <input
           type="search"
           aria-label="Buscar fotografías"
-          placeholder="Cliente, proyecto o distrito…"
+          placeholder="Nombre de foto, cliente o proyecto…"
           value={filters.search}
           maxLength={120}
           onChange={(event) => change("search", event.target.value)}
@@ -49,6 +50,7 @@ export function GalleryControls({
         >
           {[
             ["", "Todas las fotos"],
+            ["upload", "Fotos subidas"],
             ["lead", "Fotos de obra"],
             ["publication", "Fotos del sitio web"],
           ].map(([value, label]) => (
@@ -166,10 +168,10 @@ export function GalleryControls({
           </div>
         </div>
       )}
-      {publication && (
+      {(publication || upload) && (
         <div className="gallery-source-filters gallery-advanced">
           <Select
-            label="Categoría de publicaciones"
+            label="Categoría"
             value={filters.category}
             options={[
               { value: "", label: "Todas las categorías" },
@@ -180,7 +182,7 @@ export function GalleryControls({
             ]}
             onChange={(value) => change("category", value)}
           />
-          {canOpenProjects && (
+          {publication && canOpenProjects && (
             <Select
               label="Estado de publicación"
               value={filters.status}
