@@ -64,6 +64,14 @@ const sample: SirePurchase[] = [
   },
 ];
 let rows = sample.map((row) => ({ ...row }));
+const existingPurchases = [
+  {
+    id: "444444444444444444444444",
+    label: "Materiales para ventanas · Compra de ejemplo",
+    referenceMatch: false,
+  },
+];
+let availablePurchases = existingPurchases;
 const handlers = [
   http.post("*/admin/accounting/costs", () =>
     HttpResponse.json(
@@ -99,13 +107,7 @@ const handlers = [
   http.get("*/admin/accounting/sire/purchases/:id", ({ params }) =>
     HttpResponse.json({
       item: rows.find((row) => row.id === params.id),
-      purchases: [
-        {
-          id: "444444444444444444444444",
-          label: "Materiales para ventanas · Compra de ejemplo",
-          referenceMatch: false,
-        },
-      ],
+      purchases: availablePurchases,
     }),
   ),
   http.post(
@@ -141,6 +143,7 @@ export const ComprasPendientes: Story = {
   name: "Bandeja de compras por registrar",
   beforeEach() {
     rows = sample.map((row) => ({ ...row }));
+    availablePurchases = existingPurchases;
   },
   parameters: { msw: handlers },
   render,
@@ -160,6 +163,63 @@ export const ComprasGuardadas: Story = {
   name: "Todas las compras guardadas",
   beforeEach() {
     rows = sample.map((row) => ({ ...row, status: "registered" }));
+    availablePurchases = existingPurchases;
+  },
+};
+
+async function openMaterials(canvasElement: HTMLElement) {
+  const page = within(canvasElement.ownerDocument.body);
+  await userEvent.click(
+    (await page.findAllByRole("button", { name: /^Completar compra$/ }))[1],
+  );
+  await userEvent.type(
+    await page.findByRole("textbox", { name: "¿Para qué fue esta compra?" }),
+    "Materiales para ventanas",
+  );
+  await userEvent.click(
+    page.getByRole("combobox", { name: "Destino de la compra" }),
+  );
+  await userEvent.click(
+    await page.findByRole("option", {
+      name: "Compra de materiales para almacén",
+    }),
+  );
+  return page;
+}
+export const MaterialesSinPedido: Story = {
+  ...ComprasPendientes,
+  name: "Materiales: continuar sin un selector innecesario",
+  beforeEach() {
+    rows = sample.map((row) => ({ ...row }));
+    availablePurchases = [];
+  },
+  play: async ({ canvasElement }) => {
+    const page = await openMaterials(canvasElement);
+    await expect(
+      page.queryByRole("combobox", { name: "Detalle de materiales" }),
+    ).not.toBeInTheDocument();
+    await expect(
+      page.getByRole("button", { name: "Guardar y completar materiales" }),
+    ).toBeEnabled();
+  },
+};
+export const VincularPedidoExistente: Story = {
+  ...ComprasPendientes,
+  name: "Materiales: vincular un pedido ya registrado",
+  play: async ({ canvasElement }) => {
+    const page = await openMaterials(canvasElement);
+    await expect(
+      page.getByRole("button", { name: "Guardar y completar materiales" }),
+    ).toBeEnabled();
+    await userEvent.click(
+      page.getByRole("combobox", { name: "Detalle de materiales" }),
+    );
+    await userEvent.click(
+      await page.findByRole("option", { name: existingPurchases[0].label }),
+    );
+    await expect(
+      page.getByRole("button", { name: "Guardar y vincular pedido" }),
+    ).toBeEnabled();
   },
 };
 

@@ -98,7 +98,10 @@ function PurchaseForm({
       : [],
   );
   const [purchaseId, setPurchase] = useState(
-    suggested.length === 1 ? suggested[0].id : initial?.purchaseId || "",
+    suggested.length === 1
+      ? suggested[0].id
+      : purchases.find((purchase) => purchase.id === initial?.purchaseId)?.id ||
+          "",
   );
   const [description, setDescription] = useState(initial?.description || "");
   const [dirty, setDirty] = useState(
@@ -174,7 +177,13 @@ function PurchaseForm({
             disabled={!canWrite || busy || item.status !== "pending"}
           >
             <Check size={16} />
-            {busy ? "Guardando…" : "Guardar compra en VECA"}
+            {busy
+              ? "Guardando…"
+              : destination === "warehouse"
+                ? purchaseId
+                  ? "Guardar y vincular pedido"
+                  : "Guardar y completar materiales"
+                : "Guardar compra en VECA"}
           </Button>
         </footer>
       }
@@ -345,39 +354,33 @@ function PurchaseForm({
               <div className="sire-destination">
                 <Package size={20} />
                 <div>
-                  <p>
-                    Vincula un pedido ya completado o registra el detalle de lo
-                    comprado en el siguiente paso. Almacén confirmará la
-                    cantidad recibida.
-                  </p>
-                  <Field label="Pedido de materiales">
-                    <Select
-                      label="Pedido de materiales"
-                      value={purchaseId}
-                      options={[
-                        {
-                          value: "",
-                          label:
-                            "Completar materiales y precios de esta compra",
-                        },
-                        ...purchases.map((p) => ({
-                          value: p.id,
-                          label: `${p.referenceMatch ? "Referencia coincidente · " : ""}${p.label}`,
-                        })),
-                      ]}
-                      onChange={(value) => {
-                        setPurchase(value);
-                        setDirty(true);
-                      }}
-                    />
-                  </Field>
-                  {!purchases.length && (
-                    <p className="hint">
-                      Después de guardar, completarás los materiales, cantidades
-                      compradas y precios unitarios. Almacén recibirá el aviso
-                      cuando estén listos.
-                    </p>
+                  {purchases.length > 0 && (
+                    <Field label="Detalle de materiales">
+                      <Select
+                        label="Detalle de materiales"
+                        value={purchaseId}
+                        options={[
+                          {
+                            value: "",
+                            label: "Completar materiales en el siguiente paso",
+                          },
+                          ...purchases.map((p) => ({
+                            value: p.id,
+                            label: `${p.referenceMatch ? "Referencia coincidente · " : ""}${p.label}`,
+                          })),
+                        ]}
+                        onChange={(value) => {
+                          setPurchase(value);
+                          setDirty(true);
+                        }}
+                      />
+                    </Field>
                   )}
+                  <p>
+                    {purchaseId
+                      ? "Vincularemos esta factura al pedido seleccionado, sin repetir sus materiales."
+                      : "En el siguiente paso indicarás los materiales, cantidades y precios. Almacén confirmará lo recibido."}
+                  </p>
                 </div>
               </div>
             )}

@@ -387,6 +387,9 @@
   font-size: 12px;
   line-height: 1.8;
 }
+.sire-destination p:last-child {
+  margin-bottom: 0;
+}
 .sire-fiscal-details {
   color: var(--panel-secondary);
   font-size: 12px;
