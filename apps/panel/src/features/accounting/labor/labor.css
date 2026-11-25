@@ -84,7 +84,7 @@
 }
 .labor-toolbar nav button:hover,
 .labor-toolbar nav button:focus-visible,
-.labor-record summary:focus-visible,
+.labor-record > summary:focus-visible,
 .labor-extra summary:focus-visible {
   background: var(--panel-accent-soft, #dde9e0);
   color: var(--panel-ink, #243731);
@@ -95,7 +95,7 @@
   border: 1px solid var(--panel-edge);
   border-radius: 12px;
 }
-.labor-record summary {
+.labor-record > summary {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto auto;
   gap: 10px;
@@ -104,10 +104,10 @@
   cursor: pointer;
   border-radius: 11px;
 }
-.labor-record summary::-webkit-details-marker {
+.labor-record > summary::-webkit-details-marker {
   display: none;
 }
-.labor-record:not([open]) summary svg {
+.labor-record:not([open]) > summary svg {
   transform: rotate(-90deg);
 }
 .labor-record b {
@@ -277,12 +277,12 @@
   .labor-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .labor-record summary {
+  .labor-record > summary {
     grid-template-columns: 14px minmax(0, 1fr) auto;
     padding: 11px;
     gap: 6px;
   }
-  .labor-record summary b {
+  .labor-record > summary b {
     grid-column: 2 / -1;
   }
   .labor-record-body {

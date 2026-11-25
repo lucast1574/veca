@@ -1,3 +1,4 @@
+import { WorkPayrollIncidents } from "../works/WorkPayrollIncidents";
 import { LeadDocuments } from "./LeadDocuments";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
@@ -725,6 +726,7 @@ export function LeadDetail({
           </aside>
         </div>
       )}
+      {workView && tab === "work" && <WorkPayrollIncidents workId={id} />}
       {["overview", "work"].includes(tab) && editing && !readOnly && (
         <Modal
           title={

@@ -101,7 +101,9 @@ export function AccountingWorkspace({
           />
         )}
         {route.tab === "personal" &&
-          user.permissions.includes("accounting_labor") && <LaborWorkspace />}
+          user.permissions.includes("accounting_labor") && (
+            <LaborWorkspace key={route.month} initialPeriod={route.month} />
+          )}
         {route.tab === "impuestos" && (
           <TaxPeriod
             key={route.month || "current"}

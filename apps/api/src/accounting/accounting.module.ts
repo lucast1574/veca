@@ -44,7 +44,7 @@ import { SireProvider } from "./sire-provider";
 import { SireSyncService } from "./sire-sync.service";
 import { SirePurchasesService } from "./sire-purchases.service";
 import { LaborController } from "./labor.controller";
-import { LaborProvider } from "./labor-provider";
+import { PersonnelModule } from "../personnel/personnel.module";
 import { LaborCostsService } from "./labor-costs.service";
 import { InvoiceProvider } from "./invoice-provider";
 
@@ -414,7 +414,7 @@ class FiscalConnectionController {
 }
 
 @Module({
-  imports: [CrmModule, MediaModule, WarehouseModule],
+  imports: [CrmModule, MediaModule, WarehouseModule, PersonnelModule],
   controllers: [
     AccountingController,
     AccountingPurchasesController,
@@ -433,7 +433,6 @@ class FiscalConnectionController {
     SirePurchasesService,
     SireSyncService,
     SireProvider,
-    LaborProvider,
     LaborCostsService,
   ],
 })

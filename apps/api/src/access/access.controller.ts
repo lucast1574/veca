@@ -1,4 +1,9 @@
 import {
+  DashboardMetrics,
+  availableStockExpression,
+} from "./dashboard-metrics.service";
+import { CrmModule } from "../crm/crm.controller";
+import {
   BadRequestException,
   Body,
   Controller,
@@ -190,6 +195,7 @@ class DashboardController {
   constructor(
     private readonly database: Database,
     private readonly mail: MailService,
+    private readonly metrics: DashboardMetrics,
   ) {}
   @Get() async summary(@Req() req: AuthenticatedRequest) {
     const db = this.database.db,
@@ -239,7 +245,9 @@ class DashboardController {
       p.includes("inventory")
         ? db
             .collection("inventory_materials")
-            .find({ $expr: { $lte: ["$balanceMilli", "$minimumMilli"] } })
+            .find({
+              $expr: { $lte: [availableStockExpression, "$minimumMilli"] },
+            })
             .sort({ name: 1 })
             .limit(8)
             .project({
@@ -248,6 +256,7 @@ class DashboardController {
               unit: 1,
               balanceMilli: 1,
               minimumMilli: 1,
+              availableMilli: availableStockExpression,
             })
             .toArray()
         : [],
@@ -266,20 +275,16 @@ class DashboardController {
         : null,
       p.includes("accounting")
         ? Promise.all([
-            db
-              .collection("dispatches")
-              .countDocuments({
-                status: { $in: ["review", "sending", "pending", "rejected"] },
-              }),
+            db.collection("dispatches").countDocuments({
+              status: { $in: ["review", "sending", "pending", "rejected"] },
+            }),
             db
               .collection("accounting_invoices")
               .countDocuments({ status: "requested" }),
-            db
-              .collection("accounting_invoices")
-              .countDocuments({
-                status: { $in: ["accepted", "observed"] },
-                $expr: { $gt: ["$totalCents", "$paidCents"] },
-              }),
+            db.collection("accounting_invoices").countDocuments({
+              status: { $in: ["accepted", "observed"] },
+              $expr: { $gt: ["$totalCents", "$paidCents"] },
+            }),
           ])
         : null,
       p.includes("leads") && p.includes("dispatches")
@@ -293,6 +298,7 @@ class DashboardController {
         : [],
     ]);
     return {
+      visuals: await this.metrics.forUser(req.session.user),
       stages: Object.fromEntries(stages.map((s) => [s._id, s.count])),
       recent: recent.map(({ _id, ...rest }) => ({ ...rest, id: String(_id) })),
       upcoming: upcoming.map(({ _id, ...rest }) => ({
@@ -300,10 +306,10 @@ class DashboardController {
         id: String(_id),
       })),
       lowStock: materials.map(
-        ({ _id, balanceMilli, minimumMilli, ...rest }) => ({
+        ({ _id, balanceMilli, minimumMilli, availableMilli, ...rest }) => ({
           ...rest,
           id: String(_id),
-          balance: balanceMilli / 1000,
+          balance: availableMilli / 1000,
           minimum: minimumMilli / 1000,
         }),
       ),
@@ -327,7 +333,8 @@ class DashboardController {
   }
 }
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, CrmModule],
+  providers: [DashboardMetrics],
   controllers: [UsersController, DashboardController, AdministrationController],
 })
 export class AccessModule {}

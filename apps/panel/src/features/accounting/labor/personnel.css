@@ -1,0 +1,216 @@
+.personnel-actions,
+.personnel-period {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.personnel-actions .btn {
+  margin: 0;
+}
+.personnel-period {
+  margin-bottom: 20px;
+}
+.personnel-period .field {
+  flex: 1;
+  min-width: 100px;
+  margin: 0;
+}
+.personnel-check-list,
+.personnel-incidents {
+  display: grid;
+  gap: 12px;
+}
+.personnel-check-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+}
+.personnel-check-list span {
+  flex: 1;
+  min-width: 0;
+}
+.personnel-check-list strong,
+.personnel-check-list small {
+  display: block;
+}
+.personnel-check-list small,
+.personnel-incidents small {
+  color: var(--panel-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.personnel-incidents article {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 16px;
+}
+.personnel-incidents header,
+.personnel-incidents footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.personnel-incidents header small {
+  display: block;
+  margin-top: 4px;
+}
+.personnel-incidents p {
+  margin: 0;
+  color: var(--panel-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.personnel-work {
+  margin-top: 24px;
+}
+.personnel-work h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.payroll-profile-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+.payroll-profile-hero span,
+.payroll-profile-hero small {
+  display: block;
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.payroll-profile-hero strong {
+  display: block;
+  font-size: 32px;
+  letter-spacing: -0.04em;
+  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+}
+.payroll-profile-hero p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--panel-secondary);
+  line-height: 1.8;
+}
+.payroll-profile-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.payroll-profile-totals dt {
+  color: var(--panel-secondary);
+  font-size: 11px;
+}
+.payroll-profile-totals dd {
+  margin: 6px 0 0;
+  font-weight: 750;
+}
+.personnel-detail > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  cursor: pointer;
+  color: var(--panel-accent);
+  font-weight: 700;
+  font-size: 12px;
+  list-style: none;
+}
+.personnel-detail > summary::-webkit-details-marker {
+  display: none;
+}
+.personnel-detail[open] > summary svg {
+  transform: rotate(180deg);
+}
+.personnel-detail > summary:focus-visible {
+  background: var(--panel-soft);
+  outline: none;
+}
+.personnel-breakdown {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+.personnel-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+}
+.personnel-breakdown dt {
+  color: var(--panel-secondary);
+}
+.personnel-breakdown dd {
+  margin: 0;
+  font-weight: 700;
+}
+.payroll-own-incidents {
+  border-top: 1px solid var(--panel-edge);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+.payroll-own-incidents h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.payroll-own-incidents > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 12px 0;
+  font-size: 12px;
+}
+.payroll-own-incidents small {
+  display: block;
+  color: var(--panel-secondary);
+  margin-top: 4px;
+}
+.labor-line-detail {
+  flex-basis: 100%;
+  width: 100%;
+}
+@media (max-width: 620px) {
+  .payroll-profile-hero {
+    flex-direction: column;
+    padding: 20px;
+    gap: 12px;
+  }
+  .payroll-profile-totals {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .personnel-check-list label {
+    flex-wrap: wrap;
+  }
+}
+
+.labor-lines .labor-line-detail {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.labor-lines li > .btn {
+  grid-column: 3;
+  grid-row: 1;
+}
+@media (max-width: 620px) {
+  .labor-lines li > .btn {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+
+.labor-lines li {
+  grid-template-rows: auto auto;
+}

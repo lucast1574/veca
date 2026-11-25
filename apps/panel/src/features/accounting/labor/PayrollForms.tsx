@@ -205,15 +205,15 @@ export function EmployeeForm({
 }
 
 const extraFields = [
-  ["taxableExtraCents", "Extras afectos"],
-  ["nonTaxableCents", "Ingresos no afectos"],
+  ["taxableExtraCents", "Bonos y otros extras afectos"],
+  ["nonTaxableCents", "Bonos e ingresos no afectos"],
   ["afpDeductionCents", "Descuento previsional (AFP o especial)"],
   ["employerContributionCents", "Aporte de salud del empleador"],
   ["gratuityCents", "Gratificación"],
   ["ctsCents", "CTS"],
   ["vacationCents", "Vacaciones"],
   ["fifthCategoryCents", "Retención de quinta categoría"],
-  ["otherDeductionCents", "Otros descuentos"],
+  ["otherDeductionCents", "Otros descuentos manuales"],
 ] as const;
 
 export function PayrollForm({
@@ -281,7 +281,7 @@ export function PayrollForm({
         return run
           ? saveLabor(
               "/runs/" + run.id,
-              { ...input, revision: run.revision },
+              { ...input, revision: run.revision, manualOtherDeductions: true },
               "PUT",
             )
           : saveLabor("/runs", input);
@@ -366,6 +366,22 @@ export function PayrollForm({
                     required
                   />
                 </Field>
+                <div className="labor-grid">
+                  {extraFields
+                    .filter(
+                      ([key]) =>
+                        key === "taxableExtraCents" ||
+                        key === "nonTaxableCents",
+                    )
+                    .map(([key, label]) => (
+                      <MoneyField
+                        key={key}
+                        label={label}
+                        name={id + "_" + key}
+                        cents={line?.[key]}
+                      />
+                    ))}
+                </div>
                 <details
                   className="labor-extra"
                   open={
@@ -375,11 +391,13 @@ export function PayrollForm({
                     undefined
                   }
                 >
-                  <summary>Ingresos, aportes y descuentos adicionales</summary>
+                  <summary>Bonos, beneficios y descuentos</summary>
                   <div className="labor-grid">
                     {extraFields
                       .filter(
                         ([key]) =>
+                          key !== "taxableExtraCents" &&
+                          key !== "nonTaxableCents" &&
                           (key !== "afpDeductionCents" ||
                             needsPension ||
                             Boolean(line?.afpDeductionCents)) &&
@@ -392,7 +410,17 @@ export function PayrollForm({
                           key={key}
                           label={label}
                           name={id + "_" + key}
-                          cents={line?.[key]}
+                          cents={
+                            key === "otherDeductionCents" && line
+                              ? Math.max(
+                                  0,
+                                  line.otherDeductionCents -
+                                    (run?.workDeductions || [])
+                                      .filter((i) => i.employeeId === id)
+                                      .reduce((s, i) => s + i.cents, 0),
+                                )
+                              : line?.[key]
+                          }
                         />
                       ))}
                   </div>

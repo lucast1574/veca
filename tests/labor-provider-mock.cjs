@@ -37,6 +37,11 @@ module.exports = (path, options) => {
       { error: { message: "El registro cambió." } },
       { status: 409 },
     );
+  if (collection === "runs" && method === "PUT" && current?.status !== "draft")
+    return Response.json(
+      { error: { message: "La planilla ya está cerrada." } },
+      { status: 409 },
+    );
   const key = id || randomUUID();
   const revision = current ? current.revision + 1 : 0;
   let saved;
@@ -46,12 +51,22 @@ module.exports = (path, options) => {
     const lines = input.lines.map((line) => {
       const employee = employees.get(line.employeeId);
       assert.ok(employee);
-      const grossCents = Math.round((employee.salaryCents * line.days) / 30);
+      const baseCents = Math.round((employee.salaryCents * line.days) / 30);
+      const grossCents =
+        baseCents +
+        line.taxableExtraCents +
+        line.nonTaxableCents +
+        line.gratuityCents +
+        line.vacationCents;
       return {
         ...line,
         employeeName: employee.name,
         grossCents,
-        netCents: Math.round(grossCents * 0.87),
+        netCents:
+          grossCents -
+          Math.round((baseCents + line.taxableExtraCents) * 0.13) -
+          line.fifthCategoryCents -
+          line.otherDeductionCents,
         employerEssaludCents: Math.round(
           Math.max(grossCents, input.minimumWageCents) * 0.09,
         ),

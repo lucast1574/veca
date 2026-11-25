@@ -22,6 +22,25 @@ export class Database implements OnModuleInit, OnModuleDestroy {
     await this.client.connect();
     this.db = this.client.db(config.MONGODB_DATABASE);
     await Promise.all([
+      this.db.collection("labor_employee_accounts").createIndex(
+        { issuerRuc: 1, userId: 1 },
+        {
+          unique: true,
+          partialFilterExpression: { userId: { $type: "string" } },
+        },
+      ),
+      this.db
+        .collection("work_payroll_incidents")
+        .createIndex({ issuerRuc: 1, period: 1, employeeId: 1 }),
+      this.db
+        .collection("work_payroll_incidents")
+        .createIndex({ workId: 1, createdAt: -1 }),
+      this.db
+        .collection("payroll_deduction_operations")
+        .createIndex(
+          { issuerRuc: 1, runId: 1 },
+          { unique: true, partialFilterExpression: { state: "pending" } },
+        ),
       this.db
         .collection("dispatches")
         .createIndex(

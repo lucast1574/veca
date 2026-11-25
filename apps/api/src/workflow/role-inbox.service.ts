@@ -1,3 +1,5 @@
+import { fiscalIssuerRuc } from "../common/fiscal-config";
+import { limaDate } from "../dispatch/guide-provider";
 import { Injectable } from "@nestjs/common";
 import type { Document } from "mongodb";
 import {
@@ -51,6 +53,31 @@ export class RoleInbox {
     const sections: Promise<InboxSection>[] = [];
     const workHref = (row: Document) => `#works/${row._id}`;
     const workScope = this.access.scope(user);
+    if (can("accounting") && can("accounting_labor"))
+      sections.push(
+        this.queue(
+          "work_deductions",
+          "Descuentos de obra",
+          "work_payroll_incidents",
+          [
+            {
+              $match: {
+                issuerRuc: fiscalIssuerRuc,
+                status: "authorized",
+                payrollRunId: { $exists: false },
+                period: { $lte: limaDate(new Date()).slice(0, 7) },
+              },
+            },
+          ],
+          "#accounting/personal",
+          (row) => ({
+            id: String(row._id),
+            title: row.employeeName,
+            detail: `${row.workName} · Planilla ${row.period}`,
+            href: `#accounting/personal?month=${row.period}`,
+          }),
+        ),
+      );
     if (can("works")) {
       if (can("works_manage")) {
         sections.push(

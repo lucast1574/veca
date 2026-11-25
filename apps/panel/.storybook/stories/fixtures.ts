@@ -262,6 +262,8 @@ export const handlers = [
   http.get(`${base}/admin/accounting/margin/:id`, () =>
     HttpResponse.json(margin),
   ),
+  http.get(`${base}/account/payroll`, ({request})=>HttpResponse.json({linked:false,period:new URL(request.url).searchParams.get("period")})),
+  http.get(`${base}/admin/works/:id/payroll-incidents`,()=>HttpResponse.json({canManage:false,employees:[],items:[]})),
   http.all(`${base}/*`, () =>
     HttpResponse.json(
       { message: "Esta acción es una vista de ejemplo y no modifica datos." },

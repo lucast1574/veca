@@ -1,3 +1,5 @@
+import { PersonnelService } from "../personnel/personnel.service";
+import { PayrollDeductions } from "../personnel/payroll-deductions.service";
 import {
   ConflictException,
   Injectable,
@@ -46,6 +48,8 @@ export class LaborCostsService {
     private readonly database: Database,
     private readonly provider: LaborProvider,
     private readonly warehouse: WarehouseService,
+    private readonly people: PersonnelService,
+    private readonly deductions: PayrollDeductions,
   ) {}
 
   private get allocations() {
@@ -64,16 +68,18 @@ export class LaborCostsService {
         this.allocations.find({ issuerRuc: fiscalIssuerRuc, period }).toArray(),
       ],
     );
-    return {
+    return this.people.enrich({
       period,
       employees,
       regimes,
-      runs: runs.filter((run) => run.period === period),
+      runs: await this.deductions.recover(
+        runs.filter((run) => run.period === period),
+      ),
       receipts: receipts.filter((receipt) =>
         receipt.issueDate.startsWith(period + "-"),
       ),
       allocations: allocations.map(view),
-    };
+    });
   }
 
   async receivedReceipt(id: string): Promise<LaborReceipt> {

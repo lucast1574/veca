@@ -13,6 +13,8 @@ import type { AllocationTarget } from "./LaborAllocationForm";
 
 export type Dialog =
   | { kind: "employee"; record?: LaborEmployee }
+  | { kind: "account"; record: LaborEmployee }
+  | { kind: "deductions"; record: PayrollRun }
   | { kind: "payroll"; record?: PayrollRun }
   | { kind: "fee"; record?: LaborReceipt }
   | { kind: "payment"; record: PayrollRun | LaborReceipt }
@@ -121,12 +123,42 @@ export function PayrollRecords({
                   <strong>{line.employeeName}</strong>
                   <small>
                     {line.days} días · Neto {amount(line.netCents)}
+                    {line.taxableExtraCents + line.nonTaxableCents > 0 &&
+                      ` · Bonos y extras ${amount(line.taxableExtraCents + line.nonTaxableCents)}`}
+                    {line.otherDeductionCents > 0 &&
+                      ` · Otros descuentos ${amount(line.otherDeductionCents)}`}
                   </small>
                 </div>
                 <div>
                   <strong>{amount(cost)}</strong>
                   <small>Costo del trabajador</small>
                 </div>
+                <details className="personnel-detail labor-line-detail">
+                  <summary>Ver bonos, beneficios y descuentos</summary>
+                  <dl className="personnel-breakdown">
+                    {[
+                      ["Bonos y extras afectos", line.taxableExtraCents],
+                      ["Bonos e ingresos no afectos", line.nonTaxableCents],
+                      ["Gratificación o aguinaldo", line.gratuityCents],
+                      ["CTS", line.ctsCents],
+                      ["Vacaciones", line.vacationCents],
+                      ["Quinta categoría", line.fifthCategoryCents],
+                      ["Otros descuentos", line.otherDeductionCents],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{amount(Number(value))}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {run.workDeductions
+                    ?.filter((i) => i.employeeId === line.employeeId)
+                    .map((i) => (
+                      <p className="hint" key={i.id}>
+                        {i.workName} · {i.item} · {amount(i.cents)}
+                      </p>
+                    ))}
+                </details>
                 {payrollEffective(run) && (
                   <AllocationButton
                     target={{
@@ -145,6 +177,17 @@ export function PayrollRecords({
           })}
         </ul>
         <div className="labor-record-actions">
+          {run.status === "draft" && (
+            <Button
+              variant="ghost"
+              disabled={!canWrite}
+              onClick={() => open({ kind: "deductions", record: run })}
+            >
+              {run.deductionPending
+                ? "Continuar incorporación de descuentos"
+                : "Descuentos de obra"}
+            </Button>
+          )}
           {run.status === "draft" && (
             <>
               <Button

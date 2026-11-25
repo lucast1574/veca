@@ -1,0 +1,407 @@
+.dashboard-v2 {
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-v2 .workspace-welcome h1 {
+  font-size: clamp(30px, 3.5vw, 40px);
+}
+.dash-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+.dash-hero-grid.is-single {
+  grid-template-columns: 1fr;
+}
+.dash-hero-grid > .role-inbox {
+  margin: 0;
+  min-width: 0;
+}
+.dash-hero-grid .workspace-section-head {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.dash-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--panel-edge);
+  background: var(--panel-surface);
+  border-radius: 14px;
+  margin: 24px 0;
+}
+.dash-metric-strip > a {
+  padding: 20px;
+  color: var(--panel-ink);
+  text-decoration: none;
+}
+.dash-metric-strip > a + a {
+  border-left: 1px solid var(--panel-edge);
+}
+.dash-metric-strip > a:hover,
+.dash-metric-strip > a:focus-visible {
+  background: var(--panel-soft);
+  outline: none;
+}
+.dash-metric-strip span,
+.dash-metric-strip small {
+  display: block;
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.dash-metric-strip strong {
+  display: block;
+  font-size: 30px;
+  letter-spacing: -0.04em;
+  margin: 10px 0;
+}
+.dash-metric-strip small {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+.dash-visual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin: 20px 0;
+}
+.dash-panel {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel-surface);
+}
+.dash-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.dash-panel h2,
+.role-inbox-v2 h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.025em;
+}
+.dash-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dash-panel .warehouse-link {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.dash-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--panel-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 750;
+}
+.dash-bars {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.dash-axis {
+  stroke: var(--panel-edge);
+}
+.dash-fill-neutral {
+  fill: var(--panel-ink);
+}
+.dash-fill-brand {
+  fill: var(--panel-brand);
+}
+.dash-chart-value {
+  fill: var(--panel-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dash-chart-label {
+  fill: var(--panel-secondary);
+  font-size: 12px;
+}
+.dash-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--panel-secondary);
+}
+.dash-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dash-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--panel-ink);
+}
+.dash-legend i.is-brand {
+  background: var(--panel-brand);
+}
+.dash-footnote {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--panel-secondary);
+  margin: 16px 0 0;
+}
+.dash-stage-rows {
+  display: grid;
+  gap: 22px;
+}
+.dash-stage-rows a {
+  color: var(--panel-ink);
+  text-decoration: none;
+}
+.dash-stage-rows a:hover span,
+.dash-stage-rows a:focus-visible span {
+  color: var(--panel-accent);
+}
+.dash-stage-rows span {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+.dash-stage-rows i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-soft);
+  margin-top: 10px;
+  overflow: hidden;
+}
+.dash-stage-rows em {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--panel-brand);
+}
+.dash-stage-rows a:last-child em {
+  background: var(--panel-ink);
+}
+.dash-distribution {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+}
+.dash-donut {
+  position: relative;
+}
+.dash-donut svg {
+  display: block;
+  width: 100%;
+}
+.dash-donut circle {
+  fill: none;
+  stroke-width: 18;
+}
+.dash-donut-track {
+  stroke: var(--panel-soft);
+}
+.segment-0 {
+  stroke: var(--panel-ink);
+  background: var(--panel-ink);
+}
+.segment-1 {
+  stroke: var(--panel-brand);
+  background: var(--panel-brand);
+}
+.segment-2 {
+  stroke: var(--panel-secondary);
+  background: var(--panel-secondary);
+}
+.dash-donut > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.dash-donut strong {
+  font-size: 30px;
+  letter-spacing: -0.04em;
+}
+.dash-donut small {
+  color: var(--panel-secondary);
+  font-size: 11px;
+}
+.dash-distribution ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: 16px;
+}
+.dash-distribution a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--panel-secondary);
+  text-decoration: none;
+}
+.dash-distribution b {
+  margin-left: auto;
+  color: var(--panel-ink);
+}
+.dash-distribution a:hover,
+.dash-distribution a:focus-visible {
+  color: var(--panel-accent);
+}
+.dash-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.dash-finance-bars {
+  display: grid;
+  gap: 20px;
+}
+.dash-finance-bars > div > strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--panel-secondary);
+}
+.dash-finance-pair {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+.dash-finance-pair span {
+  display: block;
+  background: var(--panel-ink);
+  opacity: 0.12;
+  height: 20px;
+  border-radius: 4px;
+}
+.dash-finance-pair.is-cost span {
+  background: var(--panel-brand);
+  opacity: 0.16;
+}
+.dash-finance-pair b {
+  position: absolute;
+  inset-inline-start: 8px;
+  color: var(--panel-ink);
+  font-size: 11px;
+}
+.dash-access-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  font-size: 12px;
+  color: var(--panel-accent);
+  font-weight: 700;
+  margin: 16px 0;
+}
+.role-inbox-v2 {
+  padding: 24px;
+  border: 1px solid var(--panel-edge);
+  background: var(--panel-surface);
+  border-radius: 14px;
+}
+.dash-queue-total {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.dash-inbox-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+.dash-inbox-tabs button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--panel-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.dash-inbox-tabs button[aria-pressed="true"] {
+  color: var(--panel-accent);
+  background: var(--panel-accent-soft);
+  border-color: transparent;
+}
+.dash-inbox-tabs button:hover,
+.dash-inbox-tabs button:focus-visible {
+  color: var(--panel-ink);
+  outline: none;
+  background: var(--panel-raised);
+}
+.dash-inbox-items .workspace-row {
+  padding-block: 12px;
+}
+.dash-inbox-items > .warehouse-link {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.dash-inbox-clear {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--panel-secondary);
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  .dash-visual-grid,
+  .dash-hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .dash-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dash-metric-strip > a:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--panel-edge);
+  }
+  .dash-metric-strip > a:nth-child(4) {
+    border-top: 1px solid var(--panel-edge);
+  }
+}
+@media (max-width: 520px) {
+  .dash-panel,
+  .role-inbox-v2 {
+    padding: 20px;
+  }
+  .dash-panel > header,
+  .role-inbox-v2 > .workspace-section-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .dash-distribution {
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .dash-distribution a {
+    flex-wrap: wrap;
+  }
+  .dash-metric-strip > a {
+    padding: 16px;
+  }
+  .dash-inbox-tabs button {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { InboxSection } from "@veca/content";
 import { ArrowUpRight, CheckCircle2 } from "lucide-react";
 import {
@@ -5,59 +6,66 @@ import {
   useAccountingQuery,
 } from "../accounting/accounting-shared";
 import { useLiveRefresh } from "../operations/shared";
+import "./role-inbox.css";
 export function RoleInbox() {
   const query = useAccountingQuery<InboxSection[]>("/admin/dashboard/inbox");
   useLiveRefresh(query.refresh, false);
-  const active = query.data?.filter((section) => section.count > 0) || [];
+  const [selected, setSelected] = useState("");
+  const active = query.data?.filter((s) => s.count > 0) || [];
+  const current = active.find((s) => s.key === selected) || active[0];
   return (
-    <section className="role-inbox">
-      <div className="workspace-section-head">
-        <h2>Tu trabajo pendiente</h2>
-      </div>
-      <QueryState {...query}>
-        {!active.length && (
-          <div className="workspace-section">
-            <div className="workspace-empty">
-              <CheckCircle2 size={25} />
-              <p>No tienes pendientes registrados en tus bandejas.</p>
-            </div>
-          </div>
+    <section className="role-inbox role-inbox-v2">
+      <header className="workspace-section-head">
+        <div>
+          <span className="dash-eyebrow">Qué sigue</span>
+          <h2>Tu trabajo pendiente</h2>
+        </div>
+        {!!active.length && (
+          <span className="dash-queue-total">
+            {active.reduce((n, s) => n + s.count, 0)} pendientes en tus bandejas
+          </span>
         )}
-        <div className="workspace-columns">
-          {active.map((section) => (
-            <section className="workspace-section" key={section.key}>
-              <div className="workspace-section-head">
-                <h3>
-                  {section.title}{" "}
-                  <span className="inbox-count">{section.count}</span>
-                </h3>
-                <a
-                  href={section.href}
-                  aria-label={`Abrir ${section.title.toLowerCase()}`}
+      </header>
+      <QueryState {...query}>
+        {!active.length ? (
+          <div className="dash-inbox-clear">
+            <CheckCircle2 size={20} />
+            <p>No tienes pendientes registrados en tus bandejas.</p>
+          </div>
+        ) : (
+          <>
+            <div className="dash-inbox-tabs" aria-label="Elegir bandeja">
+              {active.map((s) => (
+                <button
+                  type="button"
+                  key={s.key}
+                  aria-pressed={current?.key === s.key}
+                  onClick={() => setSelected(s.key)}
                 >
-                  <ArrowUpRight size={17} />
+                  <span>{s.title}</span>
+                  <b>{s.count}</b>
+                </button>
+              ))}
+            </div>
+            {current && (
+              <div className="dash-inbox-items">
+                {current.items.slice(0, 3).map((i) => (
+                  <a className="workspace-row" key={i.id} href={i.href}>
+                    <span>
+                      <strong>{i.title}</strong>
+                      <small>{i.detail}</small>
+                    </span>
+                    <ArrowUpRight size={16} />
+                  </a>
+                ))}
+                <a href={current.href} className="warehouse-link">
+                  Abrir {current.title.toLowerCase()} <ArrowUpRight size={15} />
                 </a>
               </div>
-              {section.items.map((item) => (
-                <a className="workspace-row" key={item.id} href={item.href}>
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.detail}</small>
-                  </span>
-                  <ArrowUpRight size={16} />
-                </a>
-              ))}
-              {section.count > section.items.length && (
-                <a className="warehouse-link" href={section.href}>
-                  Ver los {section.count} pendientes
-                </a>
-              )}
-            </section>
-          ))}
-        </div>
+            )}
+          </>
+        )}
       </QueryState>
     </section>
   );
 }
-
-import "./role-inbox.css";

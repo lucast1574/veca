@@ -1,3 +1,4 @@
+import { ProfilePayroll } from "./ProfilePayroll";
 import { useState, type ReactNode } from "react";
 import {
   Check,
@@ -116,6 +117,7 @@ export function UserProfile({
           {error && <Notice error>{error}</Notice>}
         </div>
         <div className="profile-main">
+          <ProfilePayroll />
           <section
             className="profile-section"
             aria-labelledby="profile-info-heading"

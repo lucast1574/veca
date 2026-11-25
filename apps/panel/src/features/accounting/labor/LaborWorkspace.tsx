@@ -1,3 +1,9 @@
+import {
+  EmployeeAccountDialog,
+  PayrollDeductionDialog,
+  incidentState,
+} from "./PersonnelDialogs";
+import "./personnel.css";
 import { useState } from "react";
 import { FileText, Plus, Users, Wallet } from "lucide-react";
 import {
@@ -49,11 +55,14 @@ const sections = [
   { id: "runs", label: "Planilla", Icon: Wallet },
   { id: "receipts", label: "Honorarios", Icon: FileText },
   { id: "employees", label: "Trabajadores", Icon: Users },
+  { id: "incidents", label: "Descuentos de obra", Icon: FileText },
 ] as const;
 type Section = (typeof sections)[number]["id"];
-export function LaborWorkspace() {
+export function LaborWorkspace({
+  initialPeriod,
+}: { initialPeriod?: string } = {}) {
   const [section, setSection] = useState<Section>("runs");
-  const [period, setPeriod] = useState(today().slice(0, 7));
+  const [period, setPeriod] = useState(initialPeriod || today().slice(0, 7));
   const [year, month] = period.split("-");
   const latestYear = Math.max(Number(today().slice(0, 4)) + 1, Number(year));
   const years = Array.from({ length: latestYear - 1999 }, (_, index) => {
@@ -186,6 +195,7 @@ export function LaborWorkspace() {
                     <Plus size={16} /> Nuevo recibo
                   </Button>
                 )}
+
                 {section === "employees" && (
                   <Button
                     disabled={!canWrite}
@@ -213,6 +223,49 @@ export function LaborWorkspace() {
                   open={open}
                 />
               )}
+              {section === "incidents" && (
+                <div className="personnel-incidents">
+                  {data.incidents?.length ? (
+                    data.incidents.map((i) => (
+                      <article key={i.id}>
+                        <header>
+                          <div>
+                            <strong>{i.employeeName}</strong>
+                            <small>
+                              {i.workName} · {i.item}
+                            </small>
+                          </div>
+                          <strong>{amount(i.cents)}</strong>
+                        </header>
+                        <p>{i.reason}</p>
+                        <footer>
+                          <span
+                            className="labor-status"
+                            data-state={
+                              i.status === "authorized" ? "approved" : "draft"
+                            }
+                          >
+                            {incidentState(i)}
+                          </span>
+                          <a
+                            className="warehouse-link"
+                            href={`#works/${i.workId}`}
+                          >
+                            Abrir obra
+                          </a>
+                        </footer>
+                        {i.authorization && (
+                          <small>Sustento: {i.authorization.reference}</small>
+                        )}
+                      </article>
+                    ))
+                  ) : (
+                    <p className="accounting-empty">
+                      No hay incidencias de obra para este periodo.
+                    </p>
+                  )}
+                </div>
+              )}
               {section === "employees" &&
                 (data.employees.length ? (
                   <ul className="labor-employees">
@@ -227,6 +280,11 @@ export function LaborWorkspace() {
                                   regime.code === employee.laborRegime,
                               )?.label}
                           </small>
+                          {employee.account?.userId && (
+                            <small>
+                              Cuenta VECA · {employee.account.userName}
+                            </small>
+                          )}
                         </div>
                         <strong>{amount(employee.salaryCents)}</strong>
                         <span
@@ -235,16 +293,27 @@ export function LaborWorkspace() {
                         >
                           {employee.active ? "Activo" : "Inactivo"}
                         </span>
-                        <Button
-                          variant="ghost"
-                          disabled={!canWrite}
-                          aria-label={"Editar a " + employee.name}
-                          onClick={() =>
-                            open({ kind: "employee", record: employee })
-                          }
-                        >
-                          Editar
-                        </Button>
+                        <div className="personnel-actions">
+                          <Button
+                            variant="ghost"
+                            disabled={!canWrite}
+                            onClick={() =>
+                              open({ kind: "account", record: employee })
+                            }
+                          >
+                            Cuenta VECA
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={!canWrite}
+                            aria-label={"Editar a " + employee.name}
+                            onClick={() =>
+                              open({ kind: "employee", record: employee })
+                            }
+                          >
+                            Editar
+                          </Button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -258,6 +327,25 @@ export function LaborWorkspace() {
           </>
         )}
       </QueryState>
+      {data && dialog?.kind === "account" && (
+        <EmployeeAccountDialog
+          employee={dialog.record}
+          close={close}
+          done={() =>
+            saved(
+              "Cuenta vinculada. La persona verá su información en Mi perfil.",
+            )
+          }
+        />
+      )}
+      {data && dialog?.kind === "deductions" && (
+        <PayrollDeductionDialog
+          run={dialog.record}
+          incidents={data.incidents || []}
+          close={close}
+          done={() => saved("Descuentos incorporados al borrador.")}
+        />
+      )}
       {data && dialog?.kind === "employee" && (
         <EmployeeForm
           employee={dialog.record}

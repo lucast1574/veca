@@ -180,10 +180,19 @@ export const laborAllocationInput = z.strictObject({
 
 export type LaborRegime = z.infer<typeof laborRegime>;
 export type EmployeeInput = z.infer<typeof employeeInput>;
-export type LaborEmployee = z.infer<typeof laborEmployee>;
+export type LaborEmployee = z.infer<typeof laborEmployee> & {
+  account?: PayrollAccountLink;
+};
 export type PayrollLineInput = z.infer<typeof payrollLineInput>;
 export type PayrollInput = z.infer<typeof payrollInput>;
-export type PayrollRun = z.infer<typeof payrollRun>;
+export type PayrollRun = z.infer<typeof payrollRun> & {
+  workDeductions?: WorkPayrollIncident[];
+  deductionPending?: {
+    operationId: string;
+    incidentIds: string[];
+    revision: number;
+  };
+};
 export type HonorariumInput = z.infer<typeof honorariumInput>;
 export type LaborReceipt = z.infer<typeof laborReceipt>;
 export type LaborSource = z.infer<typeof laborSource>;
@@ -194,6 +203,7 @@ export type LaborAllocation = Pick<
 >;
 export type LaborWorkspace = {
   period: string;
+  incidents?: WorkPayrollIncident[];
   employees: LaborEmployee[];
   regimes: LaborRegime[];
   runs: PayrollRun[];
@@ -234,3 +244,59 @@ export function splitLaborCost(cents: number, rows: LaborAllocation["rows"]) {
     cents: cents + Number(index < leftover),
   }));
 }
+
+export const workPayrollIncidentInput = z.strictObject({
+  id: accountingId,
+  employeeId: z.uuid(),
+  date: accountingDate,
+  period: accountingMonth,
+  kind: z.enum(["waste", "damage"]),
+  item: z.string().trim().min(2).max(180),
+  quantityNote: z.string().trim().max(100).default(""),
+  reason: z.string().trim().min(8).max(1500),
+  cents: cents.positive(),
+});
+export const incidentAuthorizationInput = z.strictObject({
+  revision,
+  basis: z.enum(["agreement", "order"]),
+  reference: z.string().trim().min(5).max(500),
+  confirmed: z.literal(true),
+});
+export type WorkPayrollIncident = z.infer<typeof workPayrollIncidentInput> & {
+  workId: string;
+  workName: string;
+  employeeName: string;
+  revision: number;
+  status: "reported" | "authorized" | "cancelled";
+  createdAt: string;
+  createdBy: string;
+  authorization?: {
+    basis: "agreement" | "order";
+    reference: string;
+    by: string;
+    at: string;
+  };
+  payrollRunId?: string;
+  payrollStatus?: PayrollRun["status"];
+};
+export type PayrollAccountLink = {
+  userId: string | null;
+  userName: string;
+  revision: number;
+};
+export type MyPayroll =
+  | { linked: false; period: string }
+  | {
+      linked: true;
+      period: string;
+      employeeName: string;
+      position: string;
+      salaryCents: number;
+      regimeLabel: string;
+      run: Pick<
+        PayrollRun,
+        "id" | "status" | "period" | "paidAt" | "paymentReference"
+      > | null;
+      line: PayrollRun["lines"][number] | null;
+      incidents: WorkPayrollIncident[];
+    };
