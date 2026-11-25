@@ -3,10 +3,13 @@ import {
   ArrowRight,
   CheckCheck,
   CloudDownload,
+  FileCheck2,
+  LoaderCircle,
   ReceiptText,
 } from "lucide-react";
-import type { SirePurchasePage } from "@veca/content";
+import type { SirePurchasePage, SireReconciliation } from "@veca/content";
 import { Button, Notice } from "../../components/ui";
+import { Modal } from "../../components/Modal";
 import { useAccountingPermission } from "./AccountingAccess";
 import {
   accountingPath,
@@ -21,6 +24,8 @@ import {
 import { SireAutomaticDialog } from "./SireAutomaticDialog";
 import { SireFileDialog } from "./SireFileDialog";
 import { SirePurchaseDialog } from "./SirePurchaseDialog";
+import { SireComparisonResult } from "./SireComparisonResult";
+import { useSirePurchaseRefresh } from "./useSirePurchaseRefresh";
 import "./sire.css";
 const statuses = {
   pending: "Falta indicar su destino",
@@ -40,9 +45,25 @@ export function SirePurchaseInbox({
   const canWrite = useAccountingPermission("accounting_write");
   const [state, setState] = useState<"pending" | "all">("pending");
   const [page, setPage] = useState(1);
+  const [newSince, setNewSince] = useState("");
+  const [finishing, setFinishing] = useState(false);
+  const [focusNew, setFocusNew] = useState(false);
+  const list = useRef<HTMLUListElement>(null);
+  const actions = useRef<HTMLDivElement>(null);
   const query = useAccountingQuery<SirePurchasePage>(
-    `${accountingPath}/sire/purchases?month=${month}&page=${page}&state=${state}`,
+    `${accountingPath}/sire/purchases?month=${month}&page=${page}&state=${state}${newSince ? `&newSince=${encodeURIComponent(newSince)}` : ""}`,
   );
+  const lastPage = useRef<SirePurchasePage | undefined>(undefined);
+  useEffect(() => {
+    if (query.data) lastPage.current = query.data;
+  }, [query.data]);
+  const refresh = useSirePurchaseRefresh(month, (since) => {
+    setNewSince(since);
+    setState("all");
+    setPage(1);
+    setFinishing(true);
+    query.refresh();
+  });
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "visible") query.refresh();
@@ -91,13 +112,47 @@ export function SirePurchaseInbox({
     Boolean(query.data),
     query.refresh,
   ]);
-  const [dialog, setDialog] = useState<"sync" | "file" | null>(null);
+  const [dialog, setDialog] = useState<"compare" | "file" | "result" | null>(
+    null,
+  );
+  const [comparison, setComparison] = useState<SireReconciliation>();
   const [selected, setSelected] = useState("");
   const [notice, setNotice] = useState("");
-  const data = query.data;
-  function refreshed() {
+  const data = query.data ?? (finishing ? lastPage.current : undefined);
+  const updating = refresh.busy || finishing;
+  useEffect(() => {
+    if (!finishing || query.loading) return;
+    if (query.error) {
+      setFinishing(false);
+      return;
+    }
+    if (!data) return;
+    const count = data.newCount ?? 0;
+    setNotice(
+      count
+        ? `${count === 1 ? "Encontramos 1 compra nueva. La marcamos" : `Encontramos ${count} compras nuevas. Las marcamos`} en la lista.`
+        : "No hay compras nuevas. Tu bandeja está al día.",
+    );
+    setFinishing(false);
+    setFocusNew(true);
+  }, [finishing, query.loading, query.error, data]);
+  useEffect(() => {
+    if (!focusNew || selected || dialog || query.loading || updating) return;
+    const first = data?.newCount
+      ? list.current?.querySelector<HTMLButtonElement>(
+          "[data-new-purchase] button",
+        )
+      : actions.current?.querySelector<HTMLButtonElement>("button");
+    if (first) {
+      first.focus({ preventScroll: true });
+      if (data?.newCount) first.scrollIntoView({ block: "nearest" });
+      setFocusNew(false);
+    }
+  }, [focusNew, selected, dialog, query.loading, updating, data]);
+  function compared(result: SireReconciliation) {
     query.refresh();
-    setDialog(null);
+    setComparison(result);
+    setDialog("result");
     setPage(1);
   }
   return (
@@ -114,14 +169,36 @@ export function SirePurchaseInbox({
             guárdala en VECA.
           </p>
         </div>
-        <Button
-          variant="ghost"
-          disabled={!canWrite}
-          onClick={() => setDialog("sync")}
-        >
-          <CloudDownload size={17} />
-          Actualizar compras
-        </Button>
+        <div className="sire-inbox-actions" ref={actions}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!canWrite || updating || !data?.checkedAt}
+            aria-busy={updating}
+            onClick={() => {
+              if (!data?.checkedAt) return;
+              setNotice("");
+              refresh.refresh(data.checkedAt);
+            }}
+          >
+            {updating ? (
+              <LoaderCircle size={17} className="sire-refresh-spinner" />
+            ) : (
+              <CloudDownload size={17} />
+            )}
+            {updating ? "Actualizando…" : "Actualizar compras"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!canWrite || updating}
+            aria-haspopup="dialog"
+            onClick={() => setDialog("compare")}
+          >
+            <FileCheck2 size={17} />
+            Comparar con SUNAT
+          </Button>
+        </div>
       </header>
       <div className="sire-inbox-summary">
         <div>
@@ -170,6 +247,11 @@ export function SirePurchaseInbox({
         </span>
       </div>
       {notice && <Notice>{notice}</Notice>}
+      {refresh.error && (
+        <Notice error>
+          {refresh.error} Pulsa Actualizar compras para reintentar.
+        </Notice>
+      )}
       {data?.syncFailed && (
         <Notice>
           La actualización automática no pudo terminar. Volveremos a intentarlo;
@@ -177,7 +259,7 @@ export function SirePurchaseInbox({
           compras.
         </Notice>
       )}
-      {data?.syncing && (
+      {(refresh.busy || data?.syncing) && (
         <p className="hint" role="status">
           Estamos trayendo las compras de SUNAT. La bandeja se actualizará sola.
         </p>
@@ -206,9 +288,16 @@ export function SirePurchaseInbox({
                 </p>
               </div>
             ) : (
-              <ul className="sire-purchase-list">
+              <ul className="sire-purchase-list" ref={list}>
                 {data.items.map((row) => (
-                  <li key={row.id}>
+                  <li
+                    key={row.id}
+                    data-new-purchase={
+                      newSince && row.firstSeenAt && row.firstSeenAt > newSince
+                        ? ""
+                        : undefined
+                    }
+                  >
                     <span className="sire-receipt-icon">
                       <ReceiptText size={20} />
                     </span>
@@ -221,6 +310,11 @@ export function SirePurchaseInbox({
                         {displayDate(row.date)}
                       </span>
                       <small>{statuses[row.status]}</small>
+                      {newSince &&
+                        row.firstSeenAt &&
+                        row.firstSeenAt > newSince && (
+                          <span className="sire-new-purchase">Nueva</span>
+                        )}
                     </div>
                     <strong className="sire-purchase-amount">
                       {row.currency === "PEN"
@@ -256,19 +350,14 @@ export function SirePurchaseInbox({
         Las compras por completar todavía no se suman a tus gastos. Guardarlas
         no declara impuestos ni cambia el stock.
       </p>
-      {dialog === "sync" && (
+      {dialog === "compare" && (
         <SireAutomaticDialog
           month={month}
           initialBook="purchases"
           lockBook
           close={() => setDialog(null)}
           manual={() => setDialog("file")}
-          done={(result) => {
-            setNotice(
-              `${result.count} comprobantes consultados. Los nuevos quedan en esta bandeja y los ya guardados se reconocen sin repetirlos.`,
-            );
-            refreshed();
-          }}
+          done={compared}
         />
       )}
       {dialog === "file" && (
@@ -277,8 +366,25 @@ export function SirePurchaseInbox({
           initialBook="purchases"
           lockBook
           close={() => setDialog(null)}
-          done={refreshed}
+          done={compared}
         />
+      )}
+      {dialog === "result" && comparison && (
+        <Modal
+          title={`Comparación de compras · ${month}`}
+          description="Revisa las coincidencias y los comprobantes que necesitan atención."
+          size="wide"
+          onClose={() => setDialog(null)}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button type="button" onClick={() => setDialog(null)}>
+                Volver a las compras
+              </Button>
+            </footer>
+          }
+        >
+          <SireComparisonResult result={comparison} />
+        </Modal>
       )}
       {selected && (
         <SirePurchaseDialog

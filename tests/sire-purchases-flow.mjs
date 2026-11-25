@@ -46,6 +46,9 @@ try {
     return { status: response.status, data: await response.json() };
   }
   const syncPath = `/period/${month}/reconcile/purchases/automatic`;
+  const before = (await request(`/sire/purchases?month=${month}&state=all`))
+    .data;
+  assert.ok(before.checkedAt, "the server supplies the refresh baseline");
   const started = await request(syncPath, "POST");
   assert.equal(started.status, 201);
   let result = started;
@@ -65,6 +68,62 @@ try {
   assert.equal(first.tax, 1800);
   assert.equal("job" in list, false);
   assert.equal("issuerRuc" in first, false);
+  const fresh = await request(
+    `/sire/purchases?month=${month}&state=all&newSince=${encodeURIComponent(before.checkedAt)}`,
+  );
+  assert.equal(fresh.data.newCount, 2);
+  assert.ok(
+    fresh.data.items.every((row) => row.firstSeenAt > before.checkedAt),
+  );
+  const seen = fresh.data.items.map((row) => [row.id, row.firstSeenAt]);
+  const checkedAt = fresh.data.checkedAt;
+  // Reading the same proposal again must not relabel old purchases as new.
+  await request(syncPath + "/" + started.data.job);
+  const repeated = (
+    await request(
+      `/sire/purchases?month=${month}&state=all&newSince=${encodeURIComponent(checkedAt)}`,
+    )
+  ).data;
+  assert.equal(repeated.newCount, 0);
+  assert.deepEqual(
+    repeated.items.map((row) => [row.id, row.firstSeenAt]),
+    seen,
+  );
+  assert.equal(
+    (await request(`/sire/purchases?month=${month}&newSince=invalid`)).status,
+    400,
+  );
+  // An older invoice newly received from SUNAT must be visible on the first page.
+  const extraIds = Array.from({ length: 21 }, () => new ObjectId());
+  const source = await db
+    .collection("sire_purchases")
+    .findOne({ _id: new ObjectId(first.id) });
+  try {
+    await db.collection("sire_purchases").insertMany(
+      extraIds.map((_id, index) => ({
+        ...source,
+        _id,
+        reference: `FPAGE-${index + 1}`,
+        date: index === 20 ? `${month}-01` : `${month}-28`,
+        firstSeenAt:
+          index === 20
+            ? "2099-01-01T00:00:00.000Z"
+            : "2000-01-01T00:00:00.000Z",
+      })),
+    );
+    const paged = (
+      await request(
+        `/sire/purchases?month=${month}&state=all&newSince=${encodeURIComponent(checkedAt)}`,
+      )
+    ).data;
+    assert.equal(paged.newCount, 1);
+    assert.equal(paged.items[0].id, String(extraIds[20]));
+    assert.equal(paged.hasMore, true);
+  } finally {
+    await db
+      .collection("sire_purchases")
+      .deleteMany({ _id: { $in: extraIds } });
+  }
   const body = {
     version: first.version,
     description: "Transporte QA",

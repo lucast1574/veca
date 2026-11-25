@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { http, HttpResponse } from "msw";
-import { within, userEvent, expect } from "storybook/test";
+import { http, HttpResponse, delay } from "msw";
+import { within, userEvent, expect, waitFor } from "storybook/test";
 import { AccountingCosts } from "../../src/features/accounting/AccountingCosts";
 import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
@@ -10,6 +10,13 @@ import type { SirePurchase } from "@veca/content";
 const meta = {
   title: "VECA/Compras de proveedores",
   parameters: { layout: "fullscreen" },
+  beforeEach() {
+    rows = sample.map((row) => ({ ...row }));
+    availablePurchases = existingPurchases;
+    refreshCase = "none";
+    refreshed = false;
+    syncCalls = 0;
+  },
 } satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -72,7 +79,64 @@ const existingPurchases = [
   },
 ];
 let availablePurchases = existingPurchases;
+const baseline = "2026-11-25T13:40:00.000Z";
+const afterRefresh = "2026-11-25T13:41:00.000Z";
+let refreshCase: "new" | "none" | "error" = "none";
+let refreshed = false;
+let syncCalls = 0;
+const comparison = {
+  book: "purchases",
+  period: "2026-11",
+  count: 3,
+  matches: 2,
+  issues: [
+    {
+      status: "onlySunat",
+      reference: "F001-98",
+      taxId: "20100000003",
+      sunat: 1000,
+      currency: "PEN",
+    },
+  ],
+};
 const handlers = [
+  http.get("*/admin/accounting/sire/connection", () =>
+    HttpResponse.json({ configured: true }),
+  ),
+  http.post(
+    "*/admin/accounting/period/:month/reconcile/purchases/automatic",
+    async () => {
+      syncCalls++;
+      await delay(400);
+      if (refreshCase === "error") {
+        refreshCase = "none";
+        return HttpResponse.json(
+          { message: "No pudimos consultar SUNAT. Tus compras se conservan." },
+          { status: 503 },
+        );
+      }
+      return HttpResponse.json(
+        { job: "v1.storybook", status: "pending" },
+        { status: 201 },
+      );
+    },
+  ),
+  http.get(
+    "*/admin/accounting/period/:month/reconcile/purchases/automatic/:job",
+    () => {
+      if (!refreshed && refreshCase === "new")
+        rows = [
+          { ...sample[2], firstSeenAt: "2026-11-25T13:40:30.000Z" },
+          ...rows,
+        ];
+      refreshed = true;
+      return HttpResponse.json({
+        job: "v1.storybook",
+        status: "ready",
+        result: comparison,
+      });
+    },
+  ),
   http.post("*/admin/accounting/costs", () =>
     HttpResponse.json(
       {
@@ -91,7 +155,9 @@ const handlers = [
     HttpResponse.json(works.map((w) => ({ id: w.id, name: w.workName }))),
   ),
   http.get("*/admin/accounting/sire/purchases", ({ request }) => {
-    const all = new URL(request.url).searchParams.get("state") === "all";
+    const params = new URL(request.url).searchParams;
+    const all = params.get("state") === "all";
+    const since = params.get("newSince");
     const pending = rows.filter((row) => row.status === "pending");
     return HttpResponse.json({
       items: all ? rows : pending,
@@ -101,7 +167,11 @@ const handlers = [
       registered: rows.length - pending.length,
       review: 0,
       hasMore: false,
-      syncedAt: "2026-11-25T13:40:00Z",
+      syncedAt: refreshed ? afterRefresh : baseline,
+      checkedAt: refreshed ? afterRefresh : baseline,
+      newCount: rows.filter(
+        (row) => since && row.firstSeenAt && row.firstSeenAt > since,
+      ).length,
     });
   }),
   http.get("*/admin/accounting/sire/purchases/:id", ({ params }) =>
@@ -144,9 +214,124 @@ export const ComprasPendientes: Story = {
   beforeEach() {
     rows = sample.map((row) => ({ ...row }));
     availablePurchases = existingPurchases;
+    refreshCase = "none";
+    refreshed = false;
+    syncCalls = 0;
   },
   parameters: { msw: handlers },
   render,
+};
+export const ActualizarConNuevasCompras: Story = {
+  ...ComprasPendientes,
+  name: "Actualizar: compras nuevas y foco en la primera",
+  beforeEach() {
+    rows = sample.slice(0, 2).map((row) => ({ ...row }));
+    refreshCase = "new";
+    refreshed = false;
+    syncCalls = 0;
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const update = await page.findByRole("button", {
+      name: "Actualizar compras",
+    });
+    await waitFor(() => expect(update).toBeEnabled());
+    await userEvent.click(update);
+    await expect(
+      page.getByRole("button", { name: "Actualizando…" }),
+    ).toBeDisabled();
+    await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
+    await expect(
+      await page.findByText(
+        /Encontramos 1 compra nueva/,
+        {},
+        { timeout: 10000 },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Nueva")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        page.getAllByRole("button", { name: /Completar compra/ })[0],
+      ).toHaveFocus(),
+    );
+    await expect(syncCalls).toBe(1);
+  },
+};
+export const ActualizarSinNovedades: Story = {
+  ...ComprasPendientes,
+  name: "Actualizar: sin compras nuevas",
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const update = await page.findByRole("button", {
+      name: "Actualizar compras",
+    });
+    await waitFor(() => expect(update).toBeEnabled());
+    await userEvent.click(update);
+    await expect(
+      await page.findByText(/Tu bandeja está al día/, {}, { timeout: 10000 }),
+    ).toBeVisible();
+    await waitFor(() => expect(update).toHaveFocus());
+    await expect(page.queryByText("Nueva")).not.toBeInTheDocument();
+  },
+};
+export const ActualizarConReintento: Story = {
+  ...ComprasPendientes,
+  name: "Actualizar: error y reintento",
+  beforeEach() {
+    rows = sample.map((row) => ({ ...row }));
+    refreshCase = "error";
+    refreshed = false;
+    syncCalls = 0;
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const update = await page.findByRole("button", {
+      name: "Actualizar compras",
+    });
+    await waitFor(() => expect(update).toBeEnabled());
+    await userEvent.click(update);
+    await expect(await page.findByRole("alert")).toHaveTextContent(
+      /Tus compras se conservan/,
+    );
+    await expect(
+      within(
+        page.getByRole("region", { name: "Compras por registrar" }),
+      ).getAllByRole("button", { name: /Completar compra/ }),
+    ).toHaveLength(3);
+    await userEvent.click(update);
+    await expect(
+      await page.findByText(/Tu bandeja está al día/, {}, { timeout: 10000 }),
+    ).toBeVisible();
+  },
+};
+export const CompararCompras: Story = {
+  ...ComprasPendientes,
+  name: "Comparar: acción separada y resultados",
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(
+      await page.findByRole("button", { name: "Comparar con SUNAT" }),
+    );
+    await expect(
+      await page.findByRole("dialog", { name: "Comparar compras con SUNAT" }),
+    ).toBeVisible();
+    const compare = await page.findByRole("button", {
+      name: "Comparar compras",
+    });
+    await waitFor(() => expect(compare).toBeEnabled());
+    await userEvent.click(compare);
+    await expect(
+      await page.findByRole(
+        "dialog",
+        { name: "Comparación de compras · 2026-11" },
+        { timeout: 10000 },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("2 coinciden · 1 por revisar")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Descargar diferencias" }),
+    ).toBeEnabled();
+  },
 };
 export const CompletarCompra: Story = {
   ...ComprasPendientes,

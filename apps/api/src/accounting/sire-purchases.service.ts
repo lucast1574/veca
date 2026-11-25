@@ -23,7 +23,7 @@ import {
 
 export type IncomingPurchase = Omit<
   SirePurchase,
-  "id" | "version" | "status" | "costId"
+  "id" | "version" | "status" | "costId" | "firstSeenAt"
 >;
 type Record = IncomingPurchase & {
   _id: ObjectId;
@@ -31,6 +31,7 @@ type Record = IncomingPurchase & {
   issuerRuc: string;
   fingerprint: string;
   syncedAt: string;
+  firstSeenAt?: string;
 };
 @Injectable()
 export class SirePurchasesService {
@@ -86,6 +87,9 @@ export class SirePurchasesService {
           update: [
             {
               $set: {
+                firstSeenAt: {
+                  $ifNull: ["$firstSeenAt", "$syncedAt", syncedAt],
+                },
                 ...Object.fromEntries(
                   Object.entries(fields).map(([key, value]) => [
                     key,
@@ -179,7 +183,9 @@ export class SirePurchasesService {
     period: string,
     page: number,
     state: "pending" | "all",
+    newSince?: string,
   ): Promise<SirePurchasePage> {
+    const checkedAt = new Date().toISOString();
     const rows = await this.records
       .find({ period, issuerRuc: fiscalIssuerRuc })
       .sort({ date: -1, _id: 1 })
@@ -228,6 +234,10 @@ export class SirePurchasesService {
       state === "pending"
         ? items.filter((row) => row.status !== "registered")
         : items;
+    const isNew = (row: SirePurchase) =>
+      Boolean(newSince && row.firstSeenAt && row.firstSeenAt > newSince);
+    // Bring new purchases into view even when their invoice dates are older.
+    if (newSince) filtered.sort((a, b) => Number(isNew(b)) - Number(isNew(a)));
     const sync = await this.db.db
       .collection<{
         _id: string;
@@ -249,6 +259,8 @@ export class SirePurchasesService {
       syncedAt: sync?.syncedAt,
       syncFailed: Boolean(sync?.failed),
       syncing: Boolean(sync?.job),
+      checkedAt,
+      newCount: newSince ? items.filter(isNew).length : 0,
     };
   }
   async detail(id: string) {

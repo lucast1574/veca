@@ -166,6 +166,42 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
+  flex-wrap: wrap;
+}
+.sire-inbox-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sire-refresh-spinner {
+  animation: sire-refresh 1s linear infinite;
+}
+@keyframes sire-refresh {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sire-refresh-spinner {
+    animation: none;
+  }
+}
+.sire-comparison-result {
+  display: grid;
+  gap: 20px;
+}
+.sire-purchase-provider .sire-new-purchase {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
+  font-size: 10px;
+  font-weight: 750;
+}
+.sire-purchase-list [data-new-purchase] .sire-receipt-icon {
+  background: var(--panel-accent-soft);
+  color: var(--panel-accent);
 }
 .sire-eyebrow {
   color: var(--panel-secondary);

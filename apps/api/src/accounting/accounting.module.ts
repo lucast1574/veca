@@ -239,11 +239,13 @@ class AccountingController {
     @Query("month") month: string,
     @Query("page") page = "1",
     @Query("state") state = "pending",
+    @Query("newSince") newSince?: string,
   ) {
     return this.purchases.list(
       parse(accountingMonth, month),
       parse(pageIndex, page),
       parse(z.enum(["pending", "all"]), state),
+      parse(z.string().datetime().optional(), newSince),
     );
   }
 

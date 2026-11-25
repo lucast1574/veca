@@ -11,3 +11,5 @@ El archivo `public/mockServiceWorker.js` pertenece exclusivamente a Storybook. N
 Sugerencias del equipo muestra el foro interno, la conversación y los modales de publicación y comentario. Los escenarios verifican publicar y comentar, reintentar conservando el borrador y cambiar el estado con una cuenta de Administración. Se usan únicamente datos ficticios.
 
 Los escenarios de confirmación y registro del detalle abren los modales reales y comprueban que el catálogo y las acciones estén disponibles. El escenario de material nuevo simula el alta con saldo cero, su selección automática y la conservación de cantidad y precio en el borrador de compra. Las cantidades y las facturas son ejemplos; las acciones no definidas no guardan ni modifican datos.
+
+Las compras de proveedores también incluyen la actualización directa con compras nuevas, el aviso sin novedades, el reintento tras un error y la comparación separada con sus resultados. Se comprueban el estado de carga, la ausencia de modal al actualizar, una única consulta y el foco en la primera compra nueva.

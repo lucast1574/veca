@@ -256,6 +256,7 @@ export type SirePurchase = {
   reason?: string;
   status: "pending" | "registered" | "different" | "manual";
   costId?: string;
+  firstSeenAt?: string;
 };
 export type SirePurchasePage = {
   items: SirePurchase[];
@@ -268,6 +269,8 @@ export type SirePurchasePage = {
   syncedAt?: string;
   syncFailed?: boolean;
   syncing?: boolean;
+  checkedAt?: string;
+  newCount?: number;
 };
 
 export type ManualCostCheck =

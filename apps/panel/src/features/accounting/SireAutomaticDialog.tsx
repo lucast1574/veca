@@ -96,12 +96,12 @@ export function SireAutomaticDialog({
     <Modal
       title={
         book === "purchases"
-          ? "Actualizar compras de SUNAT"
+          ? "Comparar compras con SUNAT"
           : "Revisar ventas en SUNAT"
       }
       description={
         book === "purchases"
-          ? `Buscaremos las facturas de tus proveedores del mes ${month}.`
+          ? `Revisaremos si las compras de ${month} coinciden con lo guardado en VECA.`
           : `Compararemos las ventas de ${month} con las facturas de VECA.`
       }
       onClose={close}
@@ -120,7 +120,7 @@ export function SireAutomaticDialog({
               : error
                 ? "Reintentar consulta"
                 : book === "purchases"
-                  ? "Buscar compras del mes"
+                  ? "Comparar compras"
                   : "Revisar ventas"}
           </Button>
         </footer>
@@ -134,12 +134,12 @@ export function SireAutomaticDialog({
           <div>
             <h3>
               {book === "purchases"
-                ? "Tus facturas, sin volver a escribirlas"
+                ? "Comprueba lo que está guardado"
                 : "Comprueba tus ventas"}
             </h3>
             <p>
               {book === "purchases"
-                ? "Las compras nuevas quedarán guardadas en tu bandeja. Después solo tendrás que indicar para qué fueron. Las ya registradas no se repiten."
+                ? "Verás qué comprobantes coinciden, cuáles tienen un importe distinto y cuáles aparecen solo en SUNAT o solo en VECA. Las compras nuevas también llegarán a tu bandeja, sin duplicar las ya guardadas."
                 : "Verás si las facturas de venta de VECA coinciden con lo que aparece en SUNAT y cuáles necesitan revisión."}
             </p>
           </div>
