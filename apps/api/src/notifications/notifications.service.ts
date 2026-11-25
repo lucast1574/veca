@@ -232,6 +232,41 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     );
     if (result.upsertedCount) this.changes.next({ userId: user.id });
   }
+  async forWarehousePurchase(id: string) {
+    const order = await this.db.db
+      .collection("warehouse_purchases")
+      .findOne({ _id: new ObjectId(id) });
+    if (
+      !order ||
+      order.cancelled ||
+      (!order.requestedOnly &&
+        order.items.every(
+          (item: { received: number; ordered: number }) =>
+            item.received >= item.ordered,
+        ))
+    )
+      return;
+    const people = await this.people();
+    await Promise.all(
+      people
+        .filter(
+          (user) =>
+            user.permissions.includes("inventory") &&
+            (user.permissions.includes("purchases_manage") ||
+              (!order.requestedOnly &&
+                user.permissions.includes("inventory_receive"))),
+        )
+        .map((user) =>
+          this.add("warehouse-invoice:" + id, user, {
+            scope: "self",
+            permission: "inventory",
+            title: "Compra de materiales para revisar",
+            body: "Contabilidad vinculó un comprobante. Revisa los materiales y registra su recepción cuando lleguen.",
+            href: `#inventory/compras/${id}`,
+          }),
+        ),
+    );
+  }
   async forWork(row: LeadDocument) {
     const people = await this.people(),
       id = String(row._id),

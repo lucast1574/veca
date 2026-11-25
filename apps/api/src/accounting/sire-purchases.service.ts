@@ -14,6 +14,7 @@ import {
 } from "@veca/content";
 import { Database } from "../database/database.module";
 import { fiscalIssuerRuc } from "../common/fiscal-config";
+import { parse } from "../common/validation";
 import { AccountingService } from "./accounting.service";
 import {
   matchingPurchaseCosts,
@@ -296,6 +297,7 @@ export class SirePurchasesService {
       );
     if (
       input.destination === "warehouse" &&
+      input.purchaseId &&
       !purchases.some((p) => p.id === input.purchaseId)
     )
       throw new BadRequestException(
@@ -314,7 +316,7 @@ export class SirePurchasesService {
       throw new ConflictException(
         "Esta factura coincide con una compra de almacén. Vincúlala a esa compra para evitar repetir su costo.",
       );
-    const data = costInput.parse({
+    const data = parse(costInput, {
       description: input.description,
       date: item.date,
       supplier: item.supplier,
@@ -326,7 +328,7 @@ export class SirePurchasesService {
       taxCents: item.tax,
       allocations:
         input.destination === "work"
-          ? [{ workId: input.workId, cents: item.net }]
+          ? input.allocations || [{ workId: input.workId, cents: item.net }]
           : [],
     });
     const stableId = createHash("sha256")

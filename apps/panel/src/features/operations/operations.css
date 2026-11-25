@@ -324,7 +324,7 @@
 .ops-create-lead .notice {
   margin: 16px 0 0;
 }
-.ops-create-lead .veca-select-menu {
+.ops-create-lead .veca-select-menu:not([popover]) {
   position: static;
   margin-top: 8px;
 }

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { http, HttpResponse } from "msw";
-import { within, userEvent } from "storybook/test";
+import { within, userEvent, expect } from "storybook/test";
 import { AccountingCosts } from "../../src/features/accounting/AccountingCosts";
 import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
@@ -64,6 +64,17 @@ const sample: SirePurchase[] = [
 ];
 let rows = sample.map((row) => ({ ...row }));
 const handlers = [
+  http.post("*/admin/accounting/costs", () =>
+    HttpResponse.json(
+      {
+        check: { status: "found", purchaseId: sample[0].id, period: "2026-11" },
+      },
+      { status: 201 },
+    ),
+  ),
+  http.get("*/admin/accounting/cost-origins", () =>
+    HttpResponse.json({ purchases: [], dispatches: [] }),
+  ),
   http.get("*/admin/accounting/costs", () =>
     HttpResponse.json({ items: [], hasMore: false }),
   ),
@@ -147,5 +158,42 @@ export const ComprasGuardadas: Story = {
   name: "Todas las compras guardadas",
   beforeEach() {
     rows = sample.map((row) => ({ ...row, status: "registered" }));
+  },
+};
+
+export const FacturaManualYaEncontrada: Story = {
+  ...ComprasPendientes,
+  name: "Registro manual: continuar con factura de SUNAT",
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(
+      await page.findByRole("button", { name: "Registrar gasto o compra" }),
+    );
+    await userEvent.type(
+      page.getByRole("textbox", { name: /^Concepto$/ }),
+      "Cena comercial de ejemplo",
+    );
+    await userEvent.type(
+      page.getByRole("textbox", { name: /^RUC del proveedor$/ }),
+      sample[0].taxId,
+    );
+    await userEvent.type(
+      page.getByRole("textbox", { name: /^Número de comprobante$/ }),
+      sample[0].reference,
+    );
+    await userEvent.type(
+      page.getByRole("textbox", { name: /^Importe sin IGV$/ }),
+      "63.56",
+    );
+    await userEvent.type(
+      page.getByRole("textbox", { name: /^IGV del comprobante$/ }),
+      "11.44",
+    );
+    await userEvent.click(
+      page.getByRole("button", { name: /^Guardar registro$/ }),
+    );
+    await expect(
+      page.findByRole("heading", { name: "Encontramos esta factura en SUNAT" }),
+    ).resolves.toBeVisible();
   },
 };

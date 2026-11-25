@@ -31,7 +31,9 @@ const statuses = {
 export function SirePurchaseInbox({
   month,
   onSaved,
+  revision = 0,
 }: {
+  revision?: number;
   month: string;
   onSaved: () => void;
 }) {
@@ -52,6 +54,9 @@ export function SirePurchaseInbox({
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [query.refresh]);
+  useEffect(() => {
+    if (revision) query.refresh();
+  }, [revision, query.refresh]);
   const requested = useRef(false);
   useEffect(() => {
     if (

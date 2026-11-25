@@ -79,7 +79,7 @@
   border-radius: 14px;
   box-shadow: 0 18px 50px #10172b30;
   animation: veca-select-enter 0.18s ease-out;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   scroll-padding: 7px;
 }
 .veca-select-menu[popover] {
@@ -155,4 +155,8 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+.veca-select-menu::-webkit-scrollbar {
+  display: none;
 }

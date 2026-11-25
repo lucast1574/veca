@@ -4,6 +4,8 @@ import { Select } from "@veca/ui/src/Select";
 import {
   sireIncorporation,
   type AccountingWork,
+  COST_KIND_LABELS,
+  type CostInput,
   type SirePurchase,
   type SireIncorporation,
 } from "@veca/content";
@@ -29,7 +31,9 @@ export function SirePurchaseDialog({
   close,
   saved,
   canWrite,
+  initial,
 }: {
+  initial?: CostInput;
   id: string;
   close: () => void;
   saved: () => void;
@@ -51,6 +55,7 @@ export function SirePurchaseDialog({
       close={close}
       saved={saved}
       canWrite={canWrite}
+      initial={initial}
     />
   );
 }
@@ -59,7 +64,9 @@ function PurchaseForm({
   close,
   saved,
   canWrite,
+  initial,
 }: {
+  initial?: CostInput;
   detail: Detail;
   close: () => void;
   saved: () => void;
@@ -70,14 +77,33 @@ function PurchaseForm({
   const suggested = purchases.filter((p) => p.referenceMatch);
   const [destination, setDestination] = useState<
     SireIncorporation["destination"] | ""
-  >(suggested.length === 1 ? "warehouse" : "");
-  const [kind, setKind] = useState("");
-  const [workId, setWork] = useState("");
-  const [purchaseId, setPurchase] = useState(
-    suggested.length === 1 ? suggested[0].id : "",
+  >(
+    suggested.length === 1 || initial?.kind === "purchase"
+      ? "warehouse"
+      : initial?.allocations.length
+        ? "work"
+        : initial
+          ? "general"
+          : "",
   );
-  const [description, setDescription] = useState("");
-  const [dirty, setDirty] = useState(false);
+  const [kind, setKind] = useState(
+    initial && !["purchase", "materials"].includes(initial.kind)
+      ? initial.kind
+      : "",
+  );
+  const [workId, setWork] = useState(initial?.allocations[0]?.workId || "");
+  const [splits, setSplits] = useState(
+    initial?.allocations && initial.allocations.length > 1
+      ? initial.allocations
+      : [],
+  );
+  const [purchaseId, setPurchase] = useState(
+    suggested.length === 1 ? suggested[0].id : initial?.purchaseId || "",
+  );
+  const [description, setDescription] = useState(initial?.description || "");
+  const [dirty, setDirty] = useState(
+    Boolean(initial) && item.status === "pending",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useUnsavedChanges(dirty, busy);
@@ -87,12 +113,23 @@ function PurchaseForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || !canWrite) return;
+    if (
+      destination === "work" &&
+      splits.length &&
+      splits.reduce((sum, row) => sum + row.cents, 0) !== item.net
+    ) {
+      setError(
+        "Distribuye todo el importe sin IGV de la factura entre las obras.",
+      );
+      return;
+    }
     const result = sireIncorporation.safeParse({
       version: item.version,
       description,
       destination,
       kind: destination === "warehouse" ? "other" : kind,
-      ...(destination === "work" && workId && { workId }),
+      ...(destination === "work" &&
+        (splits.length ? { allocations: splits } : workId ? { workId } : {})),
       ...(destination === "warehouse" && purchaseId && { purchaseId }),
     });
     if (!result.success) {
@@ -158,6 +195,15 @@ function PurchaseForm({
             : `${item.currency} ${(item.total / 100).toFixed(2)}`}
         </b>
       </div>
+      {initial &&
+        (initial.netCents !== item.net || initial.taxCents !== item.tax) && (
+          <Notice>
+            Los importes que ingresaste no coinciden con la factura: escribiste{" "}
+            {amount(initial.netCents + initial.taxCents)} y SUNAT muestra{" "}
+            {amount(item.total)}. Usaremos los importes del comprobante;
+            revísalos antes de guardar.
+          </Notice>
+        )}
       {item.status !== "pending" ? (
         <Notice>
           {item.status === "registered"
@@ -210,6 +256,8 @@ function PurchaseForm({
                   options={[
                     { value: "", label: "Selecciona el tipo" },
                     { value: "fuel", label: "Combustible" },
+                    { value: "meals", label: COST_KIND_LABELS.meals },
+                    { value: "services", label: COST_KIND_LABELS.services },
                     { value: "transport", label: "Transporte" },
                     { value: "installation", label: "Instalación" },
                     { value: "other", label: "Otro gasto" },
@@ -221,7 +269,57 @@ function PurchaseForm({
                 />
               </Field>
             )}
-            {destination === "work" && (
+            {destination === "work" && splits.length > 0 && (
+              <div className="accounting-group">
+                <h3>Distribución que ingresaste</h3>
+                <p className="hint">
+                  Conservamos las obras y los importes. Deben sumar el importe
+                  sin IGV de SUNAT.
+                </p>
+                {splits.map((split, index) => (
+                  <Field
+                    key={split.workId}
+                    label={
+                      works.data?.find((work) => work.id === split.workId)
+                        ?.name || "Obra"
+                    }
+                  >
+                    <input
+                      aria-label={`Importe para obra ${index + 1}`}
+                      inputMode="decimal"
+                      defaultValue={String(split.cents / 100)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(",", ".");
+                        setSplits((rows) =>
+                          rows.map((row, i) =>
+                            i === index
+                              ? {
+                                  ...row,
+                                  cents: /^\d+(\.\d{1,2})?$/.test(value)
+                                    ? Math.round(Number(value) * 100)
+                                    : 0,
+                                }
+                              : row,
+                          ),
+                        );
+                        setDirty(true);
+                      }}
+                    />
+                  </Field>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setSplits([]);
+                    setDirty(true);
+                  }}
+                >
+                  Asignar a una sola obra
+                </Button>
+              </div>
+            )}
+            {destination === "work" && !splits.length && (
               <>
                 <Field label="Obra">
                   <Select
@@ -248,9 +346,9 @@ function PurchaseForm({
                 <Package size={20} />
                 <div>
                   <p>
-                    Vincula la factura con una compra de Inventario. Se guardará
-                    su comprobante sin crear otra orden ni sumar materiales al
-                    stock.
+                    Elige una compra existente o envíala a Almacén para que
+                    identifique los materiales. El stock se actualizará cuando
+                    registren lo recibido.
                   </p>
                   <Field label="Compra de Inventario">
                     <Select
@@ -259,7 +357,7 @@ function PurchaseForm({
                       options={[
                         {
                           value: "",
-                          label: "Selecciona la compra del proveedor",
+                          label: "Enviar a Almacén para preparar la recepción",
                         },
                         ...purchases.map((p) => ({
                           value: p.id,
@@ -274,9 +372,8 @@ function PurchaseForm({
                   </Field>
                   {!purchases.length && (
                     <p className="hint">
-                      No hay una compra vigente de este proveedor. Solicita a
-                      Almacén registrar la compra en Inventario y vuelve a abrir
-                      esta factura.
+                      Almacén recibirá una tarea y un aviso para identificar los
+                      materiales y preparar la recepción.
                     </p>
                   )}
                 </div>

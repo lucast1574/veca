@@ -13,7 +13,7 @@
 .accounting-guide-draft .dispatch-fields .field {
   margin: 0;
 }
-.guide-work-picker .veca-select-menu {
+.guide-work-picker .veca-select-menu:not([popover]) {
   position: static;
   margin-top: 8px;
   scrollbar-width: none;

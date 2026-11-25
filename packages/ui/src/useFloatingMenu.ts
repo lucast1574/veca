@@ -52,3 +52,16 @@ export function useFloatingMenu(
     };
   }, [open, floating]);
 }
+
+/** Scroll the options, never their dialog or page ancestors. */
+export function scrollMenuOption(
+  menu: HTMLElement | null,
+  option: HTMLElement | null | undefined,
+) {
+  if (!menu || !option) return;
+  const outer = menu.getBoundingClientRect(),
+    inner = option.getBoundingClientRect();
+  if (inner.top < outer.top + 7) menu.scrollTop -= outer.top + 7 - inner.top;
+  else if (inner.bottom > outer.bottom - 7)
+    menu.scrollTop += inner.bottom - outer.bottom + 7;
+}

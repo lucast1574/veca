@@ -123,7 +123,7 @@ try {
   assert.equal(
     (await request("/costs", "POST", { id: String(duplicateId), data: manual }))
       .status,
-    409,
+    201,
   );
   assert.equal(
     (
@@ -135,34 +135,32 @@ try {
     400,
   );
   // The second invoice is linked to an existing order without another order, stock or material cost.
-  await db
-    .collection("warehouse_purchases")
-    .insertOne({
-      _id: orderId,
-      version: 1,
-      supplier: "Proveedor QA local",
-      supplierRuc: "20100066603",
-      reason: "Materiales QA",
-      workId: "",
-      workName: "",
-      items: [
-        {
-          materialId: String(new ObjectId()),
-          name: "QA",
-          sku: "QA",
-          unit: "und",
-          requested: 1,
-          ordered: 1,
-          received: 0,
-          unitCents: 10000,
-          reason: "QA",
-        },
-      ],
-      receipts: [],
-      createdAt: new Date().toISOString(),
-      actor: "admin",
-      status: "open",
-    });
+  await db.collection("warehouse_purchases").insertOne({
+    _id: orderId,
+    version: 1,
+    supplier: "Proveedor QA local",
+    supplierRuc: "20100066603",
+    reason: "Materiales QA",
+    workId: "",
+    workName: "",
+    items: [
+      {
+        materialId: String(new ObjectId()),
+        name: "QA",
+        sku: "QA",
+        unit: "und",
+        requested: 1,
+        ordered: 1,
+        received: 0,
+        unitCents: 10000,
+        reason: "QA",
+      },
+    ],
+    receipts: [],
+    createdAt: new Date().toISOString(),
+    actor: "admin",
+    status: "open",
+  });
   const beforeOrders = await db
     .collection("warehouse_purchases")
     .countDocuments();

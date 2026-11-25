@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState, type Ref } from "react";
-import { useFloatingMenu } from "./useFloatingMenu";
+import { useFloatingMenu, scrollMenuOption } from "./useFloatingMenu";
 export type SelectOption = {
   value: string;
   label: string;
@@ -18,7 +18,7 @@ export function Select({
   error,
   disabled,
   triggerRef,
-  floating = false,
+  floating = true,
 }: {
   id?: string;
   name?: string;
@@ -52,9 +52,12 @@ export function Select({
   }, [open]);
   useEffect(() => {
     if (open)
-      root.current
-        ?.querySelector(`[data-option-index="${active}"]`)
-        ?.scrollIntoView({ block: "nearest" });
+      scrollMenuOption(
+        menu.current,
+        menu.current?.querySelector<HTMLElement>(
+          `[data-option-index="${active}"]`,
+        ),
+      );
   }, [active, open]);
   function choose(index: number) {
     if (!options[index]) return;

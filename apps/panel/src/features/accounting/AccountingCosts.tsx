@@ -1,7 +1,8 @@
+import { SirePurchaseDialog } from "./SirePurchaseDialog";
 import { SirePurchaseInbox } from "./SirePurchaseInbox";
 import { useAccountingPermission } from "./AccountingAccess";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
 import {
   costInput,
@@ -10,6 +11,7 @@ import {
   type AccountingCost,
   type AccountingWork,
   type CostInput,
+  type ManualCostCheck,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { API_BASE, api } from "../../lib/api";
@@ -46,6 +48,8 @@ export function AccountingCosts({
   );
   const [entry, setEntry] = useState<"new" | AccountingCost>();
   const [active, setActive] = useState<AccountingCost>();
+  const [inboxRevision, setInboxRevision] = useState(0);
+  const [source, setSource] = useState<{ id: string; initial: CostInput }>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const rows = query.data?.items || [];
@@ -125,7 +129,12 @@ export function AccountingCosts({
         </Field>
       </div>
       {!purchaseId && month && (
-        <SirePurchaseInbox month={month} key={month} onSaved={query.refresh} />
+        <SirePurchaseInbox
+          month={month}
+          key={month}
+          revision={inboxRevision}
+          onSaved={query.refresh}
+        />
       )}
       <h3 className="sire-saved-title">Compras guardadas</h3>
       <p className="hint">
@@ -180,6 +189,24 @@ export function AccountingCosts({
           current={entry === "new" ? undefined : entry}
           initialPurchase={purchaseId}
           onClose={() => setEntry(undefined)}
+          onFound={async (match, initial) => {
+            setEntry(undefined);
+            if (match.status === "found") {
+              setMonth(match.period);
+              setSource({ id: match.purchaseId, initial });
+            } else {
+              try {
+                const row = await api<AccountingCost>(
+                  `${path}/${match.costId}`,
+                );
+                setMonth(row.date.slice(0, 7));
+                setActive(row);
+              } catch (e) {
+                setError((e as Error).message);
+              }
+            }
+            query.refresh();
+          }}
           onSaved={(row) => {
             setEntry(undefined);
             setActive(row);
@@ -188,6 +215,20 @@ export function AccountingCosts({
           }}
         />
       )}
+      {source && (
+        <SirePurchaseDialog
+          id={source.id}
+          initial={source.initial}
+          canWrite={canWrite}
+          close={() => setSource(undefined)}
+          saved={() => {
+            setSource(undefined);
+            setInboxRevision((value) => value + 1);
+            query.refresh();
+          }}
+        />
+      )}
+      {error && !active && <Notice error>{error}</Notice>}
       {active && (
         <Modal
           title={active.description}
@@ -312,7 +353,12 @@ function CostForm({
   current,
   onClose,
   onSaved,
+  onFound,
 }: {
+  onFound: (
+    match: Extract<ManualCostCheck, { status: "found" | "registered" }>,
+    initial: CostInput,
+  ) => void;
   current?: AccountingCost;
   initialPurchase?: string;
   onClose: () => void;
@@ -320,7 +366,7 @@ function CostForm({
 }) {
   const query = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
   const [kind, setKind] = useState<CostInput["kind"]>(
-    current?.kind || "purchase",
+    current?.kind || (initialPurchase ? "purchase" : "other"),
   );
   const origins = useAccountingQuery<OriginList>(
     accountingPath + "/cost-origins",
@@ -345,6 +391,15 @@ function CostForm({
   };
   const [error, setError] = useState("");
   const id = useRef(recordId());
+  const [match, setMatch] =
+    useState<Extract<ManualCostCheck, { status: "found" | "registered" }>>();
+  const matchNotice = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (match) matchNotice.current?.focus();
+  }, [match]);
+  const draft = useRef<CostInput | undefined>(undefined);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -374,18 +429,55 @@ function CostForm({
     setBusy(true);
     setError("");
     try {
-      const saved = current
-        ? await api<AccountingCost>(`${path}/${current.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ version: current.version, data: dto.data }),
-          })
-        : await accountingPost<AccountingCost>(path, {
-            id: id.current,
-            data: dto.data,
+      let saved: AccountingCost | undefined;
+      if (current)
+        saved = await api<AccountingCost>(`${path}/${current.id}`, {
+          method: "PUT",
+          body: JSON.stringify({ version: current.version, data: dto.data }),
+        });
+      else {
+        const abort = new AbortController();
+        request.current = abort;
+        const deadline = AbortSignal.timeout(35_000);
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const response = await api<
+            AccountingCost | { check: ManualCostCheck }
+          >(path, {
+            method: "POST",
+            body: JSON.stringify({ id: id.current, data: dto.data }),
+            signal: AbortSignal.any([abort.signal, deadline]),
           });
+          if (!("check" in response)) {
+            saved = response;
+            break;
+          }
+          if (
+            response.check.status === "found" ||
+            response.check.status === "registered"
+          ) {
+            draft.current = dto.data;
+            setMatch(response.check);
+            return;
+          }
+          if (response.check.status !== "pending")
+            throw new Error(
+              "No pudimos comprobar la factura. Vuelve a intentarlo.",
+            );
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          if (abort.signal.aborted) return;
+        }
+        if (!saved)
+          throw new Error(
+            "SUNAT está tardando en responder. Conservamos tus datos; vuelve a pulsar Guardar registro para continuar la comprobación.",
+          );
+      }
       onSaved(saved);
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        (e as Error).name === "TimeoutError"
+          ? "La consulta tardó demasiado. Tus datos se conservan; vuelve a intentarlo."
+          : (e as Error).message,
+      );
     } finally {
       setBusy(false);
     }
@@ -398,7 +490,52 @@ function CostForm({
       busy={busy}
       onClose={close}
     >
-      <form onSubmit={save} onChange={() => setDirty(true)}>
+      {match && (
+        <div
+          className="sire-help-copy manual-match-notice"
+          ref={matchNotice}
+          tabIndex={-1}
+          role="status"
+        >
+          <h3>
+            {match.status === "found"
+              ? "Encontramos esta factura en SUNAT"
+              : "Esta factura ya está guardada en VECA"}
+          </h3>
+          <p>
+            {match.status === "found"
+              ? "Usaremos los datos del proveedor para evitar registrar la compra dos veces. Conservamos el concepto, la categoría y la asignación que ingresaste."
+              : "Abre el registro existente para revisarlo. No crearemos otra compra."}
+          </p>
+          <div className="ve-modal-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setMatch(undefined)}
+            >
+              Volver al formulario
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (draft.current) {
+                  setDirty(false);
+                  onFound(match, draft.current);
+                }
+              }}
+            >
+              {match.status === "found"
+                ? "Continuar con esta factura"
+                : "Abrir compra guardada"}
+            </Button>
+          </div>
+        </div>
+      )}
+      <form
+        hidden={Boolean(match)}
+        onSubmit={save}
+        onChange={() => setDirty(true)}
+      >
         <fieldset disabled={busy} className="accounting-form-fields">
           <div className="accounting-grid">
             <Field label="Concepto">
@@ -581,13 +718,23 @@ function CostForm({
             </Button>
           </div>
         </fieldset>
+        {busy && !current && (
+          <p className="hint" role="status">
+            Comprobando si la factura ya está en SUNAT o en VECA…
+          </p>
+        )}
         {error && <Notice error>{error}</Notice>}
         <div className="accounting-form-actions">
           <Button variant="ghost" type="button" disabled={busy} onClick={close}>
             Cancelar
           </Button>
           <Button disabled={busy}>
-            <Upload size={16} /> {busy ? "Guardando…" : "Guardar registro"}
+            <Upload size={16} />{" "}
+            {busy
+              ? current
+                ? "Guardando…"
+                : "Comprobando factura…"
+              : "Guardar registro"}
           </Button>
         </div>
       </form>

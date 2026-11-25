@@ -147,7 +147,9 @@ export function Purchases({
                   </small>
                 </div>
                 <span className="ops-stock-status">
-                  {purchaseStatus[row.status]}
+                  {row.invoiceSource && row.status === "requested"
+                    ? "Identificar materiales"
+                    : purchaseStatus[row.status]}
                 </span>
               </li>
             ))}
@@ -205,6 +207,7 @@ function PurchaseForm({
   close: () => void;
   done: (row: Purchase) => void;
 }) {
+  const editableLines = !requested || Boolean(requested.invoiceSource);
   const [work, setWork] = useState(initialWork);
   const newLine = () => ({
     key: crypto.randomUUID(),
@@ -212,20 +215,31 @@ function PurchaseForm({
     requested: 0,
     label: "",
   });
-  const [lines, setLines] = useState(
-    () =>
-      requested?.items.map((item) => ({
-        key: item.materialId,
-        materialId: item.materialId,
-        requested: item.requested,
-        label: `${item.sku} · ${item.name}`,
-      })) || [newLine()],
+  const [lines, setLines] = useState(() =>
+    requested?.items.length
+      ? requested.items.map((item) => ({
+          key: item.materialId,
+          materialId: item.materialId,
+          requested: item.requested,
+          label: `${item.sku} · ${item.name}`,
+        }))
+      : [newLine()],
   );
   const id = useRef(requested?.id || recordId());
   return (
     <WarehouseForm
-      title={requested ? "Registrar compra solicitada" : "Nueva compra"}
-      action="Registrar compra"
+      title={
+        requested?.invoiceSource
+          ? "Preparar recepción de materiales"
+          : requested
+            ? "Registrar compra solicitada"
+            : "Nueva compra"
+      }
+      action={
+        requested?.invoiceSource
+          ? "Guardar materiales de esta compra"
+          : "Registrar compra"
+      }
       wide
       onClose={close}
       save={async (form) => {
@@ -264,6 +278,15 @@ function PurchaseForm({
         );
       }}
     >
+      {requested?.invoiceSource && (
+        <Notice>
+          Esta compra viene de Contabilidad:{" "}
+          {requested.invoiceSource.reference || "sin número de factura"}.
+          Identifica los materiales y distribuye{" "}
+          {money(requested.invoiceSource.netCents)} sin IGV. Después registra lo
+          recibido cuando llegue físicamente.
+        </Notice>
+      )}
       {loadError && <Notice error>{loadError}</Notice>}
       <div className="warehouse-grid">
         {!requested && (
@@ -275,11 +298,19 @@ function PurchaseForm({
           />
         )}
         <Field label="Proveedor">
-          <input name="supplier" required maxLength={150} />
+          <input
+            name="supplier"
+            required
+            maxLength={150}
+            defaultValue={requested?.supplier}
+            readOnly={Boolean(requested?.invoiceSource)}
+          />
         </Field>
         <Field label="RUC del proveedor (opcional)">
           <input
             name="ruc"
+            defaultValue={requested?.supplierRuc}
+            readOnly={Boolean(requested?.invoiceSource)}
             pattern="[0-9]{11}"
             maxLength={11}
             inputMode="numeric"
@@ -296,9 +327,9 @@ function PurchaseForm({
           <div className="warehouse-line" key={line.key}>
             <header>
               <strong>
-                {requested ? line.label : `Material ${index + 1}`}
+                {!editableLines ? line.label : `Material ${index + 1}`}
               </strong>
-              {!requested && lines.length > 1 && (
+              {editableLines && lines.length > 1 && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -313,7 +344,7 @@ function PurchaseForm({
                 </Button>
               )}
             </header>
-            {!requested && (
+            {editableLines && (
               <WarehouseSelect
                 label="Código o material"
                 value={line.materialId}
@@ -328,17 +359,19 @@ function PurchaseForm({
               />
             )}
             <div className="warehouse-grid is-3">
-              <Field label="Cantidad solicitada">
-                <input
-                  name={line.key + "-requested"}
-                  readOnly={Boolean(requested)}
-                  defaultValue={requested ? line.requested : undefined}
-                  type="number"
-                  required
-                  min="0"
-                  step="0.001"
-                />
-              </Field>
+              {!requested?.invoiceSource && (
+                <Field label="Cantidad solicitada">
+                  <input
+                    name={line.key + "-requested"}
+                    readOnly={Boolean(requested)}
+                    defaultValue={requested ? line.requested : undefined}
+                    type="number"
+                    required
+                    min="0"
+                    step="0.001"
+                  />
+                </Field>
+              )}
               <Field label="Cantidad comprada">
                 <input
                   name={line.key + "-ordered"}
@@ -359,12 +392,19 @@ function PurchaseForm({
               </Field>
             </div>
             <Field label="¿Por qué se compró esa cantidad?">
-              <input name={line.key + "-reason"} required maxLength={500} />
+              <input
+                name={line.key + "-reason"}
+                required
+                maxLength={500}
+                defaultValue={
+                  requested?.invoiceSource ? requested.reason : undefined
+                }
+              />
             </Field>
           </div>
         ))}
       </div>
-      {!requested && (
+      {editableLines && (
         <Button
           type="button"
           variant="ghost"
@@ -513,16 +553,34 @@ function PurchaseDetail({
           </p>
         </div>
         <div className="accounting-tools">
-          <span className="ops-stock-status">{purchaseStatus[row.status]}</span>
+          <span className="ops-stock-status">
+            {row.invoiceSource && row.status === "requested"
+              ? "Identificar materiales"
+              : purchaseStatus[row.status]}
+          </span>
           {canManage && row.status === "requested" && (
             <Button type="button" onClick={() => setOrdering(true)}>
-              Registrar compra
+              {row.invoiceSource ? "Preparar recepción" : "Registrar compra"}
             </Button>
           )}
         </div>
       </header>
       <div className="warehouse-preview">
-        {row.supplier && <strong>{money(total)} sin IGV</strong>}
+        {row.invoiceSource ? (
+          <>
+            <strong>
+              Factura {row.invoiceSource.reference || "por identificar"} ·{" "}
+              {money(row.invoiceSource.netCents)} sin IGV
+            </strong>
+            <p>
+              Contabilidad derivó esta compra a Almacén. Identifica los
+              materiales y confirma su recepción cuando lleguen. La factura ya
+              está guardada; no necesitas registrarla otra vez.
+            </p>
+          </>
+        ) : (
+          row.supplier && <strong>{money(total)} sin IGV</strong>
+        )}
         {row.supplier && row.requestedAt && (
           <small>
             Solicitado el {date(row.requestedAt)} por {row.requestedBy}

@@ -95,6 +95,12 @@ export type Purchase = Omit<z.infer<typeof purchaseInput>, "items"> & {
     unit: string;
     received: number;
   })[];
+  invoiceSource?: {
+    costId: string;
+    reference: string;
+    netCents: number;
+    taxCents: number;
+  };
   receipts: (z.infer<typeof purchaseReceipt> & {
     at: string;
     actor: string;

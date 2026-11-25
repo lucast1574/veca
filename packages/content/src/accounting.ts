@@ -69,14 +69,18 @@ export const invoicePayment = z
 export const costKinds = [
   "purchase",
   "fuel",
+  "meals",
+  "services",
   "transport",
   "installation",
   "materials",
   "other",
 ] as const;
 export const COST_KIND_LABELS: Record<(typeof costKinds)[number], string> = {
-  purchase: "Compra",
+  purchase: "Materiales para almacén",
   fuel: "Combustible",
+  meals: "Comidas y reuniones",
+  services: "Servicios",
   transport: "Transporte",
   installation: "Instalación",
   materials: "Consumo de materiales",
@@ -205,17 +209,29 @@ export const sireIncorporation = z
     destination: z.enum(["general", "work", "warehouse"], {
       error: "Selecciona a dónde corresponde esta compra.",
     }),
-    kind: z.enum(["fuel", "transport", "installation", "other"], {
-      error: "Selecciona el tipo de gasto.",
-    }),
+    kind: z.enum(
+      ["fuel", "meals", "services", "transport", "installation", "other"],
+      {
+        error: "Selecciona el tipo de gasto.",
+      },
+    ),
     workId: accountingId.optional(),
+    allocations: z
+      .array(
+        z.object({ workId: accountingId, cents: amount.positive() }).strict(),
+      )
+      .min(1)
+      .max(30)
+      .optional(),
     purchaseId: accountingId.optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
     if (
-      (data.destination === "work") !== Boolean(data.workId) ||
-      (data.destination === "warehouse") !== Boolean(data.purchaseId)
+      (data.destination === "work") !==
+        Boolean(data.workId || data.allocations?.length) ||
+      (data.destination !== "warehouse" && Boolean(data.purchaseId)) ||
+      Boolean(data.workId && data.allocations?.length)
     )
       ctx.addIssue({
         code: "custom",
@@ -253,3 +269,9 @@ export type SirePurchasePage = {
   syncFailed?: boolean;
   syncing?: boolean;
 };
+
+export type ManualCostCheck =
+  | { status: "pending" }
+  | { status: "found"; purchaseId: string; period: string }
+  | { status: "registered"; costId: string }
+  | { status: "clear" };

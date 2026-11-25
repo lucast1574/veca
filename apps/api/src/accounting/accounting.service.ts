@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -24,6 +25,7 @@ import {
   type InvoiceStatus,
 } from "@veca/content";
 import { Database } from "../database/database.module";
+import { PurchaseRoutingService } from "./purchase-routing.service";
 import { WarehouseService } from "../inventory/warehouse.service";
 import { InventoryService } from "../inventory/inventory.service";
 import { CrmRepository } from "../crm/crm.repository";
@@ -47,6 +49,7 @@ type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   actor: string;
   invoiceKey?: string;
   sireSourceId?: string;
+  warehouseRoutingPending?: boolean;
 };
 const issued: InvoiceStatus[] = ["accepted", "observed"];
 const pageSize = 25;
@@ -81,6 +84,7 @@ function costView({
   actor,
   invoiceKey,
   sireSourceId,
+  warehouseRoutingPending,
   ...row
 }: CostRecord): AccountingCost {
   return { ...row, id: _id.toHexString(), proof: Boolean(proofKey) };
@@ -100,6 +104,7 @@ export class AccountingService {
     private readonly inventory: InventoryService,
     private readonly warehouse: WarehouseService,
     private readonly labor: LaborCostsService,
+    private readonly routing: PurchaseRoutingService,
   ) {}
 
   get enabled() {
@@ -413,7 +418,13 @@ export class AccountingService {
     const [purchases, dispatches] = await Promise.all([
       this.db.db
         .collection("warehouse_purchases")
-        .find({ cancelled: { $ne: true }, requestedOnly: { $ne: true } })
+        .find({
+          cancelled: { $ne: true },
+          $or: [
+            { requestedOnly: { $ne: true } },
+            { "invoiceSource.costId": { $exists: true } },
+          ],
+        })
         .project({ supplier: 1, createdAt: 1, workName: 1 })
         .sort({ _id: -1 })
         .limit(300)
@@ -462,13 +473,17 @@ export class AccountingService {
     };
   }
 
+  async cost(id: string) {
+    return costView(await this.costRecord(id));
+  }
+
   async createCost(
     data: CostInput,
     actor: string,
     id: string,
     sireSourceId?: string,
   ) {
-    const fields = await this.costFields(data);
+    const fields = await this.costFields(data, id);
     await this.checkCostDuplicate(data, id);
     const creationHash = fingerprint(fields);
     const record: CostRecord = {
@@ -483,6 +498,7 @@ export class AccountingService {
         ? { invoiceKey: purchaseDocumentKey(data.supplierRuc, data.reference) }
         : {}),
       ...(sireSourceId && { sireSourceId }),
+      ...(data.kind === "purchase" && { warehouseRoutingPending: true }),
     };
     const result = await this.costs
       .findOneAndUpdate(
@@ -497,11 +513,22 @@ export class AccountingService {
       throw new ConflictException(
         "Ya existe un gasto guardado con esta solicitud. Vuelve a la lista para abrirlo.",
       );
-    return costView(result);
+    await this.routing
+      .ensure(id)
+      .catch(() =>
+        new Logger(AccountingService.name).warn(
+          "La derivación a Almacén se reintentará automáticamente.",
+        ),
+      );
+    return costView(await this.costRecord(id));
   }
 
   async editCost(id: string, version: number, data: CostInput) {
     const current = await this.costRecord(id);
+    if (current.warehouseRoutingPending)
+      throw new ConflictException(
+        "La compra está siendo derivada a Almacén. Vuelve a abrirla en unos momentos antes de editarla.",
+      );
     if (current.sireSourceId && data.kind === "materials")
       throw new BadRequestException(
         "Una factura de SUNAT no se convierte en un consumo de stock.",
@@ -517,7 +544,16 @@ export class AccountingService {
         "Los datos del comprobante de SUNAT se conservan. Puedes editar su clasificación y asignación.",
       );
     await this.checkCostDuplicate(data, id);
-    const fields = await this.costFields(data);
+    if (
+      current.kind === "purchase" &&
+      current.purchaseId &&
+      (data.kind !== "purchase" || data.purchaseId !== current.purchaseId) &&
+      (await this.warehouse.purchase(current.purchaseId)).status !== "cancelled"
+    )
+      throw new ConflictException(
+        "La compra ya está en Almacén. Coordina su cancelación antes de cambiar su destino o quitar el vínculo.",
+      );
+    const fields = await this.costFields(data, id);
     const invoiceKey =
       data.kind !== "materials"
         ? purchaseDocumentKey(data.supplierRuc, data.reference)
@@ -526,7 +562,14 @@ export class AccountingService {
       .findOneAndUpdate(
         { _id: new ObjectId(id), version, reviewed: false },
         {
-          $set: { ...fields, ...(invoiceKey && { invoiceKey }) },
+          $set: {
+            ...fields,
+            ...(invoiceKey && { invoiceKey }),
+            ...(data.kind === "purchase" &&
+            (current.kind !== "purchase" || !current.purchaseId)
+              ? { warehouseRoutingPending: true }
+              : {}),
+          },
           $unset: {
             ...(!invoiceKey ? { invoiceKey: "" } : {}),
             ...(data.purchaseId ? {} : { purchaseId: "" }),
@@ -539,7 +582,14 @@ export class AccountingService {
       .catch((error: unknown) => this.costWriteError(error));
     if (!row)
       throw new ConflictException("Este gasto cambió o ya está revisado.");
-    return costView(row);
+    await this.routing
+      .ensure(id)
+      .catch(() =>
+        new Logger(AccountingService.name).warn(
+          "La derivación a Almacén se reintentará automáticamente.",
+        ),
+      );
+    return costView(await this.costRecord(id));
   }
 
   private costWriteError(error: unknown): never {
@@ -562,17 +612,33 @@ export class AccountingService {
       );
   }
 
-  private async costFields(data: CostInput) {
+  private async costFields(data: CostInput, id: string) {
     if (data.date > limaDate())
       throw new BadRequestException("La fecha del gasto no puede ser futura.");
     if (data.purchaseId) {
       const purchase = await this.warehouse.purchase(data.purchaseId);
       if (
-        ["cancelled", "requested"].includes(purchase.status) ||
+        purchase.status === "cancelled" ||
+        (purchase.status === "requested" &&
+          purchase.invoiceSource?.costId !== id) ||
         data.kind === "materials"
       )
         throw new BadRequestException(
           "Selecciona una compra vigente para el comprobante.",
+        );
+    }
+    if (data.purchaseId) {
+      const purchase = await this.warehouse.purchase(data.purchaseId);
+      if (
+        purchase.invoiceSource &&
+        (purchase.invoiceSource.costId !== id ||
+          purchase.supplierRuc !== data.supplierRuc ||
+          purchase.invoiceSource.reference !== data.reference ||
+          purchase.invoiceSource.netCents !== data.netCents ||
+          purchase.invoiceSource.taxCents !== data.taxCents)
+      )
+        throw new BadRequestException(
+          "Conserva los datos de la factura vinculada a Almacén.",
         );
     }
     if (data.dispatchId) {

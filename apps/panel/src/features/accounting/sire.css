@@ -520,3 +520,8 @@
 .sire-purchase-form .field:last-child {
   margin-bottom: 0;
 }
+
+.manual-match-notice:focus {
+  outline: 0;
+  box-shadow: none;
+}

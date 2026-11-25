@@ -16,6 +16,7 @@ import {
   purchaseReceipt,
   purchaseRequest,
   workPlanInput,
+  type CostInput,
   type Equipment,
   type Purchase,
   type WorkSupply,
@@ -207,6 +208,40 @@ export class WarehouseService {
     return purchaseView(await this.order(id));
   }
 
+  async requestInvoice(cost: CostInput & { _id: ObjectId }, actor: string) {
+    const _id = cost._id;
+    const row = {
+      _id,
+      supplier: cost.supplier || "Proveedor por identificar",
+      supplierRuc: cost.supplierRuc,
+      reason: cost.description,
+      workId: "",
+      workName: "",
+      items: [],
+      receipts: [],
+      version: 1,
+      requestedOnly: true,
+      actor,
+      requestedBy: actor,
+      requestedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      invoiceSource: {
+        costId: String(_id),
+        reference: cost.reference,
+        netCents: cost.netCents,
+        taxCents: cost.taxCents,
+      },
+    };
+    const saved = await this.orders.findOneAndUpdate(
+      { _id },
+      { $setOnInsert: row },
+      { upsert: true, returnDocument: "after" },
+    );
+    if (!saved || saved.invoiceSource?.costId !== String(_id))
+      throw new ConflictException("La compra ya corresponde a otro registro.");
+    return purchaseView(saved);
+  }
+
   async createPurchase(raw: unknown, actor: string) {
     const data = parse(purchaseInput, raw);
     const action = () => this.createPurchaseRecord(data, actor);
@@ -348,32 +383,66 @@ export class WarehouseService {
     if (
       input.id.toLowerCase() !== String(row._id) ||
       input.workId.toLowerCase() !== row.workId ||
-      input.items.length !== row.items.length
+      (!row.invoiceSource && input.items.length !== row.items.length)
     )
       throw new BadRequestException(
         "La compra debe conservar la obra y los códigos de la solicitud.",
       );
-    const items = row.items.map((item) => {
-      const line = input.items.find(
-        (entry) => entry.materialId.toLowerCase() === item.materialId,
+    const items = row.invoiceSource
+      ? await Promise.all(
+          input.items.map(async (item) => {
+            const material = await this.inventory.materials.findOne({
+              _id: safeId(item.materialId),
+            });
+            if (!material)
+              throw new BadRequestException(
+                "Selecciona materiales del catálogo.",
+              );
+            return {
+              ...item,
+              requested: 0,
+              materialId: String(material._id),
+              name: material.name,
+              sku: material.sku,
+              unit: material.unit,
+              received: 0,
+            };
+          }),
+        )
+      : row.items.map((item) => {
+          const line = input.items.find(
+            (entry) => entry.materialId.toLowerCase() === item.materialId,
+          );
+          if (!line || line.requested !== item.requested)
+            throw new BadRequestException(
+              "Las cantidades solicitadas se conservan en el historial.",
+            );
+          return {
+            ...item,
+            ordered: line.ordered,
+            unitCents: line.unitCents,
+            reason: line.reason,
+          };
+        });
+    if (
+      row.invoiceSource &&
+      (input.supplierRuc !== row.supplierRuc ||
+        input.items.some((item) => item.requested !== 0) ||
+        items.reduce(
+          (sum, item) => sum + Math.round(item.ordered * item.unitCents),
+          0,
+        ) !== row.invoiceSource.netCents)
+    )
+      throw new BadRequestException(
+        "Conserva el RUC y distribuye el importe sin IGV de la factura entre los materiales.",
       );
-      if (!line || line.requested !== item.requested)
-        throw new BadRequestException(
-          "Las cantidades solicitadas se conservan en el historial.",
-        );
-      return {
-        ...item,
-        ordered: line.ordered,
-        unitCents: line.unitCents,
-        reason: line.reason,
-      };
-    });
     if (
       !row.requestedOnly &&
       !row.cancelled &&
       row.requestedAt &&
       row.supplier === input.supplier &&
       row.supplierRuc === input.supplierRuc &&
+      row.items.length === items.length &&
       row.items.every(
         (item, index) =>
           item.ordered === items[index].ordered &&

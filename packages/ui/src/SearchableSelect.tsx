@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
-import { useFloatingMenu } from "./useFloatingMenu";
+import { useFloatingMenu, scrollMenuOption } from "./useFloatingMenu";
 import type { SelectOption } from "./Select";
 
 const normalized = (text: string) =>
@@ -17,7 +17,7 @@ export function SearchableSelect({
   options,
   placeholder,
   onChange,
-  floating = false,
+  floating = true,
 }: {
   id: string;
   label: string;
@@ -53,9 +53,10 @@ export function SearchableSelect({
   }, [open]);
   useEffect(() => {
     if (open)
-      root.current
-        ?.querySelector("[data-active=true]")
-        ?.scrollIntoView({ block: "nearest" });
+      scrollMenuOption(
+        menu.current,
+        menu.current?.querySelector<HTMLElement>("[data-active=true]"),
+      );
   }, [active, open, needle]);
 
   function show() {

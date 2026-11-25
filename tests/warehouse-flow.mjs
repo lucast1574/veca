@@ -13,6 +13,7 @@ async function call(
   status = 200,
   data,
   method = data === undefined ? "GET" : "POST",
+  attempt = 0,
 ) {
   const form = data instanceof FormData;
   const result = await fetch("http://localhost:4400" + path, {
@@ -28,6 +29,12 @@ async function call(
     body: form ? data : data === undefined ? undefined : JSON.stringify(data),
   });
   const body = await result.json();
+  if (path === acct + "/costs" && body.check?.status === "pending") {
+    assert.ok(attempt < 8, "La comprobación de SUNAT debe terminar");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return call(path, status, data, method, attempt + 1);
+  }
+
   assert.equal(
     result.status,
     status,

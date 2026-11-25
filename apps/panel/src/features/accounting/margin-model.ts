@@ -27,6 +27,16 @@ export const costCategory = {
     color: "transport",
   },
   fuel: { label: "Combustible", detail: "Movilidad y equipos", color: "fuel" },
+  meals: {
+    label: "Comidas y reuniones",
+    detail: "Atención y reuniones asignadas a la obra",
+    color: "other",
+  },
+  services: {
+    label: "Servicios",
+    detail: "Servicios contratados para la obra",
+    color: "installation",
+  },
   other: {
     label: "Otros gastos",
     detail: "Otros costos asignados a esta obra",

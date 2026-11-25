@@ -34,6 +34,8 @@ import { parse } from "../common/validation";
 import { WarehouseModule } from "../inventory/warehouse.module";
 import { CrmModule } from "../crm/crm.controller";
 import { MediaModule } from "../media/media.module";
+import { ManualCostCheckService } from "./manual-cost-check.service";
+import { PurchaseRoutingService } from "./purchase-routing.service";
 import { AccountingService } from "./accounting.service";
 import { SireService } from "./sire.service";
 import { SireProvider } from "./sire-provider";
@@ -55,6 +57,7 @@ class AccountingController {
     private readonly accounts: AccountingService,
     private readonly sire: SireService,
     private readonly purchases: SirePurchasesService,
+    private readonly manualCosts: ManualCostCheckService,
   ) {}
 
   @Get("cost-origins")
@@ -166,15 +169,23 @@ class AccountingController {
     );
   }
 
+  @Get("costs/:id")
+  cost(@Param("id") id: string) {
+    return this.accounts.cost(parse(accountingId, id));
+  }
+
   @Post("costs")
   @RequirePermission("accounting_write", "accounting")
-  createCost(@Body() raw: unknown, @Req() request: AuthenticatedRequest) {
+  async createCost(@Body() raw: unknown, @Req() request: AuthenticatedRequest) {
     const { id, data } = parse(entry, raw);
-    return this.accounts.createCost(
-      parse(costInput, data),
-      request.session.user.username,
-      id,
-    );
+    const input = parse(costInput, data);
+    const check = await this.manualCosts.check(input);
+    if (
+      check.status !== "clear" &&
+      !(check.status === "registered" && check.costId === id)
+    )
+      return { check };
+    return this.accounts.createCost(input, request.session.user.username, id);
   }
 
   @Put("costs/:id")
@@ -384,6 +395,8 @@ class FiscalConnectionController {
   exports: [AccountingService],
   providers: [
     AccountingService,
+    ManualCostCheckService,
+    PurchaseRoutingService,
     InvoiceProvider,
     SireService,
     SirePurchasesService,
