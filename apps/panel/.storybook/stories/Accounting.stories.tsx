@@ -363,6 +363,40 @@ export const RevisionVentas: Story = {
     await expect(page.getByText("Importe distinto")).toBeVisible();
   },
 };
+export const ActualizarVentas: Story = {
+  name: "Ventas: actualización directa del resumen",
+  beforeEach({ msw }) {
+    history.replaceState(null, "", "#accounting/facturas/sunat");
+    let reads = 0;
+    msw.use(
+      http.get("*/admin/accounting/period/:month", async () => {
+        reads++;
+        if (reads > 1) await delay(500);
+        return HttpResponse.json(
+          reads > 1
+            ? { ...report, salesCount: 4, salesNet: 2100000, salesTax: 378000 }
+            : report,
+        );
+      }),
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const update = await page.findByRole("button", {
+      name: "Actualizar ventas",
+    });
+    await userEvent.click(update);
+    await expect(
+      page.getByRole("button", { name: "Actualizando…" }),
+    ).toBeDisabled();
+    await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
+    await expect(await page.findByText("4 facturas aceptadas")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Actualizar ventas" }),
+    ).toBeEnabled();
+    await expect(fiscalPath).toBe("");
+  },
+};
 export const VentasArchivoManual: Story = {
   name: "Ventas: archivo manual siempre del RVIE",
   beforeEach() {

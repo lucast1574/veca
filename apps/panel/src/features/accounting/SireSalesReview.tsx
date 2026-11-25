@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileCheck2 } from "lucide-react";
+import { FileCheck2, LoaderCircle, RefreshCw } from "lucide-react";
 import type { AccountingPeriod, SireReconciliation } from "@veca/content";
 import { Button, Field } from "../../components/ui";
 import { useAccountingPermission } from "./AccountingAccess";
@@ -11,7 +11,6 @@ import { SireComparisonResult } from "./SireComparisonResult";
 import {
   accountingPath,
   QueryState,
-  Refresh,
   Summary,
   today,
   useAccountingQuery,
@@ -63,7 +62,20 @@ function SalesPeriod({ month }: { month: string }) {
             </p>
           </div>
           <div className="sire-inbox-actions">
-            <Refresh loading={report.loading} onClick={report.refresh} />
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={report.loading}
+              aria-busy={report.loading}
+              onClick={report.refresh}
+            >
+              {report.loading ? (
+                <LoaderCircle size={17} className="sire-refresh-spinner" />
+              ) : (
+                <RefreshCw size={17} />
+              )}
+              {report.loading ? "Actualizando…" : "Actualizar ventas"}
+            </Button>
             <Button
               type="button"
               variant="ghost"

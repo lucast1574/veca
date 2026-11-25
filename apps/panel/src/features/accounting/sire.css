@@ -170,8 +170,12 @@
 }
 .sire-inbox-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+.sire-inbox .sire-inbox-actions > .btn {
+  margin: 0;
 }
 .sire-refresh-spinner {
   animation: sire-refresh 1s linear infinite;
@@ -586,5 +590,9 @@
 @media (max-width: 600px) {
   .sire-closing-guide {
     padding: 20px 16px;
+  }
+  .sire-inbox-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
