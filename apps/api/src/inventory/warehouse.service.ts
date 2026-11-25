@@ -26,6 +26,7 @@ import { parse } from "../common/validation";
 import { CrmRepository } from "../crm/crm.repository";
 import { Database } from "../database/database.module";
 import { InventoryService } from "./inventory.service";
+import { Notifications } from "../notifications/notifications.service";
 
 type PurchaseRecord = Omit<Purchase, "id" | "status"> & {
   _id: ObjectId;
@@ -86,6 +87,7 @@ export class WarehouseService {
     private readonly crm: CrmRepository,
     private readonly inventory: InventoryService,
     private readonly gate: WorkGate,
+    private readonly notices: Notifications,
   ) {}
   private get orders() {
     return this.db.db.collection<PurchaseRecord>("warehouse_purchases");
@@ -301,6 +303,7 @@ export class WarehouseService {
         )
     )
       throw new ConflictException("La solicitud ya corresponde a otra compra.");
+    await this.notices.forWarehousePurchase(String(saved._id));
     return purchaseView(saved);
   }
 
@@ -374,6 +377,7 @@ export class WarehouseService {
       throw new ConflictException(
         "Esta solicitud ya corresponde a otro registro.",
       );
+    await this.notices.forAccountingPurchase(String(row._id));
     return purchaseView(row);
   }
 
@@ -449,8 +453,10 @@ export class WarehouseService {
           item.unitCents === items[index].unitCents &&
           item.reason === items[index].reason,
       )
-    )
+    ) {
+      await this.notices.forWarehousePurchase(String(row._id));
       return purchaseView(row);
+    }
     const saved = await this.orders.findOneAndUpdate(
       { _id: row._id, requestedOnly: true, cancelled: { $ne: true } },
       {
@@ -468,6 +474,7 @@ export class WarehouseService {
     );
     if (!saved)
       throw new ConflictException("La solicitud ya fue atendida o cancelada.");
+    await this.notices.forWarehousePurchase(String(saved._id));
     return purchaseView(saved);
   }
 

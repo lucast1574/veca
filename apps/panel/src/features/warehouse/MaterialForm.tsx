@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { MATERIAL_CATEGORIES, MATERIAL_UNITS } from "@veca/content";
+import {
+  MATERIAL_CATEGORIES,
+  MATERIAL_UNITS,
+  type Material,
+} from "@veca/content";
 import { Field } from "../../components/ui";
 import { post } from "../../lib/api";
 import { WarehouseForm, WarehouseSelect } from "./shared";
@@ -7,9 +11,11 @@ import { WarehouseForm, WarehouseSelect } from "./shared";
 export function MaterialForm({
   close,
   done,
+  create = (data) => post<Material>("/admin/crm/materials", data),
 }: {
   close: () => void;
-  done: () => void;
+  done: (material: Material) => void;
+  create?: (data: unknown) => Promise<Material>;
 }) {
   const [unit, setUnit] = useState("unit");
   const [category, setCategory] = useState("Vidrio");
@@ -19,31 +25,26 @@ export function MaterialForm({
       action="Crear material"
       onClose={close}
       save={async (form) => {
-        await post("/admin/crm/materials", {
+        const material = await create({
           ...Object.fromEntries(form),
           unit,
           category,
           minimum: Number(form.get("minimum")),
         });
-        done();
+        done(material);
       }}
     >
-      <p className="hint">
-        Se crea con saldo cero. Registra después la recepción para conservar el
-        origen del stock.
-      </p>
       <div className="warehouse-grid">
         {[
-          ["sku", "Código / SKU"],
           ["name", "Nombre del material"],
-          ["location", "Ubicación en almacén"],
-          ["description", "Especificación o medida"],
+          ["sku", "Código / SKU"],
         ].map(([name, label]) => (
           <Field key={name} label={label}>
             <input
               name={name}
               required={name === "sku" || name === "name"}
-              maxLength={name === "description" ? 1000 : 160}
+              maxLength={name === "sku" ? 60 : 160}
+              minLength={name === "name" ? 2 : 1}
             />
           </Field>
         ))}
@@ -62,18 +63,32 @@ export function MaterialForm({
             label: value,
           }))}
         />
-        <Field label="Saldo mínimo">
-          <input
-            name="minimum"
-            type="number"
-            defaultValue="0"
-            min="0"
-            max="1000000"
-            step="0.001"
-            required
-          />
-        </Field>
       </div>
+      <details className="material-extra-details">
+        <summary>Más detalles (opcional)</summary>
+        <div className="warehouse-grid">
+          <Field label="Ubicación en almacén">
+            <input name="location" maxLength={200} />
+          </Field>
+          <Field label="Especificación o medida">
+            <input name="description" maxLength={1000} />
+          </Field>
+          <Field label="Saldo mínimo">
+            <input
+              name="minimum"
+              type="number"
+              defaultValue="0"
+              min="0"
+              max="1000000"
+              step="0.001"
+              required
+            />
+          </Field>
+        </div>
+      </details>
+      <p className="hint">
+        El stock se actualizará cuando Almacén confirme la recepción.
+      </p>
     </WarehouseForm>
   );
 }

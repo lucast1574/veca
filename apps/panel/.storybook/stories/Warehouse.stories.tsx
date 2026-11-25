@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
+import type { SessionUser } from "@veca/content";
+import { AccountingWorkspace } from "../../src/features/accounting/AccountingWorkspace";
 import { InventoryWorkspace } from "../../src/features/warehouse/InventoryWorkspace";
 import { StoryFrame } from "./StoryFrame";
 import { handlers, user } from "./fixtures";
@@ -10,14 +12,37 @@ const meta = {
 } satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
+const warehouseUser: SessionUser = {
+  ...user,
+  name: "Jorge Quispe",
+  roleName: "Almacén",
+  permissions: [
+    "dashboard",
+    "inventory",
+    "inventory_receive",
+    "inventory_request",
+    "inventory_dispatch",
+    "inventory_reserve",
+  ],
+};
+const accountant: SessionUser = {
+  ...user,
+  roleName: "Contabilidad",
+  permissions: ["dashboard", "accounting", "accounting_write"],
+};
 const screen = (tab: string, selected?: string) => () => (
-  <StoryFrame view="inventory">
+  <StoryFrame view="inventory" sessionUser={warehouseUser}>
     <InventoryWorkspace
-      user={user}
-      accountingAccess
+      user={warehouseUser}
+      accountingAccess={false}
       tab={tab}
       selected={selected}
     />
+  </StoryFrame>
+);
+const accountingScreen = () => (
+  <StoryFrame view="accounting" sessionUser={accountant}>
+    <AccountingWorkspace user={accountant} inventoryAccess={false} />
   </StoryFrame>
 );
 export const SolicitudesDeObra: Story = {
@@ -33,19 +58,90 @@ export const FacturaEnviadaPorContabilidad: Story = {
   render: screen("compras", orders[0].id),
 };
 export const PrepararMateriales: Story = {
-  ...FacturaEnviadaPorContabilidad,
-  name: "04 · Identificar los materiales de la factura",
+  name: "04 · Contabilidad registra cantidades y precios",
+  beforeEach() {
+    history.replaceState(
+      null,
+      "",
+      `#accounting/gastos/${orders[0].id}/preparar`,
+    );
+  },
+  render: accountingScreen,
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      await page.findByRole("button", { name: "Preparar recepción" }),
-    );
-    await userEvent.click(
       await page.findByRole("combobox", { name: "Código o material" }),
     );
+    await userEvent.click(await page.findByRole("option", { name: /VID-T10/ }));
+    await userEvent.type(
+      await page.findByRole("spinbutton", { name: "Cantidad comprada" }),
+      "12",
+    );
+    await userEvent.type(
+      await page.findByRole("spinbutton", { name: "Precio unitario sin IGV" }),
+      "470",
+    );
     await expect(
-      page.findByRole("option", { name: /VID-T10/ }),
-    ).resolves.toBeVisible();
+      page.findByRole("button", { name: "Enviar a Almacén" }),
+    ).resolves.toBeEnabled();
+  },
+};
+export const PendientesEnContabilidad: Story = {
+  name: "03b · Bandeja de compras por completar en Contabilidad",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/gastos");
+  },
+  render: accountingScreen,
+};
+export const MaterialNuevoEnCompra: Story = {
+  name: "04b · Registrar un material sin perder la compra",
+  beforeEach: PrepararMateriales.beforeEach,
+  render: accountingScreen,
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.type(
+      await page.findByRole("spinbutton", { name: "Cantidad comprada" }),
+      "12",
+    );
+    await userEvent.type(
+      await page.findByRole("spinbutton", { name: "Precio unitario sin IGV" }),
+      "470",
+    );
+    await userEvent.click(
+      await page.findByRole("button", { name: "Registrar nuevo" }),
+    );
+    const dialog = within(
+      await page.findByRole("dialog", { name: "Nuevo material" }),
+    );
+    await userEvent.type(
+      dialog.getByRole("textbox", { name: "Nombre del material" }),
+      "Vidrio laminado de 10 mm · Ejemplo",
+    );
+    await userEvent.type(
+      dialog.getByRole("textbox", { name: "Código / SKU" }),
+      "VID-L10",
+    );
+    await userEvent.click(
+      dialog.getByRole("combobox", { name: "Unidad de medida" }),
+    );
+    await userEvent.click(
+      await page.findByRole("option", { name: /^m²$/ }),
+    );
+    await userEvent.click(
+      dialog.getByRole("button", { name: "Crear material" }),
+    );
+    await expect(
+      page.findByRole("combobox", { name: "Código o material" }),
+    ).resolves.toHaveValue("VID-L10 · Vidrio laminado de 10 mm · Ejemplo");
+    await expect(
+      page.getByRole("spinbutton", { name: "Cantidad comprada" }),
+    ).toHaveValue(12);
+    await expect(
+      page.getByRole("spinbutton", { name: "Precio unitario sin IGV" }),
+    ).toHaveValue(470);
+    await expect(
+      page.getByRole("button", { name: "Enviar a Almacén" }),
+    ).toBeEnabled();
   },
 };
 export const RecepcionDeMaterial: Story = {
@@ -54,10 +150,10 @@ export const RecepcionDeMaterial: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      await page.findByRole("button", { name: "Registrar recepción" }),
+      await page.findByRole("button", { name: "Confirmar recepción" }),
     );
     await expect(
-      page.findByRole("heading", { name: "Registrar recepción de material" }),
+      page.findByRole("heading", { name: "Confirmar recepción de material" }),
     ).resolves.toBeVisible();
   },
 };

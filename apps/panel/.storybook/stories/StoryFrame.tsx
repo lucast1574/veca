@@ -1,3 +1,4 @@
+import type { SessionUser } from "@veca/content";
 import type { ReactNode } from "react";
 import { FlaskConical } from "lucide-react";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
@@ -6,14 +7,16 @@ import { user } from "./fixtures";
 export function StoryFrame({
   view,
   children,
+  sessionUser = user,
 }: {
   view: "works" | "accounting" | "inventory";
   children: ReactNode;
+  sessionUser?: SessionUser;
 }) {
   return (
     <>
       <WorkspaceShell
-        user={user}
+        user={sessionUser}
         view={view}
         projectCount={12}
         onNavigate={() => false}

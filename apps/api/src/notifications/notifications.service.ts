@@ -232,6 +232,30 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     );
     if (result.upsertedCount) this.changes.next({ userId: user.id });
   }
+  async forAccountingPurchase(id: string) {
+    const order = await this.db.db
+      .collection("warehouse_purchases")
+      .findOne({ _id: new ObjectId(id) });
+    if (!order || order.cancelled || !order.requestedOnly) return;
+    const people = await this.people();
+    await Promise.all(
+      people
+        .filter(
+          (user) =>
+            user.permissions.includes("accounting") &&
+            user.permissions.includes("accounting_write"),
+        )
+        .map((user) =>
+          this.add("accounting-purchase:" + id, user, {
+            scope: "self",
+            permission: "accounting",
+            title: "Compra de materiales por completar",
+            body: "Registra los materiales, las cantidades compradas y sus precios unitarios para que Almacén confirme la entrega.",
+            href: `#accounting/gastos/${id}/preparar`,
+          }),
+        ),
+    );
+  }
   async forWarehousePurchase(id: string) {
     const order = await this.db.db
       .collection("warehouse_purchases")
@@ -239,11 +263,11 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     if (
       !order ||
       order.cancelled ||
-      (!order.requestedOnly &&
-        order.items.every(
-          (item: { received: number; ordered: number }) =>
-            item.received >= item.ordered,
-        ))
+      order.requestedOnly ||
+      order.items.every(
+        (item: { received: number; ordered: number }) =>
+          item.received >= item.ordered,
+      )
     )
       return;
     const people = await this.people();
@@ -252,16 +276,14 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
         .filter(
           (user) =>
             user.permissions.includes("inventory") &&
-            (user.permissions.includes("purchases_manage") ||
-              (!order.requestedOnly &&
-                user.permissions.includes("inventory_receive"))),
+            user.permissions.includes("inventory_receive"),
         )
         .map((user) =>
           this.add("warehouse-invoice:" + id, user, {
             scope: "self",
             permission: "inventory",
-            title: "Compra de materiales para revisar",
-            body: "Contabilidad vinculó un comprobante. Revisa los materiales y registra su recepción cuando lleguen.",
+            title: "Materiales por recibir",
+            body: "Contabilidad registró los materiales y cantidades compradas. Confirma la cantidad que llegue realmente al almacén.",
             href: `#inventory/compras/${id}`,
           }),
         ),

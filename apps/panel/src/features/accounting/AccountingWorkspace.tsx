@@ -18,9 +18,11 @@ const tabs = [
 ] as const;
 
 function locationSection() {
-  const [, part, id] = location.hash.split("/");
+  const [, part, id, action] = location.hash.split("/");
   const tab = tabs.find(([value]) => value === part);
-  return tab ? { tab: tab[0], id } : { tab: "guias" as const, id: part };
+  return tab
+    ? { tab: tab[0], id, prepare: action === "preparar" }
+    : { tab: "guias" as const, id: part, prepare: false };
 }
 
 export function AccountingWorkspace({
@@ -87,8 +89,9 @@ export function AccountingWorkspace({
         )}
         {route.tab === "gastos" && (
           <AccountingCosts
-            key={route.id || "all"}
+            key={`${route.id || "all"}:${route.prepare}`}
             purchaseId={route.id}
+            preparePurchase={route.prepare}
             inventoryAccess={inventoryAccess}
           />
         )}

@@ -129,7 +129,70 @@
 .warehouse-detail-list {
   margin-bottom: 0.5rem;
 }
+.warehouse-order-status[data-state="requested"] {
+  background: var(--panel-raised);
+  color: var(--panel-secondary);
+}
+.warehouse-next-step {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel-surface);
+}
+.warehouse-next-step-main {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.warehouse-step-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--panel-accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+.warehouse-next-step h3 {
+  color: var(--panel-ink);
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+.warehouse-next-step p {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--panel-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+.warehouse-next-step .btn {
+  margin: 4px 0 0;
+}
+.warehouse-detail-secondary {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.warehouse-detail-secondary .btn {
+  margin: 0;
+}
 @media (max-width: 620px) {
+  .warehouse-detail-list > li,
+  .accounting-purchase-orders .warehouse-list > li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .warehouse-detail-list .btn,
+  .accounting-purchase-orders .warehouse-list .btn {
+    width: 100%;
+  }
+  .warehouse-next-step {
+    padding: 20px;
+  }
+  .warehouse-next-step-main > .btn {
+    width: 100%;
+  }
   .warehouse-grid,
   .warehouse-grid.is-3 {
     grid-template-columns: minmax(0, 1fr);
@@ -278,4 +341,55 @@
 .work-tasks {
   display: grid;
   gap: 16px;
+}
+
+.accounting-purchase-orders {
+  margin: 20px 0;
+}
+.accounting-purchase-orders h3,
+.accounting-purchase-orders p {
+  margin-top: 0;
+}
+.purchase-detail-total {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.purchase-detail-total p {
+  margin: 0;
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.purchase-source {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+.purchase-source .hint {
+  margin: 0;
+}
+.purchase-source .hint span {
+  display: block;
+}
+.warehouse-line .purchase-catalogue-create {
+  min-height: 32px;
+  margin: 0 0 0 auto;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.material-extra-details > summary {
+  width: fit-content;
+  min-height: 32px;
+  padding: 4px 0;
+  color: var(--panel-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+.material-extra-details > summary:hover,
+.material-extra-details > summary:focus-visible {
+  color: var(--panel-accent);
+}
+.material-extra-details[open] > summary {
+  margin-bottom: 12px;
 }

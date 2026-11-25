@@ -36,6 +36,7 @@ import { CrmModule } from "../crm/crm.controller";
 import { MediaModule } from "../media/media.module";
 import { ManualCostCheckService } from "./manual-cost-check.service";
 import { PurchaseRoutingService } from "./purchase-routing.service";
+import { AccountingPurchasesController } from "./accounting-purchases.controller";
 import { AccountingService } from "./accounting.service";
 import { SireService } from "./sire.service";
 import { SireProvider } from "./sire-provider";
@@ -388,6 +389,7 @@ class FiscalConnectionController {
   imports: [CrmModule, MediaModule, WarehouseModule],
   controllers: [
     AccountingController,
+    AccountingPurchasesController,
     LeadInvoiceRequestController,
     FiscalConnectionController,
     LaborController,

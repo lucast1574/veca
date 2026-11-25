@@ -35,7 +35,7 @@ export function SirePurchaseInbox({
 }: {
   revision?: number;
   month: string;
-  onSaved: () => void;
+  onSaved: (purchaseId?: string) => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const [state, setState] = useState<"pending" | "all">("pending");
@@ -285,11 +285,15 @@ export function SirePurchaseInbox({
           id={selected}
           canWrite={canWrite}
           close={() => setSelected("")}
-          saved={() => {
+          saved={(purchaseId) => {
             setSelected("");
-            setNotice("Compra guardada. Ya puedes verla en Compras guardadas.");
+            setNotice(
+              purchaseId
+                ? "Factura guardada. Completa los materiales y precios para enviarla a Almacén."
+                : "Compra guardada. Ya puedes verla en Compras guardadas.",
+            );
             query.refresh();
-            onSaved();
+            onSaved(purchaseId);
           }}
         />
       )}

@@ -1,3 +1,7 @@
+import {
+  AccountingPurchaseOrders,
+  PurchaseCostDetail,
+} from "./AccountingPurchaseOrders";
 import { SirePurchaseDialog } from "./SirePurchaseDialog";
 import { SirePurchaseInbox } from "./SirePurchaseInbox";
 import { useAccountingPermission } from "./AccountingAccess";
@@ -36,7 +40,9 @@ type CostPage = { items: AccountingCost[]; hasMore: boolean };
 export function AccountingCosts({
   purchaseId,
   inventoryAccess,
+  preparePurchase = false,
 }: {
+  preparePurchase?: boolean;
   purchaseId?: string;
   inventoryAccess: boolean;
 }) {
@@ -49,6 +55,9 @@ export function AccountingCosts({
   const [entry, setEntry] = useState<"new" | AccountingCost>();
   const [active, setActive] = useState<AccountingCost>();
   const [inboxRevision, setInboxRevision] = useState(0);
+  const [preparing, setPreparing] = useState<string | undefined>(
+    preparePurchase ? purchaseId : undefined,
+  );
   const [source, setSource] = useState<{ id: string; initial: CostInput }>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -93,8 +102,8 @@ export function AccountingCosts({
         </div>
       </div>
       <p className="hint">
-        Registra y revisa los comprobantes. Los materiales se gestionan en
-        Inventario, en Pedidos y recepciones.
+        Registra los comprobantes, los materiales comprados y sus precios.
+        Almacén confirma las cantidades recibidas en Inventario.
       </p>
       {purchaseId && (
         <p className="hint">
@@ -133,9 +142,29 @@ export function AccountingCosts({
           month={month}
           key={month}
           revision={inboxRevision}
-          onSaved={query.refresh}
+          onSaved={(orderId) => {
+            query.refresh();
+            setInboxRevision((value) => value + 1);
+            if (orderId) setPreparing(orderId);
+          }}
         />
       )}
+      <AccountingPurchaseOrders
+        canWrite={canWrite}
+        purchaseId={purchaseId}
+        selected={preparing}
+        onSelect={setPreparing}
+        revision={inboxRevision}
+        onClose={() => {
+          setPreparing(undefined);
+          if (preparePurchase)
+            location.hash = `accounting/gastos/${purchaseId}`;
+        }}
+        onSaved={() => {
+          setInboxRevision((value) => value + 1);
+          query.refresh();
+        }}
+      />
       <h3 className="sire-saved-title">Compras guardadas</h3>
       <p className="hint">
         Aquí están los comprobantes que ya incorporaste o registraste
@@ -209,7 +238,10 @@ export function AccountingCosts({
           }}
           onSaved={(row) => {
             setEntry(undefined);
-            setActive(row);
+            if (row.kind === "purchase" && row.purchaseId && entry === "new")
+              setPreparing(row.purchaseId);
+            else setActive(row);
+            setInboxRevision((value) => value + 1);
             setPage(1);
             query.refresh();
           }}
@@ -221,8 +253,9 @@ export function AccountingCosts({
           initial={source.initial}
           canWrite={canWrite}
           close={() => setSource(undefined)}
-          saved={() => {
+          saved={(orderId) => {
             setSource(undefined);
+            if (orderId) setPreparing(orderId);
             setInboxRevision((value) => value + 1);
             query.refresh();
           }}
@@ -251,6 +284,7 @@ export function AccountingCosts({
               ? `Asignado a ${active.allocations.length} obra(s)`
               : "Gasto general"}
           </p>
+          {active.purchaseId && <PurchaseCostDetail id={active.purchaseId} />}
           {active.purchaseId && inventoryAccess && (
             <a
               className="accounting-inline"
@@ -571,6 +605,7 @@ function CostForm({
             <Field label="Proveedor">
               <input
                 name="supplier"
+                required={kind === "purchase"}
                 maxLength={150}
                 defaultValue={current?.supplier}
               />

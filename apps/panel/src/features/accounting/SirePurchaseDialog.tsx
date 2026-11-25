@@ -36,7 +36,7 @@ export function SirePurchaseDialog({
   initial?: CostInput;
   id: string;
   close: () => void;
-  saved: () => void;
+  saved: (purchaseId?: string) => void;
   canWrite: boolean;
 }) {
   const query = useAccountingQuery<Detail>(
@@ -69,7 +69,7 @@ function PurchaseForm({
   initial?: CostInput;
   detail: Detail;
   close: () => void;
-  saved: () => void;
+  saved: (purchaseId?: string) => void;
   canWrite: boolean;
 }) {
   const formId = useId();
@@ -139,12 +139,12 @@ function PurchaseForm({
     setBusy(true);
     setError("");
     try {
-      await accountingPost(
+      const incorporated = await accountingPost<{ purchaseId?: string }>(
         `${accountingPath}/sire/purchases/${item.id}/incorporate`,
         result.data,
       );
       setDirty(false);
-      saved();
+      saved(incorporated.purchaseId);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -346,9 +346,9 @@ function PurchaseForm({
                 <Package size={20} />
                 <div>
                   <p>
-                    Vincula la factura a un pedido existente o envíala a
-                    Almacén para preparar uno. El stock aumentará cuando
-                    registren la recepción de los materiales.
+                    Vincula un pedido ya completado o registra el detalle de lo
+                    comprado en el siguiente paso. Almacén confirmará la
+                    cantidad recibida.
                   </p>
                   <Field label="Pedido de materiales">
                     <Select
@@ -357,7 +357,8 @@ function PurchaseForm({
                       options={[
                         {
                           value: "",
-                          label: "Enviar a Almacén para preparar la recepción",
+                          label:
+                            "Completar materiales y precios de esta compra",
                         },
                         ...purchases.map((p) => ({
                           value: p.id,
@@ -372,8 +373,9 @@ function PurchaseForm({
                   </Field>
                   {!purchases.length && (
                     <p className="hint">
-                      Almacén recibirá una tarea y un aviso para identificar los
-                      materiales y preparar la recepción.
+                      Después de guardar, completarás los materiales, cantidades
+                      compradas y precios unitarios. Almacén recibirá el aviso
+                      cuando estén listos.
                     </p>
                   )}
                 </div>

@@ -284,8 +284,14 @@ export class SirePurchasesService {
   }
   async incorporate(id: string, input: SireIncorporation, actor: string) {
     const { item, purchases } = await this.detail(id);
-    if (item.status === "registered")
-      return { costId: item.costId, alreadyRegistered: true };
+    if (item.status === "registered") {
+      const cost = await this.accounts.cost(item.costId!);
+      return {
+        costId: item.costId,
+        purchaseId: cost.purchaseId,
+        alreadyRegistered: true,
+      };
+    }
     if (item.version !== input.version)
       throw new ConflictException(
         "La propuesta cambió. Cierra y vuelve a revisar la compra.",
@@ -338,6 +344,10 @@ export class SirePurchasesService {
       .digest("hex")
       .slice(0, 24);
     const cost = await this.accounts.createCost(data, actor, stableId, id);
-    return { costId: cost.id, alreadyRegistered: false };
+    return {
+      costId: cost.id,
+      purchaseId: cost.purchaseId,
+      alreadyRegistered: false,
+    };
   }
 }

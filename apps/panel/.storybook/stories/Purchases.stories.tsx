@@ -5,6 +5,7 @@ import { AccountingCosts } from "../../src/features/accounting/AccountingCosts";
 import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
 import { user, works } from "./fixtures";
+import { warehouseHandlers } from "./warehouse-fixtures";
 import type { SirePurchase } from "@veca/content";
 const meta = {
   title: "VECA/Compras de proveedores",
@@ -116,6 +117,7 @@ const handlers = [
       return HttpResponse.json({ costId: params.id }, { status: 201 });
     },
   ),
+  ...warehouseHandlers,
 ];
 const render = () => (
   <WorkspaceShell

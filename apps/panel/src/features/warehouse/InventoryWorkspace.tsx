@@ -61,7 +61,10 @@ export function InventoryWorkspace({
         <Purchases
           key={selected || "list"}
           accountingAccess={accountingAccess}
-          canManage={!!user?.permissions.includes("purchases_manage")}
+          accountingWrite={Boolean(
+            accountingAccess && user?.permissions.includes("accounting_write"),
+          )}
+          canRequest={!!user?.permissions.includes("inventory_request")}
           canReceive={!!user?.permissions.includes("inventory_receive")}
           selected={selected === "nueva" ? undefined : selected}
           workId={selected === "nueva" ? workId : ""}

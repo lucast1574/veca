@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 import {
   MATERIAL_CATEGORIES,
+  materialSchema,
   type Material,
   type Purchase,
   type SupplyRequest,
@@ -273,6 +274,59 @@ const plan: WorkSupply = {
 };
 const base = "http://veca-storybook.invalid";
 export const warehouseHandlers = [
+  http.get(`${base}/admin/accounting/purchase-materials`, () =>
+    HttpResponse.json(materials),
+  ),
+  http.post(
+    `${base}/admin/accounting/purchase-materials`,
+    async ({ request }) =>
+      HttpResponse.json(
+        {
+          ...materialSchema.parse(await request.json()),
+          id: "bbbbbbbbbbbbbbbbbbbbbbb3",
+          balance: 0,
+          available: 0,
+          reserved: 0,
+          version: 1,
+          updatedAt: at,
+        },
+        { status: 201 },
+      ),
+  ),
+  http.get(`${base}/admin/accounting/purchase-works`, () =>
+    HttpResponse.json(
+      works.map((w) => ({ id: w.id, name: w.workName, stage: w.stage })),
+    ),
+  ),
+  http.get(`${base}/admin/accounting/purchase-orders`, () =>
+    HttpResponse.json({
+      items: orders.filter((o) => o.status === "requested"),
+      hasMore: false,
+    }),
+  ),
+  http.get(`${base}/admin/accounting/purchase-orders/:id`, ({ params }) =>
+    HttpResponse.json(orders.find((o) => o.id === params.id)),
+  ),
+  http.get(`${base}/admin/accounting/costs`, () =>
+    HttpResponse.json({ items: [], hasMore: false }),
+  ),
+  http.get(`${base}/admin/accounting/cost-origins`, () =>
+    HttpResponse.json({ purchases: [], dispatches: [] }),
+  ),
+  http.get(`${base}/admin/accounting/sire/purchases`, () =>
+    HttpResponse.json({
+      items: [],
+      total: 0,
+      pending: 0,
+      pendingCents: 0,
+      registered: 0,
+      review: 0,
+      page: 1,
+      hasMore: false,
+      syncedAt: at,
+    }),
+  ),
+
   http.get(`${base}/admin/crm/materials`, () => HttpResponse.json(materials)),
   http.get(`${base}/admin/warehouse/works`, () =>
     HttpResponse.json(

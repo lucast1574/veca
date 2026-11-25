@@ -93,7 +93,7 @@ class WarehouseController {
   }
 
   @Post("purchases")
-  @RequirePermission("purchases_manage", "inventory")
+  @RequirePermission("accounting_write", "accounting")
   createPurchase(@Body() raw: unknown, @Req() req: AuthenticatedRequest) {
     return this.warehouse.createPurchase(raw, req.session.user.username);
   }
@@ -105,7 +105,7 @@ class WarehouseController {
   }
 
   @Put("purchases/:id/order")
-  @RequirePermission("purchases_manage", "inventory")
+  @RequirePermission("accounting_write", "accounting")
   orderPurchase(
     @Param("id") id: string,
     @Body() raw: unknown,
@@ -125,7 +125,7 @@ class WarehouseController {
   }
 
   @Post("purchases/:id/cancel")
-  @RequirePermission("purchases_manage", "inventory")
+  @RequirePermission("accounting_write", "accounting")
   cancel(@Param("id") id: string) {
     return this.warehouse.cancelPurchase(id);
   }

@@ -31,7 +31,7 @@ export const materialOptions = (materials: Material[]) =>
     label: `${row.sku} · ${row.name}`,
   }));
 export const purchaseStatus = {
-  requested: "Por preparar",
+  requested: "Por completar en Contabilidad",
   open: "Por recibir",
   partial: "Recepción parcial",
   received: "Recibido",
@@ -62,6 +62,7 @@ export function WarehouseForm({
   children,
   wide = false,
   canSubmit = true,
+  hasChanges = false,
 }: {
   title: string;
   action: string;
@@ -70,6 +71,7 @@ export function WarehouseForm({
   children: ReactNode;
   wide?: boolean;
   canSubmit?: boolean;
+  hasChanges?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -94,9 +96,9 @@ export function WarehouseForm({
   useEffect(() => {
     baseline.current = snapshot();
   }, []);
-  const clearGuard = useUnsavedChanges(dirty, busy);
+  const clearGuard = useUnsavedChanges(dirty || hasChanges, busy);
   function close() {
-    if (confirmDiscard(dirty, busy)) onClose();
+    if (confirmDiscard(dirty || hasChanges, busy)) onClose();
   }
   function track() {
     queueMicrotask(() => {

@@ -10,12 +10,33 @@ const month = new Intl.DateTimeFormat("en-CA", {
   month: "2-digit",
 }).format(new Date());
 const now = new Date().toISOString();
-const materialId = new ObjectId(),
-  mealId = new ObjectId(),
+let materialId = new ObjectId();
+const mealId = new ObjectId(),
   manualId = new ObjectId();
 let cookie, csrf;
 const sourceIds = [],
   costIds = [];
+const buyerId = new ObjectId(),
+  receiverId = new ObjectId();
+const buyerRole = "qa-buyer-" + String(buyerId),
+  receiverRole = "qa-receiver-" + String(receiverId);
+let rootSession;
+async function switchUser(username) {
+  const r = await fetch(base + "/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://localhost:3300",
+    },
+    body: JSON.stringify({
+      username,
+      password: "Local-only-visual-test-2026!",
+    }),
+  });
+  assert.equal(r.status, 201);
+  cookie = r.headers.get("set-cookie").split(";")[0];
+  csrf = (await r.json()).csrf;
+}
 try {
   const login = await fetch(base + "/auth/login", {
     method: "POST",
@@ -31,6 +52,44 @@ try {
   assert.equal(login.status, 201);
   cookie = login.headers.get("set-cookie").split(";")[0];
   csrf = (await login.json()).csrf;
+  rootSession = { cookie, csrf };
+  const bootstrap = await db.collection("users").findOne({ username: "admin" });
+  await db.collection("roles").insertMany([
+    {
+      id: buyerRole,
+      name: "Contabilidad QA",
+      permissions: ["accounting", "accounting_write"],
+      revision: 1,
+    },
+    {
+      id: receiverRole,
+      name: "Almacén QA",
+      permissions: ["inventory", "inventory_receive", "purchases_manage"],
+      revision: 1,
+    },
+  ]);
+  await db.collection("users").insertMany([
+    {
+      _id: buyerId,
+      username: buyerRole,
+      name: "Contabilidad QA",
+      role: buyerRole,
+      status: "active",
+      emailVerified: true,
+      passwordHash: bootstrap.passwordHash,
+    },
+    {
+      _id: receiverId,
+      username: receiverRole,
+      name: "Almacén QA",
+      role: receiverRole,
+      status: "active",
+      emailVerified: true,
+      passwordHash: bootstrap.passwordHash,
+    },
+  ]);
+  // Direct database fixtures bypass the audience invalidation used by account administration.
+  await new Promise((resolve) => setTimeout(resolve, 3100));
   async function call(path, method = "GET", body) {
     const r = await fetch(base + path, {
       method,
@@ -177,13 +236,20 @@ try {
     .collection("notifications")
     .find({
       userId: String(admin._id),
-      href: "#inventory/compras/" + cost.purchaseId,
+      href: "#accounting/gastos/" + cost.purchaseId + "/preparar",
     })
     .toArray();
   assert.equal(
     notices.length,
     1,
-    "warehouse receives one deduplicated internal notice",
+    "Accounting receives one deduplicated preparation notice",
+  );
+  assert.equal(
+    await db.collection("notifications").countDocuments({
+      userId: String(buyerId),
+      href: "#accounting/gastos/" + cost.purchaseId + "/preparar",
+    }),
+    1,
   );
   await call(
     `/admin/accounting/sire/purchases/${second.id}/incorporate`,
@@ -194,17 +260,92 @@ try {
     await db.collection("warehouse_purchases").countDocuments(),
     beforeOrders + 1,
   );
-  await db.collection("inventory_materials").insertOne({
-    _id: materialId,
-    sku: "QA-CLASSIFY",
+  await switchUser(receiverRole);
+  assert.equal(
+    (await call("/admin/accounting/purchase-materials", "POST", {})).status,
+    403,
+    "Receiving permission does not grant Accounting catalogue creation",
+  );
+  assert.equal(
+    (await call("/admin/accounting/purchase-orders")).status,
+    403,
+    "Warehouse cannot prepare purchases through Accounting",
+  );
+  assert.equal(
+    (
+      await call(
+        "/admin/warehouse/purchases/" + cost.purchaseId + "/order",
+        "PUT",
+        {},
+      )
+    ).status,
+    403,
+    "Legacy warehouse order route also requires Accounting",
+  );
+  assert.equal(
+    (await call("/admin/warehouse/purchases", "POST", {})).status,
+    403,
+    "Warehouse cannot create supplier quantities or prices",
+  );
+  assert.equal(
+    (
+      await call(
+        "/admin/warehouse/purchases/" + cost.purchaseId + "/cancel",
+        "POST",
+        {},
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    await db.collection("notifications").countDocuments({
+      userId: String(receiverId),
+      href: "#inventory/compras/" + cost.purchaseId,
+    }),
+    0,
+    "Warehouse is not told to receive an incomplete order",
+  );
+  await switchUser(buyerRole);
+  const newMaterial = {
+    sku: "QA-CLASSIFY-" + String(materialId),
     name: "Vidrio QA",
-    unit: "unidad",
-    balanceMilli: 0,
-    pending: [],
-    minimumMilli: 0,
-    updatedAt: now,
-    version: 1,
-  });
+    unit: "m2",
+    category: "Vidrio",
+    minimum: 0,
+    location: "",
+    description: "",
+  };
+  const createdMaterial = await call(
+    "/admin/accounting/purchase-materials",
+    "POST",
+    newMaterial,
+  );
+  assert.equal(createdMaterial.status, 201, JSON.stringify(createdMaterial));
+  materialId = new ObjectId(createdMaterial.data.id);
+  assert.equal(
+    createdMaterial.data.balance,
+    0,
+    "Creating the catalogue entry does not receive stock",
+  );
+  assert.equal(createdMaterial.data.unit, "m2");
+  assert.equal(
+    (await call("/admin/accounting/purchase-materials", "POST", newMaterial))
+      .status,
+    409,
+    "Repeated codes cannot duplicate materials",
+  );
+  assert.equal(
+    await db.collection("inventory_movements").countDocuments(),
+    beforeStock,
+  );
+  assert.equal(
+    (await call("/admin/accounting/purchase-materials")).status,
+    200,
+    "Accounting can select materials without inventory access",
+  );
+  const queue = await call("/admin/accounting/purchase-orders");
+  assert.equal(queue.status, 200);
+  assert.ok(queue.data.items.some((item) => item.id === cost.purchaseId));
   const order = {
     id: cost.purchaseId,
     workId: "",
@@ -221,8 +362,18 @@ try {
       },
     ],
   };
+  const wrongTotal = await call(
+    "/admin/accounting/purchase-orders/" + cost.purchaseId + "/order",
+    "PUT",
+    { ...order, items: [{ ...order.items[0], unitCents: 4500 }] },
+  );
+  assert.equal(
+    wrongTotal.status,
+    400,
+    "Unit prices and quantities must match invoice net total",
+  );
   const prepared = await call(
-    "/admin/warehouse/purchases/" + cost.purchaseId + "/order",
+    "/admin/accounting/purchase-orders/" + cost.purchaseId + "/order",
     "PUT",
     order,
   );
@@ -232,10 +383,30 @@ try {
     await db.collection("inventory_movements").countDocuments(),
     beforeStock,
   );
+  assert.equal(
+    await db.collection("notifications").countDocuments({
+      userId: String(receiverId),
+      href: "#inventory/compras/" + cost.purchaseId,
+    }),
+    1,
+    "Warehouse receives the ready order notice",
+  );
+  assert.equal(
+    (
+      await call(
+        "/admin/warehouse/purchases/" + cost.purchaseId + "/receive",
+        "POST",
+        {},
+      )
+    ).status,
+    403,
+    "Accounting cannot confirm physical stock receipt",
+  );
+  await switchUser(receiverRole);
   const receive = {
     operationId: randomUUID(),
     materialId: String(materialId),
-    quantity: 2,
+    quantity: 1,
     reference: "FQA-2",
   };
   const received = await call(
@@ -244,7 +415,7 @@ try {
     receive,
   );
   assert.equal(received.status, 201, JSON.stringify(received));
-  assert.equal(received.data.status, "received");
+  assert.equal(received.data.status, "partial");
   await call(
     "/admin/warehouse/purchases/" + cost.purchaseId + "/receive",
     "POST",
@@ -257,8 +428,41 @@ try {
   assert.equal(
     (await db.collection("inventory_materials").findOne({ _id: materialId }))
       .balanceMilli,
+    1000,
+  );
+  const overReceipt = await call(
+    "/admin/warehouse/purchases/" + cost.purchaseId + "/receive",
+    "POST",
+    { ...receive, operationId: randomUUID(), quantity: 2 },
+  );
+  assert.equal(overReceipt.status, 400);
+  await switchUser(buyerRole);
+  const replay = await call(
+    "/admin/accounting/purchase-orders/" + cost.purchaseId + "/order",
+    "PUT",
+    order,
+  );
+  assert.equal(replay.status, 200);
+  assert.equal(
+    replay.data.items[0].received,
+    1,
+    "Retrying purchase preparation preserves warehouse receipts",
+  );
+  await switchUser(receiverRole);
+  const finalReceipt = await call(
+    "/admin/warehouse/purchases/" + cost.purchaseId + "/receive",
+    "POST",
+    { ...receive, operationId: randomUUID() },
+  );
+  assert.equal(finalReceipt.status, 201);
+  assert.equal(finalReceipt.data.status, "received");
+  assert.equal(
+    (await db.collection("inventory_materials").findOne({ _id: materialId }))
+      .balanceMilli,
     2000,
   );
+  cookie = rootSession.cookie;
+  csrf = rootSession.csrf;
   // A supplier outage cannot silently create an unchecked duplicate.
   const outage = await manual(String(new ObjectId()), {
     ...dto,
@@ -285,12 +489,28 @@ try {
     beforeOrders + 1,
   );
   console.log(
-    "PASS classification: fresh SUNAT lookup, duplicate handoff, meals/services stay outside warehouse, warehouse task/notice, preparation without stock, receipt exactly once, outage protection and manual unmatched records.",
+    "PASS classification: fresh SUNAT lookup, duplicate handoff, meals/services stay outside warehouse, accounting-only quantities/prices, permission isolation, receipt-only warehouse, partial receipts and idempotent stock, outage protection and manual unmatched records.",
   );
 } finally {
   await db.collection("notifications").deleteMany({
-    href: { $in: costIds.map((id) => "#inventory/compras/" + id) },
+    $or: [
+      {
+        href: {
+          $in: costIds.flatMap((id) => [
+            "#inventory/compras/" + id,
+            "#accounting/gastos/" + id + "/preparar",
+          ]),
+        },
+      },
+      { userId: { $in: [String(buyerId), String(receiverId)] } },
+    ],
   });
+  await db
+    .collection("users")
+    .deleteMany({ _id: { $in: [buyerId, receiverId] } });
+  await db
+    .collection("roles")
+    .deleteMany({ id: { $in: [buyerRole, receiverRole] } });
   await db
     .collection("warehouse_purchases")
     .deleteMany({ "invoiceSource.costId": { $in: costIds } });

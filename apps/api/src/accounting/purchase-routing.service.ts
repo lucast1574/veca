@@ -50,7 +50,9 @@ export class PurchaseRoutingService
       { _id: row._id, warehouseRoutingPending: true },
       { $set: { purchaseId: order.id } },
     );
-    await this.notices.forWarehousePurchase(order.id);
+    if (order.status === "requested")
+      await this.notices.forAccountingPurchase(order.id);
+    else await this.notices.forWarehousePurchase(order.id);
     await costs.updateOne(
       { _id: row._id },
       { $set: { warehouseRoutingPending: false } },
