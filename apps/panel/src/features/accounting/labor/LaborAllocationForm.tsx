@@ -69,6 +69,7 @@ export function LaborAllocationForm({
       title="Repartir costo entre obras"
       description={target.name + " · " + amount(target.cost)}
       label="Guardar reparto"
+      validateForm={() => valid}
       onClose={close}
       onSaved={() => saved("Reparto guardado.")}
       onSave={() =>

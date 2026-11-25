@@ -63,6 +63,7 @@ export function WarehouseForm({
   children,
   wide = false,
   canSubmit = true,
+  validateForm,
   hasChanges = false,
 }: {
   title: string;
@@ -72,6 +73,7 @@ export function WarehouseForm({
   children: ReactNode;
   wide?: boolean;
   canSubmit?: boolean;
+  validateForm?: (form: FormData) => boolean;
   hasChanges?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -110,6 +112,7 @@ export function WarehouseForm({
     event.preventDefault();
     if (busy || !canSubmit) return;
     const values = new FormData(event.currentTarget);
+    if (validateForm && !validateForm(values)) return;
     setBusy(true);
     setError("");
     try {
@@ -133,7 +136,12 @@ export function WarehouseForm({
           <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button type="submit" form={formId} disabled={busy || !canSubmit}>
+          <Button
+            type="submit"
+            form={formId}
+            disabled={busy || !canSubmit}
+            validateForm={validateForm}
+          >
             {busy ? "Guardando…" : action}
           </Button>
         </footer>
@@ -163,6 +171,7 @@ export function WarehouseSelect({
   options,
   onChange,
   placeholder,
+  required,
 }: {
   label: string;
   name?: string;
@@ -170,6 +179,7 @@ export function WarehouseSelect({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   placeholder?: string;
+  required?: boolean;
 }) {
   return (
     <Field label={label}>
@@ -181,6 +191,7 @@ export function WarehouseSelect({
         options={options}
         onChange={onChange}
         placeholder={placeholder}
+        required={required}
       />
     </Field>
   );

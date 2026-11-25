@@ -186,22 +186,29 @@ export function RichEditor({
       run: () => editor.chain().focus().redo().run(),
     },
   ];
-  function applyLink() {
+  function parseLink() {
     try {
       const url = new URL(linkValue.trim());
-      if (!["https:", "http:"].includes(url.protocol)) throw Error();
-      editor!
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .setLink({ href: url.href })
-        .run();
-      closeLink();
+      return ["https:", "http:"].includes(url.protocol) ? url.href : "";
     } catch {
+      return "";
+    }
+  }
+  const linkHref = linkOpen ? parseLink() : "";
+  function applyLink() {
+    if (!linkHref) {
       setLinkError(
         "Escribe un enlace completo que empiece con https:// o http://.",
       );
+      return;
     }
+    editor!
+      .chain()
+      .focus()
+      .extendMarkRange("link")
+      .setLink({ href: linkHref })
+      .run();
+    closeLink();
   }
   return (
     <div className="rich-editor">
@@ -240,7 +247,9 @@ export function RichEditor({
               <Button variant="ghost" onClick={closeLink}>
                 Cancelar
               </Button>
-              <Button onClick={applyLink}>Aplicar enlace</Button>
+              <Button onClick={applyLink} disabled={!linkHref}>
+                Aplicar enlace
+              </Button>
             </footer>
           }
         >

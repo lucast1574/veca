@@ -1,5 +1,5 @@
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { publicLeadSchema, REQUEST_TYPES } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { Modal } from "../../components/Modal";
@@ -21,7 +21,7 @@ export function CreateLeadModal({
   onCreated: (id: string) => void;
 }) {
   const id = useId();
-  const submissionId = useRef<string | null>(null);
+  const [submissionId] = useState(() => crypto.randomUUID());
   const [requestType, setRequestType] = useState("");
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,18 +31,19 @@ export function CreateLeadModal({
   function close() {
     if (confirmDiscard(dirty, busy)) onClose();
   }
+  const parseLead = (fields: FormData) =>
+    publicLeadSchema.safeParse({
+      ...Object.fromEntries(fields),
+      requestType,
+      submissionId,
+      website: "",
+    });
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    const fields = Object.fromEntries(new FormData(event.currentTarget));
-    submissionId.current ??= crypto.randomUUID();
-    const input = publicLeadSchema.safeParse({
-      ...fields,
-      requestType,
-      submissionId: submissionId.current,
-      website: "",
-    });
+    const fields = new FormData(event.currentTarget);
+    const input = parseLead(fields);
     if (!input.success) {
       setError(input.error.issues[0].message);
       const field = event.currentTarget.elements.namedItem(
@@ -79,7 +80,12 @@ export function CreateLeadModal({
           <Button type="button" variant="ghost" onClick={close} disabled={busy}>
             Cancelar
           </Button>
-          <Button type="submit" form={id} disabled={busy}>
+          <Button
+            type="submit"
+            form={id}
+            disabled={busy}
+            validateForm={(fields) => parseLead(fields).success}
+          >
             {busy ? "Guardando…" : "Guardar lead"}
           </Button>
         </footer>

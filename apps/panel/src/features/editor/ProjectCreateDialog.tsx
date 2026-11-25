@@ -42,7 +42,11 @@ export function ProjectCreateDialog({
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" form={id}>
+          <Button
+            type="submit"
+            form={id}
+            disabled={!location || title.trim().length < 4}
+          >
             Abrir editor
           </Button>
         </footer>

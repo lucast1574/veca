@@ -86,6 +86,28 @@ export function PurchaseOrderDialog({
     ? requested.invoiceSource.netCents - total
     : 0;
   const id = useRef(requested?.id || recordId());
+  const parseDraft = (form: FormData) =>
+    purchaseInput.safeParse({
+      id: id.current,
+      workId: work,
+      supplier: fixedSupplier
+        ? requested!.supplier
+        : stringField(form, "supplier"),
+      supplierRuc: requested?.invoiceSource
+        ? requested.supplierRuc
+        : stringField(form, "ruc"),
+      reason: requested?.reason || stringField(form, "reason"),
+      items: lines.map((item) => ({
+        materialId: item.materialId,
+        requested: requested ? item.requested : 0,
+        ordered: Number(item.quantity),
+        unitCents: Math.round(Number(item.price) * 100),
+        reason:
+          stringField(form, item.key + "-reason") ||
+          requested?.reason ||
+          stringField(form, "reason"),
+      })),
+    });
   return (
     <>
       <WarehouseForm
@@ -105,28 +127,9 @@ export function PurchaseOrderDialog({
         }
         onClose={close}
         hasChanges={createdMaterials.length > 0}
+        validateForm={(form) => parseDraft(form).success}
         save={async (form) => {
-          const parsed = purchaseInput.safeParse({
-            id: id.current,
-            workId: work,
-            supplier: fixedSupplier
-              ? requested!.supplier
-              : stringField(form, "supplier"),
-            supplierRuc: requested?.invoiceSource
-              ? requested.supplierRuc
-              : stringField(form, "ruc"),
-            reason: requested?.reason || stringField(form, "reason"),
-            items: lines.map((item) => ({
-              materialId: item.materialId,
-              requested: requested ? item.requested : 0,
-              ordered: Number(item.quantity),
-              unitCents: Math.round(Number(item.price) * 100),
-              reason:
-                stringField(form, item.key + "-reason") ||
-                requested?.reason ||
-                stringField(form, "reason"),
-            })),
-          });
+          const parsed = parseDraft(form);
           if (!parsed.success) {
             const issue = parsed.error.issues[0];
             if (!issue.path.length) throw new Error(issue.message);

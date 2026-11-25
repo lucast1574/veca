@@ -16,6 +16,7 @@ import {
   LEAD_SOURCE_LABELS,
   DEMO_CASES,
   isDemoLead,
+  leadUpdateSchema,
   type LeadInput,
   type SessionUser,
   type PhotoMetadata,
@@ -257,9 +258,10 @@ export function LeadDetail({
     setError("");
     setEditing(false);
   }
+  const canSaveLead = !!draft && leadUpdateSchema.safeParse(draft).success;
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (readOnly || !draft || busy) return;
+    if (readOnly || !draft || busy || !canSaveLead) return;
     setBusy(true);
     setError("");
     try {
@@ -747,7 +749,11 @@ export function LeadDetail({
               >
                 Cancelar
               </Button>
-              <Button type="submit" form={editFormId} disabled={busy}>
+              <Button
+                type="submit"
+                form={editFormId}
+                disabled={busy || !canSaveLead}
+              >
                 <Save size={16} />
                 {busy ? "Guardando…" : "Guardar cambios"}
               </Button>
@@ -1029,7 +1035,7 @@ export function LeadDetail({
                 maxLength={4000}
                 rows={3}
               />
-              <Button disabled={busy}>
+              <Button type="submit" disabled={busy}>
                 {workView ? "Registrar avance" : "Añadir nota"}
               </Button>
             </form>

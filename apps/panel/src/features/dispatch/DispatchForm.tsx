@@ -123,18 +123,15 @@ export function DispatchForm({
   function close() {
     if (confirmDiscard(draft !== savedDraft, busy)) onClose();
   }
+  const hasDispatchDetails =
+    Boolean(draft.transferAt) &&
+    draft.items.length > 0 &&
+    draft.items.every((item) => item.description.trim() && item.quantity > 0);
 
   async function save(submit: boolean) {
     if (busy) return;
     setError("");
-    if (
-      submit &&
-      (!draft.transferAt ||
-        !draft.items.length ||
-        draft.items.some(
-          (item) => !item.description.trim() || item.quantity <= 0,
-        ))
-    ) {
+    if (submit && !hasDispatchDetails) {
       setError(
         "Completa la fecha de salida y los materiales con sus cantidades.",
       );
@@ -178,7 +175,11 @@ export function DispatchForm({
               Guardar borrador
             </Button>
           )}
-          <Button type="submit" form={formId} disabled={busy}>
+          <Button
+            type="submit"
+            form={formId}
+            disabled={busy || (!guideWorkName && !hasDispatchDetails)}
+          >
             {busy
               ? "Guardando…"
               : guideWorkName

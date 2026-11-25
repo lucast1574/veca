@@ -259,6 +259,7 @@ export function PayrollForm({
         ". Guarda el borrador para ver los importes calculados por API SUNAT."
       }
       label="Calcular y guardar borrador"
+      validateForm={() => workers.length > 0}
       onClose={close}
       onSaved={() => saved("Borrador calculado y guardado.")}
       onSave={(form) => {

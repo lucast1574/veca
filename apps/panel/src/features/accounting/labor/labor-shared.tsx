@@ -79,6 +79,7 @@ export function LaborForm({
   label,
   wide,
   danger,
+  validateForm,
 }: {
   title: string;
   description?: string;
@@ -90,6 +91,7 @@ export function LaborForm({
   secondary?: string;
   wide?: boolean;
   danger?: boolean;
+  validateForm?: (form: FormData, action: "draft" | "primary") => boolean;
 }) {
   const id = useId();
   const [busy, setBusy] = useState(false);
@@ -119,6 +121,9 @@ export function LaborForm({
               form={id}
               value="draft"
               disabled={busy}
+              validateForm={
+                validateForm && ((form) => validateForm(form, "draft"))
+              }
             >
               {secondary}
             </Button>
@@ -129,6 +134,9 @@ export function LaborForm({
             form={id}
             value="primary"
             disabled={busy}
+            validateForm={
+              validateForm && ((form) => validateForm(form, "primary"))
+            }
           >
             {busy ? "Guardando…" : label}
           </Button>

@@ -81,6 +81,9 @@ export function HonorariumForm({
   saved,
 }: Actions & { receipt?: LaborReceipt; period: string }) {
   const [terms, setTerms] = useState(receipt?.paymentTerms || "cash");
+  const hasReceiptNumber = (form: FormData) =>
+    /^E[0-9]{3}$/.test(field(form, "series").toUpperCase()) &&
+    /^[1-9][0-9]{0,7}$/.test(field(form, "number"));
   return (
     <LaborForm
       title={
@@ -89,6 +92,9 @@ export function HonorariumForm({
       description="Registra el comprobante emitido por el profesional en SUNAT. Puedes preparar primero un borrador."
       label="Registrar recibo"
       secondary="Guardar borrador"
+      validateForm={(form, action) =>
+        action === "draft" || hasReceiptNumber(form)
+      }
       onClose={close}
       wide
       onSaved={(action) =>
@@ -102,10 +108,7 @@ export function HonorariumForm({
         const registered = action !== "draft";
         const series = field(form, "series").toUpperCase();
         const number = field(form, "number");
-        if (
-          registered &&
-          (!/^E[0-9]{3}$/.test(series) || !/^[1-9][0-9]{0,7}$/.test(number))
-        )
+        if (registered && !hasReceiptNumber(form))
           throw new Error(
             "Ingresa la serie electrónica y el número del recibo emitido en SUNAT.",
           );

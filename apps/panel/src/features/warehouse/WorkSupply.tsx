@@ -187,24 +187,27 @@ function PlanForm({
   );
   const catalog = useWarehouseMaterials();
   const tools = useAccountingQuery<Equipment[]>(warehousePath + "/equipment");
+  const parseDraft = (form: FormData) =>
+    workPlanInput.safeParse({
+      revision: row.plan.revision,
+      budgetCents: row.plan.budgetSource
+        ? row.plan.budgetCents
+        : Math.round(Number(form.get("budget")) * 100),
+      materials: materials.map(({ materialId, key }) => ({
+        materialId,
+        quantity: Number(form.get(key)),
+      })),
+      equipment: equipment.map((item) => item.id),
+    });
   return (
     <WarehouseForm
       title="Editar plan de obra"
       action="Guardar plan"
       wide
       onClose={close}
+      validateForm={(form) => parseDraft(form).success}
       save={async (form) => {
-        const parsed = workPlanInput.safeParse({
-          revision: row.plan.revision,
-          budgetCents: row.plan.budgetSource
-            ? row.plan.budgetCents
-            : Math.round(Number(form.get("budget")) * 100),
-          materials: materials.map(({ materialId, key }) => ({
-            materialId,
-            quantity: Number(form.get(key)),
-          })),
-          equipment: equipment.map((item) => item.id),
-        });
+        const parsed = parseDraft(form);
         if (!parsed.success)
           throw new Error(
             "Revisa los códigos repetidos, las cantidades y el presupuesto.",
@@ -239,6 +242,7 @@ function PlanForm({
           <div className="warehouse-edit-line" key={item.key}>
             <WarehouseSelect
               label="Código o material"
+              required
               value={item.materialId}
               options={materialOptions(catalog.data || [])}
               onChange={(materialId) =>
@@ -293,6 +297,7 @@ function PlanForm({
           <div className="warehouse-edit-line is-tool" key={item.key}>
             <WarehouseSelect
               label="Equipo"
+              required
               value={item.id}
               options={(tools.data || [])
                 .filter(

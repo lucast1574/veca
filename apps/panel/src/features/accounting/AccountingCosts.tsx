@@ -441,11 +441,8 @@ function CostForm({
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const fields = new FormData(event.currentTarget);
-    const dto = costInput.safeParse({
+  const parseCost = (fields: FormData) =>
+    costInput.safeParse({
       description: fields.get("description"),
       date: fields.get("date"),
       supplier: fields.get("supplier"),
@@ -462,6 +459,10 @@ function CostForm({
         cents: decimal(item.amount),
       })),
     });
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const dto = parseCost(new FormData(event.currentTarget));
     if (!dto.success) {
       setError(dto.error.issues[0].message);
       return;
@@ -769,7 +770,11 @@ function CostForm({
           <Button variant="ghost" type="button" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button disabled={busy}>
+          <Button
+            type="submit"
+            disabled={busy}
+            validateForm={(fields) => parseCost(fields).success}
+          >
             <Upload size={16} />{" "}
             {busy
               ? current

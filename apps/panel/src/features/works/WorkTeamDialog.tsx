@@ -64,19 +64,20 @@ export function WorkTeamDialog({
   function close() {
     if (confirmDiscard(dirty, busy)) onClose();
   }
+  const hasCoordinator = people?.some(
+    (person) => person.id === coordinatorId && person.canCoordinate,
+  );
+  const hasWorkDetails =
+    !handoff || (workLocation && workName.trim().length >= 4);
   async function save(event: FormEvent) {
     event.preventDefault();
     if (busy || !people) return;
     setError("");
-    if (
-      !people.some(
-        (person) => person.id === coordinatorId && person.canCoordinate,
-      )
-    ) {
+    if (!hasCoordinator) {
       setError("Selecciona un coordinador activo.");
       return;
     }
-    if (handoff && (!workLocation || workName.trim().length < 4)) {
+    if (!hasWorkDetails) {
       setError("Completa el nombre y la ubicación de la obra.");
       return;
     }
@@ -126,7 +127,7 @@ export function WorkTeamDialog({
           <Button
             form={formId}
             type="submit"
-            disabled={busy || !people || !coordinatorId}
+            disabled={busy || !hasCoordinator || !hasWorkDetails}
           >
             {busy
               ? "Guardando…"

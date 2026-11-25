@@ -7,6 +7,7 @@ import {
   type SocialChannel,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
+import { FormSubmitButton } from "@veca/ui/src/FormSubmitButton";
 import { WHATSAPP } from "./content";
 import { Arrow } from "./Controls";
 export function ProjectContact({
@@ -20,7 +21,7 @@ export function ProjectContact({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reference, setReference] = useState("");
-  const operation = useRef("");
+  const [operation] = useState(() => crypto.randomUUID());
   const trigger = useRef<HTMLButtonElement>(null);
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -41,11 +42,7 @@ export function ProjectContact({
       document.body.classList.remove("ve-contact-in-view");
     };
   }, []);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    const form = new FormData(event.currentTarget);
-    if (!operation.current) operation.current = crypto.randomUUID();
+  function parseInquiry(form: FormData) {
     const data = {
       name: String(form.get("name") || ""),
       email: String(form.get("email") || ""),
@@ -53,14 +50,19 @@ export function ProjectContact({
       website: String(form.get("website") || ""),
       idea: String(form.get("idea") || ""),
       requestType: type,
-      submissionId: operation.current,
+      submissionId: operation,
     };
-    const parsed = source
+    return source
       ? socialLeadSchema.safeParse({ ...data, source })
       : publicLeadSchema.safeParse({
           ...data,
           district: String(form.get("district") || ""),
         });
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const parsed = parseInquiry(new FormData(event.currentTarget));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       setError(issue.message);
@@ -284,10 +286,14 @@ export function ProjectContact({
                 {error}
               </p>
             )}
-            <button className="ve-action" disabled={busy} type="submit">
+            <FormSubmitButton
+              className="ve-action"
+              disabled={busy}
+              validateForm={(values) => parseInquiry(values).success}
+            >
               {busy ? "Enviando tu consulta…" : "Enviar mi proyecto"}
               <Arrow />
-            </button>
+            </FormSubmitButton>
             <p className="ve-inquiry-privacy">
               Usaremos tus datos para atender esta consulta y coordinar tu
               proyecto. <a href="/privacidad/">Política de privacidad</a>

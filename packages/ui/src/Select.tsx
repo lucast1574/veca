@@ -17,6 +17,7 @@ export function Select({
   placeholder = "Selecciona una opción",
   error,
   disabled,
+  required,
   triggerRef,
   floating = true,
 }: {
@@ -29,6 +30,7 @@ export function Select({
   placeholder?: string;
   error?: string;
   disabled?: boolean;
+  required?: boolean;
   triggerRef?: Ref<HTMLButtonElement>;
   floating?: boolean;
 }) {
@@ -85,6 +87,8 @@ export function Select({
         disabled={disabled}
         role="combobox"
         aria-label={label}
+        aria-required={required}
+        value={required ? (selected >= 0 ? value : "") : undefined}
         aria-expanded={open}
         aria-controls={listId}
         aria-haspopup="listbox"

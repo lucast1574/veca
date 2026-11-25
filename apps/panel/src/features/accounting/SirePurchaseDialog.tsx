@@ -113,20 +113,12 @@ function PurchaseForm({
   const onClose = () => {
     if (confirmDiscard(dirty, busy)) close();
   };
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (busy || !canWrite) return;
-    if (
-      destination === "work" &&
-      splits.length &&
-      splits.reduce((sum, row) => sum + row.cents, 0) !== item.net
-    ) {
-      setError(
-        "Distribuye todo el importe sin IGV de la factura entre las obras.",
-      );
-      return;
-    }
-    const result = sireIncorporation.safeParse({
+  const distributed =
+    destination !== "work" ||
+    splits.length === 0 ||
+    splits.reduce((sum, row) => sum + row.cents, 0) === item.net;
+  const parsePurchase = () =>
+    sireIncorporation.safeParse({
       version: item.version,
       description,
       destination,
@@ -135,6 +127,16 @@ function PurchaseForm({
         (splits.length ? { allocations: splits } : workId ? { workId } : {})),
       ...(destination === "warehouse" && purchaseId && { purchaseId }),
     });
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy || !canWrite) return;
+    if (!distributed) {
+      setError(
+        "Distribuye todo el importe sin IGV de la factura entre las obras.",
+      );
+      return;
+    }
+    const result = parsePurchase();
     if (!result.success) {
       setError(result.error.issues[0].message);
       return;
@@ -174,7 +176,13 @@ function PurchaseForm({
           <Button
             type="submit"
             form={formId}
-            disabled={!canWrite || busy || item.status !== "pending"}
+            disabled={
+              !canWrite ||
+              busy ||
+              item.status !== "pending" ||
+              !distributed ||
+              !parsePurchase().success
+            }
           >
             <Check size={16} />
             {busy

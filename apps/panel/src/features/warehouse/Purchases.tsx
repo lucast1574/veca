@@ -219,22 +219,25 @@ function PurchaseRequestForm({
   const newLine = () => ({ key: crypto.randomUUID(), materialId: "" });
   const [rows, setRows] = useState(() => [newLine()]);
   const id = useRef(recordId());
+  const parseDraft = (form: FormData) =>
+    purchaseRequest.safeParse({
+      id: id.current,
+      workId,
+      reason: stringField(form, "reason"),
+      materials: rows.map((row) => ({
+        materialId: row.materialId,
+        quantity: Number(form.get(row.key)),
+      })),
+    });
   return (
     <WarehouseForm
       title="Solicitar pedido para la obra"
       action="Enviar solicitud"
       wide
       onClose={close}
+      validateForm={(form) => parseDraft(form).success}
       save={async (form) => {
-        const payload = purchaseRequest.safeParse({
-          id: id.current,
-          workId,
-          reason: stringField(form, "reason"),
-          materials: rows.map((row) => ({
-            materialId: row.materialId,
-            quantity: Number(form.get(row.key)),
-          })),
-        });
+        const payload = parseDraft(form);
         if (!payload.success)
           throw new Error(
             "Revisa el motivo, los códigos sin repetir y las cantidades.",
@@ -259,6 +262,7 @@ function PurchaseRequestForm({
         <div key={row.key} className="warehouse-edit-line">
           <WarehouseSelect
             label="Código o material"
+            required
             value={row.materialId}
             options={materialOptions(materials)}
             onChange={(materialId) =>

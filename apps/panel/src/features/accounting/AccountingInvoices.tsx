@@ -268,11 +268,8 @@ function InvoiceForm({
   )
     workOptions.push({ value: current.workId, label: current.workName });
 
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setError("");
-    const parsed = invoiceInput.safeParse({
+  const parseInvoice = () =>
+    invoiceInput.safeParse({
       workId: work,
       customer,
       customerRuc: ruc,
@@ -280,6 +277,11 @@ function InvoiceForm({
       dueDate: method === "credit" ? due : "",
       items,
     });
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setError("");
+    const parsed = parseInvoice();
     if (!parsed.success) {
       setError(parsed.error.issues[0].message);
       return;
@@ -321,7 +323,11 @@ function InvoiceForm({
           <Button type="button" variant="ghost" onClick={close} disabled={busy}>
             Cancelar
           </Button>
-          <Button type="submit" form={formId} disabled={busy}>
+          <Button
+            type="submit"
+            form={formId}
+            disabled={busy || !parseInvoice().success}
+          >
             {busy ? "Guardando…" : "Guardar borrador"}
           </Button>
         </footer>
@@ -728,10 +734,11 @@ function InvoiceDetail({
                 Cancelar
               </Button>
               <Button
+                type="submit"
                 disabled={
                   busy ||
                   (action === "payment" &&
-                    (!decimal(cash) ||
+                    (decimal(cash) <= 0 ||
                       decimal(cash) > row.totalCents - row.paidCents))
                 }
               >

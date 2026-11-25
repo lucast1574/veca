@@ -128,14 +128,7 @@ export function LeadStageDialog({
           <Button type="button" variant="ghost" disabled={busy} onClick={close}>
             Cancelar
           </Button>
-          <Button
-            type="submit"
-            form={id}
-            disabled={
-              busy ||
-              (stage === "completed" && !!workId && !closeout.data?.ready)
-            }
-          >
+          <Button type="submit" form={id} disabled={busy || !ready}>
             {busy ? "Guardando…" : "Confirmar cambio"}
           </Button>
         </footer>

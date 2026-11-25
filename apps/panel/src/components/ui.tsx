@@ -2,17 +2,35 @@ import {
   cloneElement,
   isValidElement,
   useId,
-  type ButtonHTMLAttributes,
   type ReactElement,
   type ReactNode,
 } from "react";
+import {
+  FormSubmitButton,
+  type FormSubmitButtonProps,
+} from "@veca/ui/src/FormSubmitButton";
+
+type ButtonProps = FormSubmitButtonProps & {
+  variant?: "primary" | "ghost" | "danger";
+};
+
 export function Button({
   children,
   variant = "primary",
+  validateForm,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "ghost" | "danger";
-}) {
+}: ButtonProps) {
+  if (props.type === "submit") {
+    return (
+      <FormSubmitButton
+        className={`btn btn-${variant}`}
+        validateForm={validateForm}
+        {...props}
+      >
+        {children}
+      </FormSubmitButton>
+    );
+  }
   return (
     <button className={`btn btn-${variant}`} {...props}>
       {children}

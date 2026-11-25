@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, type FormEvent } from "react";
+import { FormSubmitButton } from "@veca/ui/src/FormSubmitButton";
 import { confirmGoogle, galleryRequest } from "../../lib/gallery-account";
 
 export function DeleteAccount({ api }: { api: string }) {
@@ -89,9 +90,12 @@ export function DeleteAccount({ api }: { api: string }) {
                 maxLength={256}
               />
             </label>
-            <button className="ve-gallery-button danger" disabled={busy}>
+            <FormSubmitButton
+              className="ve-gallery-button danger"
+              disabled={busy}
+            >
               Eliminar definitivamente
-            </button>
+            </FormSubmitButton>
             <button
               type="button"
               className="ve-gallery-button secondary"

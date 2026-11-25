@@ -13,6 +13,7 @@ import {
   CATEGORIES,
   TAGS,
   emptyProject,
+  projectInputSchema,
   seoFor,
   slugify,
   type Project,
@@ -175,6 +176,7 @@ export function ProjectEditor({
     return result;
   }
   async function action(kind: "save" | "publish" | "unpublish") {
+    if (busy) return;
     if (
       kind === "unpublish" &&
       !confirm(
@@ -222,6 +224,7 @@ export function ProjectEditor({
     draft,
     saved?.slug || slugify(draft.title) || "tu-proyecto",
   );
+  const canSave = projectInputSchema.shape.title.safeParse(draft.title).success;
   if (publishedResult)
     return (
       <PublishSuccess
@@ -261,7 +264,7 @@ export function ProjectEditor({
         <div className="editor-actions">
           <Button
             variant="ghost"
-            disabled={busy}
+            disabled={busy || !canSave}
             onClick={() => void action("save")}
           >
             <Save size={17} />
