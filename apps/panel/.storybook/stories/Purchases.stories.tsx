@@ -34,14 +34,14 @@ const sample: SirePurchase[] = [
     id: "222222222222222222222222",
     version: 1,
     period: "2026-11",
-    reference: "F002-354",
+    reference: "F001-1208",
     taxId: "20100000002",
-    supplier: "Distribuidora de materiales · Ejemplo",
-    date: "2026-11-19",
+    supplier: "Cristales del Pacífico · Ejemplo",
+    date: "2026-11-25",
     type: "01",
-    total: 4050,
-    net: 3432,
-    tax: 618,
+    total: 665520,
+    net: 564000,
+    tax: 101520,
     currency: "PEN",
     importable: true,
     status: "pending",
@@ -174,7 +174,7 @@ async function openMaterials(canvasElement: HTMLElement) {
   );
   await userEvent.type(
     await page.findByRole("textbox", { name: "¿Para qué fue esta compra?" }),
-    "Materiales para ventanas",
+    "Paños de vidrio para la fachada del piso 4",
   );
   await userEvent.click(
     page.getByRole("combobox", { name: "Destino de la compra" }),
