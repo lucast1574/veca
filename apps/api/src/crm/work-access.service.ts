@@ -71,16 +71,15 @@ export class WorkAccess {
 
   async people(): Promise<WorkPerson[]> {
     const roles = await this.auth.roles.list();
-    const allowed = roles.filter(
-      (role) =>
-        role.permissions.includes("works") &&
-        role.permissions.some(
-          (p) => p === "works_manage" || p === "works_report",
-        ),
-    );
+    const allowed = roles
+      .filter((role) => role.permissions.includes("works"))
+      .map((role) => role.id);
     const users = await this.auth.users
       .find({
-        role: { $in: allowed.map((role) => role.id) },
+        $or: [
+          { roles: { $in: allowed } },
+          { roles: { $exists: false }, role: { $in: allowed } },
+        ],
         mobileReview: { $ne: true },
       })
       .sort({ name: 1, username: 1 })
@@ -89,7 +88,13 @@ export class WorkAccess {
       users.map((user) => this.auth.view(user, roles)),
     );
     return visible
-      .filter((user) => user.status === "active" && user.emailVerified)
+      .filter(
+        (user) =>
+          user.permissions.includes("works") &&
+          user.permissions.some(
+            (p) => p === "works_manage" || p === "works_report",
+          ),
+      )
       .map((user) => ({
         id: user.id,
         name: user.name,

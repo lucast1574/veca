@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import {
   Users,
   ShieldCheck,
@@ -30,13 +30,33 @@ const statuses: Record<string, string> = {
   rejected: "No aprobado",
   suspended: "Suspendido",
 };
+
+const roleDirections: Partial<Record<string, number>> = {
+  ArrowUp: -1,
+  ArrowLeft: -1,
+  ArrowDown: 1,
+  ArrowRight: 1,
+};
+
+function moveRoleFocus(event: KeyboardEvent<HTMLFieldSetElement>) {
+  const direction = roleDirections[event.key];
+  if (!direction) return;
+  const buttons = [
+    ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled"),
+  ];
+  const index = buttons.findIndex((button) => button === event.target);
+  if (index < 0) return;
+  event.preventDefault();
+  buttons[(index + direction + buttons.length) % buttons.length].focus();
+}
+
 export function Team({ currentId }: { currentId: string }) {
   const [data, setData] = useState<List | null>(null),
     [error, setError] = useState(""),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("all"),
     [selected, setSelected] = useState<UserSummary | null>(null),
-    [role, setRole] = useState<Role>(""),
+    [roles, setRoles] = useState<Role[]>([]),
     [status, setStatus] = useState("active"),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
@@ -66,8 +86,9 @@ export function Team({ currentId }: { currentId: string }) {
   }
   function edit(user: UserSummary) {
     setSelected(user);
-    setRole(
-      user.role && data?.roles.some((r) => r.id === user.role) ? user.role : "",
+    const assigned = user.roles ?? (user.role ? [user.role] : []);
+    setRoles(
+      assigned.filter((id) => data?.roles.some((role) => role.id === id)),
     );
     setStatus(
       user.status === "active"
@@ -78,18 +99,24 @@ export function Team({ currentId }: { currentId: string }) {
     );
     setError("");
   }
+  function toggleRole(id: Role) {
+    setRoles((current) =>
+      current.includes(id)
+        ? current.filter((role) => role !== id)
+        : [...current, id],
+    );
+  }
   async function save(nextStatus = status) {
-    if (!selected || busy || (nextStatus === "active" && !role)) return;
+    if (!selected || busy || (nextStatus === "active" && !roles.length)) return;
     setBusy(true);
     setError("");
     try {
       await api(`/admin/users/${selected.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          role:
-            selected.status === "pending" && nextStatus === "rejected"
-              ? null
-              : role || null,
+          ...(selected.status === "pending" && nextStatus === "rejected"
+            ? {}
+            : { roles }),
           status: nextStatus,
           revision: selected.revision,
         }),
@@ -108,6 +135,13 @@ export function Team({ currentId }: { currentId: string }) {
   const filtered = (data?.items || []).filter(
     (u) => filter === "all" || u.status === filter,
   );
+  const permissions = [
+    ...new Set(
+      data?.roles
+        .filter((role) => roles.includes(role.id))
+        .flatMap((role) => role.permissions),
+    ),
+  ];
   return (
     <main className="ops-page team-page">
       <div className="ops-heading">
@@ -230,7 +264,7 @@ export function Team({ currentId }: { currentId: string }) {
               )}
               <Button
                 onClick={() => void save()}
-                disabled={busy || (status === "active" && !role)}
+                disabled={busy || (status === "active" && !roles.length)}
               >
                 {status === "active" ? (
                   <ShieldCheck size={16} />
@@ -247,63 +281,68 @@ export function Team({ currentId }: { currentId: string }) {
           }
         >
           {error && <Notice error>{error}</Notice>}
-          <fieldset className="role-picker">
-            <legend>¿Qué necesita hacer esta persona?</legend>
-            {data?.roles.map((r) => (
-              <button
-                type="button"
-                key={r.id}
-                aria-pressed={role === r.id}
-                onClick={() => setRole(r.id)}
-                disabled={busy}
-                className={role === r.id ? "selected" : ""}
-              >
-                <span>
-                  <strong>{r.name}</strong>
-                  <small>{r.description}</small>
-                </span>
-                {role === r.id ? (
-                  <Check size={18} />
-                ) : (
-                  <span className="role-empty-mark" />
-                )}
-              </button>
-            ))}
+          <fieldset className="role-picker" onKeyDown={moveRoleFocus}>
+            <legend>Selecciona uno o más roles</legend>
+            {data?.roles.map((r) => {
+              const isSelected = roles.includes(r.id);
+              return (
+                <button
+                  type="button"
+                  key={r.id}
+                  aria-pressed={isSelected}
+                  onClick={() => toggleRole(r.id)}
+                  disabled={busy}
+                  className={isSelected ? "selected" : ""}
+                >
+                  <span>
+                    <strong>{r.name}</strong>
+                    <small>{r.description}</small>
+                  </span>
+                  {isSelected ? (
+                    <Check size={18} aria-hidden="true" />
+                  ) : (
+                    <span className="role-empty-mark" />
+                  )}
+                </button>
+              );
+            })}
           </fieldset>
-          <p className="role-sections">
-            Secciones:{" "}
-            {data?.roles
-              .find((r) => r.id === role)
-              ?.permissions.map(
-                (p) =>
-                  ({
-                    dashboard: "Resumen",
-                    projects: "Proyectos",
-                    leads: "Leads",
-                    works: "Obras asignadas",
-                    works_all: "Consultar todas las obras",
-                    works_manage: "Coordinar y asignar obras",
-                    works_report: "Registrar avances",
-                    gallery: "Galería",
-                    inventory: "Consultar inventario",
-                    inventory_request: "Solicitar materiales y compras",
-                    inventory_reserve: "Reservar materiales",
-                    inventory_receive: "Recibir compras y devoluciones",
-                    inventory_dispatch: "Confirmar salidas",
-                    inventory_adjust: "Ajustar existencias",
-                    inventory_catalog: "Administrar catálogo",
-                    inventory_equipment: "Gestionar equipos",
-                    purchases_manage: "Autorizar compras",
-                    dispatches: "Despachos",
-                    accounting: "Consultar Contabilidad",
-                    accounting_write: "Gestionar documentos, gastos y cobros",
-                    accounting_issue: "Emitir y verificar documentos fiscales",
-                    accounting_labor: "Acceder a planilla y honorarios",
-                    users: "Equipo",
-                  })[p],
-              )
-              .join(" · ")}
-          </p>
+          {permissions.length > 0 && (
+            <p className="role-sections">
+              Permisos asignados:{" "}
+              {permissions
+                .map(
+                  (p) =>
+                    ({
+                      dashboard: "Resumen",
+                      projects: "Proyectos",
+                      leads: "Leads",
+                      works: "Obras asignadas",
+                      works_all: "Consultar todas las obras",
+                      works_manage: "Coordinar y asignar obras",
+                      works_report: "Registrar avances",
+                      gallery: "Galería",
+                      inventory: "Consultar inventario",
+                      inventory_request: "Solicitar materiales y compras",
+                      inventory_reserve: "Reservar materiales",
+                      inventory_receive: "Recibir compras y devoluciones",
+                      inventory_dispatch: "Confirmar salidas",
+                      inventory_adjust: "Ajustar existencias",
+                      inventory_catalog: "Administrar catálogo",
+                      inventory_equipment: "Gestionar equipos",
+                      purchases_manage: "Autorizar compras",
+                      dispatches: "Despachos",
+                      accounting: "Consultar Contabilidad",
+                      accounting_write: "Gestionar documentos, gastos y cobros",
+                      accounting_issue:
+                        "Emitir y verificar documentos fiscales",
+                      accounting_labor: "Acceder a planilla y honorarios",
+                      users: "Equipo",
+                    })[p],
+                )
+                .join(" · ")}
+            </p>
+          )}
           {selected.status !== "pending" && (
             <div className="role-status">
               <Select
@@ -314,7 +353,7 @@ export function Team({ currentId }: { currentId: string }) {
                   {
                     value: "active",
                     label: "Aprobar acceso",
-                    description: "Puede entrar con el rol seleccionado",
+                    description: "Puede entrar con los roles seleccionados",
                   },
                   {
                     value: "suspended",

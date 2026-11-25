@@ -160,17 +160,39 @@ let list = expect(
 assert.equal(list.total, 1);
 assert.equal(list.items[0].emailVerified, true);
 assert.ok(!JSON.stringify(list).includes("passwordHash"));
+const approval = { revision: list.items[0].revision, status: "active" };
+expect(
+  await req("/admin/users/" + userId, "PUT", { ...approval, roles: [] }, admin),
+  400,
+);
+expect(
+  await req(
+    "/admin/users/" + userId,
+    "PUT",
+    { ...approval, roles: ["commercial", "missing-role"] },
+    admin,
+  ),
+  404,
+);
 let updated = expect(
   await req(
     "/admin/users/" + userId,
     "PUT",
-    { revision: list.items[0].revision, role: "commercial", status: "active" },
+    { ...approval, roles: ["commercial", "warehouse", "warehouse"] },
     admin,
   ),
   200,
 ).body;
+assert.deepEqual(updated.roles, ["commercial", "warehouse"]);
+assert.equal(updated.roleName, "Comercial · Almacén");
+assert.equal(updated.permissions.filter((p) => p === "dashboard").length, 1);
+const approvalSession = expect(
+  await req("/auth/me", "GET", null, member),
+  200,
+).body;
+assert.deepEqual(approvalSession.user.roles, updated.roles);
 expect(await req("/admin/crm/leads", "GET", null, member), 200);
-expect(await req("/admin/crm/materials", "GET", null, member), 403);
+expect(await req("/admin/crm/materials", "GET", null, member), 200);
 expect(await req("/admin/users", "GET", null, member), 403);
 expect(
   await req(
@@ -190,6 +212,7 @@ updated = expect(
   ),
   200,
 ).body;
+assert.deepEqual(updated.roles, ["warehouse"]);
 expect(await req("/admin/crm/leads", "GET", null, member), 403);
 expect(await req("/admin/crm/materials", "GET", null, member), 200);
 const dashboard = expect(

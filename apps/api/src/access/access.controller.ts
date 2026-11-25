@@ -24,6 +24,7 @@ import { Database } from "../database/database.module";
 import { AuthModule } from "../auth/auth.module";
 import { AuthService } from "../auth/auth.service";
 import { RequirePermission } from "../auth/route-access";
+import { assignedRoles } from "../auth/auth.types";
 import type { AuthenticatedRequest, UserDocument } from "../auth/auth.types";
 import { parse } from "../common/validation";
 import { MailService } from "../mail/mail.service";
@@ -90,10 +91,17 @@ class UsersController {
       z
         .object({
           role: roleSchema.nullable().optional(),
+          roles: z.array(roleSchema).optional(),
           status: accountStatusSchema,
           revision: z.number().int().positive(),
         })
-        .strict(),
+        .strict()
+        .refine(
+          (input) => input.roles === undefined || input.role === undefined,
+          {
+            message: "Envía los roles en un solo campo.",
+          },
+        ),
       body,
     );
     if (id === req.session.user.id)
@@ -103,53 +111,56 @@ class UsersController {
     if (!ObjectId.isValid(id)) throw new NotFoundException();
     const user = await this.auth.users.findOne({ _id: new ObjectId(id) });
     if (!user) throw new NotFoundException();
-    const roleId =
-      data.role ?? (data.status === "active" ? null : (user.role ?? null));
-    const role = roleId
-      ? (await this.auth.roles.list()).find((entry) => entry.id === roleId)
-      : undefined;
-    if (data.role && !role)
+    const previousRoles = assignedRoles(user);
+    const requestedRoles = data.roles ?? (data.role ? [data.role] : undefined);
+    const roles = [
+      ...new Set(
+        requestedRoles ?? (data.status === "active" ? [] : previousRoles),
+      ),
+    ];
+    const catalog = await this.auth.roles.list();
+    const validRoles = new Set(catalog.map((role) => role.id));
+    if (requestedRoles && roles.some((id) => !validRoles.has(id)))
       throw new NotFoundException(
-        "El rol ya no está disponible. Actualiza la lista.",
+        "Uno de los roles ya no está disponible. Actualiza la lista.",
       );
-    if (data.status === "active" && !role)
+    if (data.status === "active" && roles.length === 0)
       throw new BadRequestException(
-        "Selecciona un rol para aprobar el acceso.",
+        "Selecciona al menos un rol para aprobar el acceso.",
       );
 
-    if (!(await this.auth.view(user)).emailVerified && data.status === "active")
+    if (
+      !(await this.auth.view(user, catalog)).emailVerified &&
+      data.status === "active"
+    )
       throw new ForbiddenException(
         "La persona debe verificar su correo antes de recibir acceso.",
       );
+    if (data.revision !== (user.revision ?? 1))
+      throw new ConflictException(
+        "Este acceso cambió en otra sesión. Actualiza la lista.",
+      );
+    const from = {
+      role: user.role ?? null,
+      roles: previousRoles,
+      status: user.status,
+    };
+    const to = { role: roles[0] ?? null, roles, status: data.status };
+    const event = { actor: req.session.user.id, at: new Date(), from, to };
     const saved = await this.auth.users.findOneAndUpdate(
       {
         _id: user._id,
-        ...(user.revision
-          ? { revision: data.revision }
-          : {
-              $or: [
-                { revision: { $exists: false } },
-                { revision: data.revision },
-              ],
-            }),
+        revision: user.revision ?? { $exists: false },
       },
       {
         $set: {
-          role: roleId,
-          status: data.status,
-          updatedAt: new Date(),
-          approvedBy: req.session.user.id,
-          approvedAt: new Date(),
+          ...to,
+          updatedAt: event.at,
+          approvedBy: event.actor,
+          approvedAt: event.at,
+          revision: data.revision + 1,
         },
-        $inc: { revision: 1 },
-        $push: {
-          accessEvents: {
-            actor: req.session.user.id,
-            at: new Date(),
-            from: { role: user.role, status: user.status },
-            to: { role: roleId, status: data.status },
-          },
-        },
+        $push: { accessEvents: event },
       },
       { returnDocument: "after" },
     );
@@ -159,11 +170,9 @@ class UsersController {
       );
     await this.database.db.collection("access_audit").insertOne({
       userId: id,
-      actor: req.session.user.id,
-      at: new Date(),
-      from: { role: user.role, status: user.status },
-      to: { role: saved.role, status: saved.status },
+      ...event,
     });
+    const access = await this.auth.view(saved, catalog);
     if (saved.email)
       await this.mail
         .queue(
@@ -178,7 +187,7 @@ class UsersController {
             name: saved.name,
             paragraphs: [
               saved.status === "active"
-                ? `Tu acceso fue aprobado con el rol ${role?.name}. Encontrarás las secciones disponibles al entrar al panel.`
+                ? `Roles asignados: ${access.roleName}. Encontrarás las secciones disponibles al entrar al panel.`
                 : "Un administrador actualizó el estado de tu acceso. Si necesitas ayuda, comunícate con el equipo de VECA.",
             ],
             action: panelAction("Ir al panel"),
@@ -186,7 +195,7 @@ class UsersController {
           `access:${id}:${saved.revision}`,
         )
         .catch(() => {});
-    return { ...(await this.auth.view(saved)), revision: saved.revision };
+    return { ...access, revision: saved.revision };
   }
 }
 @RequirePermission("dashboard")

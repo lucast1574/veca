@@ -25,6 +25,7 @@ import type {
   SessionDocument,
   AuthenticatedSession,
 } from "./auth.types";
+import { assignedRoles } from "./auth.types";
 import { digest, equal } from "./auth.crypto";
 @Injectable()
 export class AuthService {
@@ -41,9 +42,12 @@ export class AuthService {
     user: UserDocument,
     catalog?: RoleDefinition[],
   ): Promise<SessionUser> {
-    const role = (catalog || (await this.roles.list())).find(
-      (r) => r.id === user.role,
-    );
+    const roles = assignedRoles(user);
+    const definitions = catalog ?? (await this.roles.list());
+    const rolesById = new Map(definitions.map((role) => [role.id, role]));
+    const activeRoles = roles
+      .map((id) => rolesById.get(id))
+      .filter((role) => role !== undefined);
     const legacy = user.username === "admin" && !user.email;
     const status = user.status || (legacy ? "active" : "pending");
     const emailVerified = user.emailVerified || legacy;
@@ -52,8 +56,9 @@ export class AuthService {
       username: user.username,
       name: user.name || (legacy ? "Administrador" : user.username),
       email: user.email || null,
-      role: user.role,
-      roleName: role?.name || null,
+      role: roles[0] ?? null,
+      roles: activeRoles.map((role) => role.id),
+      roleName: activeRoles.map((role) => role.name).join(" · ") || null,
       status,
       emailVerified,
       avatarUrl:
@@ -72,7 +77,7 @@ export class AuthService {
       accountCreatedAt: user.createdAt?.toISOString() || null,
       permissions:
         status === "active" && emailVerified
-          ? [...(role?.permissions || [])]
+          ? [...new Set(activeRoles.flatMap((role) => role.permissions))]
           : [],
     };
   }
@@ -179,41 +184,56 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     const defaults = await this.roles.defaults();
     const catalog = await this.roles.list();
-    const corporateRole = catalog.find((r) => r.id === defaults.corporateRole);
-    const corporate =
-      user.email?.split("@")[1] === defaults.corporateDomain && !!corporateRole;
+    const corporateRole =
+      user.email?.split("@")[1] === defaults.corporateDomain
+        ? catalog.find((r) => r.id === defaults.corporateRole)
+        : undefined;
+    const currentRoles = assignedRoles(user);
     const invited =
       user.trustedInvitation &&
-      catalog.some((r) => r.id === user.role) &&
+      catalog.some((r) => currentRoles.includes(r.id)) &&
       user.status === "pending";
+    const autoRoles = invited
+      ? currentRoles
+      : corporateRole
+        ? [corporateRole.id]
+        : [];
     const auto =
-      (corporate || invited) &&
+      autoRoles.length > 0 &&
       (!user.emailVerified || user.status === "pending") &&
       user.status !== "suspended" &&
       user.status !== "rejected";
-    const fields: Partial<UserDocument> = {
+    const verification: Partial<UserDocument> = {
       ...patch,
       emailVerified: true,
       updatedAt: new Date(),
-      ...(auto
-        ? {
+    };
+    if (auto) {
+      const saved = await this.users.updateOne(
+        { _id: userId, revision: user.revision ?? { $exists: false } },
+        {
+          $set: {
+            ...verification,
             status: "active",
-            role:
-              user.trustedInvitation && user.role
-                ? user.role
-                : corporateRole!.id,
+            role: autoRoles[0],
+            roles: autoRoles,
             approvedBy: invited
               ? "Invitación verificada"
               : "Dominio corporativo verificado",
-            approvedAt: new Date(),
-          }
-        : {}),
-    };
-    await this.users.updateOne(
+            approvedAt: verification.updatedAt,
+          },
+          $inc: { revision: 1 },
+        },
+      );
+      if (saved.matchedCount) return userId;
+    }
+    const previous = await this.users.findOneAndUpdate(
       { _id: userId },
-      { $set: fields, $inc: { revision: 1 } },
+      { $set: verification, $inc: { revision: 1 } },
+      { returnDocument: "before" },
     );
-    if (!user.emailVerified && !auto)
+    if (!previous) throw new UnauthorizedException();
+    if (!previous.emailVerified && previous.status === "pending")
       await this.mail
         .queue(
           config.MAIL_NOTIFY_TO,
@@ -222,7 +242,7 @@ export class AuthService {
             title: "Una persona solicita acceso",
             preview: "Revisa una nueva solicitud en el panel",
             paragraphs: [
-              `${user.name || user.email} confirmó su correo y espera tu aprobación. Asigna un rol desde el panel de usuarios.`,
+              `${user.name || user.email} confirmó su correo y espera tu aprobación. Revisa sus roles desde el panel de usuarios.`,
             ],
             action: panelAction("Revisar solicitudes", "#users"),
           },

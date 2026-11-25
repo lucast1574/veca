@@ -82,7 +82,7 @@ export function UserProfile({
               {accountStatus[user.status]}
             </span>
             <dl className="profile-identity-details">
-              <ProfileField label="Rol en la empresa">
+              <ProfileField label="Roles en la empresa">
                 {user.roleName || "Por asignar"}
               </ProfileField>
               <ProfileField label="Verificación del correo">

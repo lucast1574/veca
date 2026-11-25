@@ -5,6 +5,7 @@ export interface UserDocument {
   _id: ObjectId;
   username: string;
   role: Role | null;
+  roles?: Role[];
   passwordHash: string | null;
   name?: string;
   email?: string;
@@ -28,10 +29,14 @@ export interface UserDocument {
   accessEvents?: {
     actor: string;
     at: Date;
-    from: { role: Role | null; status?: AccountStatus };
-    to: { role: Role | null; status: AccountStatus };
+    from: { role: Role | null; roles?: Role[]; status?: AccountStatus };
+    to: { role: Role | null; roles?: Role[]; status: AccountStatus };
   }[];
 }
+export function assignedRoles(user: Pick<UserDocument, "role" | "roles">) {
+  return user.roles ?? (user.role ? [user.role] : []);
+}
+
 export interface SessionDocument {
   _id?: ObjectId;
   userId: ObjectId;

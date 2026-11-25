@@ -20,6 +20,7 @@ import { parse } from "../common/validation";
 import { config } from "../common/config";
 import { Database } from "../database/database.module";
 import { AuthService } from "../auth/auth.service";
+import { assignedRoles } from "../auth/auth.types";
 import type { AuthenticatedRequest, UserDocument } from "../auth/auth.types";
 import { RequirePermission } from "../auth/route-access";
 
@@ -144,6 +145,7 @@ export class AdministrationController {
           name: 1,
           username: 1,
           role: 1,
+          roles: 1,
           status: 1,
           email: 1,
           emailVerified: 1,
@@ -228,7 +230,11 @@ export class AdministrationController {
         return {
           id: String(user._id),
           name: user.name || (legacyAdmin ? "Administrador" : user.username),
-          role: user.role ? (roleNames.get(user.role) ?? null) : null,
+          role:
+            assignedRoles(user)
+              .map((id) => roleNames.get(id))
+              .filter(Boolean)
+              .join(" · ") || null,
           status: user.status ?? (legacyAdmin ? "active" : "pending"),
           activity: {
             crm: c?.count ?? 0,

@@ -52,6 +52,7 @@ export type SessionUser = {
   name: string;
   email: string | null;
   role: Role | null;
+  roles?: Role[];
   roleName: string | null;
   status: AccountStatus;
   emailVerified: boolean;
@@ -73,7 +74,7 @@ export function canViewAdministration(user: SessionUser) {
   return (
     user.status === "active" &&
     user.emailVerified &&
-    user.role === "admin" &&
+    (user.roles?.includes("admin") ?? user.role === "admin") &&
     user.permissions.includes("users")
   );
 }

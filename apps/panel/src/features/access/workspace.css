@@ -256,6 +256,10 @@
   color: #3e6238;
   border-color: #a9b99e;
 }
+.role-picker > button:focus-visible strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .role-picker strong {
   font-size: 13px;
   font-weight: 600;

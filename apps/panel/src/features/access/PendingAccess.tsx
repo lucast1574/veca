@@ -48,7 +48,7 @@ export function PendingAccess({
         </h1>
         <p>
           {session.user.status === "pending"
-            ? "Un administrador debe aprobar tu acceso y asignarte un rol. Cuando lo haga, podrás entrar a las secciones de tu equipo."
+            ? "Un administrador debe aprobar tu acceso y asignarte roles. Cuando lo haga, podrás entrar a las secciones de tu equipo."
             : "Comunícate con el administrador de VECA para revisar el estado de tu cuenta."}
         </p>
         <span>
