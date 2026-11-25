@@ -51,6 +51,21 @@
 }
 .veca-select .veca-select-search {
   cursor: text;
+  padding-inline-end: 48px;
+}
+.veca-select-search-chevron {
+  position: absolute;
+  inset-inline-end: 15px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  color: var(--select-muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: transform 0.2s;
+}
+.veca-select.is-open > .veca-select-search-chevron {
+  transform: translateY(-50%) rotate(180deg);
 }
 .veca-select .veca-select-search::placeholder,
 .veca-select-empty {

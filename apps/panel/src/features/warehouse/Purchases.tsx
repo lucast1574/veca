@@ -515,11 +515,15 @@ function ReceiveForm({
           readOnly={Boolean(pending)}
         />
       </Field>
-      <Field label="Guía, comprobante o referencia de la entrega">
+      <Field
+        label="Número de guía o documento de entrega"
+        hint="Lo encuentras en la guía o documento que entrega el proveedor junto al material."
+      >
         <input
           name="reference"
           maxLength={100}
           required
+          placeholder="Ej.: T001-000185"
           defaultValue={pending?.reference}
           readOnly={Boolean(pending)}
         />
