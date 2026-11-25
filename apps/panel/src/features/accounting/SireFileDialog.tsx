@@ -81,8 +81,11 @@ export function SireFileDialog({
             <strong>{month}</strong>.
           </li>
           <li>
-            Descarga la propuesta del Registro de compras (RCE) o de ventas
-            (RVIE), según el registro que compararás.
+            Descarga la propuesta del{" "}
+            {book === "purchases"
+              ? "Registro de compras (RCE)"
+              : "Registro de ventas e ingresos (RVIE)"}
+            .
           </li>
           <li>
             Si llega en ZIP, extráelo y adjunta el <strong>TXT original</strong>
@@ -108,8 +111,10 @@ export function SireFileDialog({
         en SUNAT o solo en VECA. Las facturas en soles se comparan
         automáticamente; otros tipos, monedas o datos incompletos requieren
         revisión manual. Este paso no declara impuestos ni modifica tus
-        registros contables. Las compras nuevas quedan pendientes en la bandeja
-        de VECA.
+        registros contables.{" "}
+        {book === "purchases"
+          ? "Las compras nuevas quedan pendientes en la bandeja de VECA."
+          : "Las ventas que aparezcan solo en SUNAT requieren revisión; no se emite otra factura al comparar."}
       </p>
     </WarehouseForm>
   );

@@ -18,11 +18,14 @@ const tabs = [
 ] as const;
 
 function locationSection() {
-  const [, part, id, action] = location.hash.split("/");
+  const [path, search] = location.hash.split("?");
+  const [, part, id, action] = path.split("/");
+  const rawMonth = new URLSearchParams(search).get("month") || "";
+  const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(rawMonth) ? rawMonth : undefined;
   const tab = tabs.find(([value]) => value === part);
   return tab
-    ? { tab: tab[0], id, prepare: action === "preparar" }
-    : { tab: "guias" as const, id: part, prepare: false };
+    ? { tab: tab[0], id, prepare: action === "preparar", month }
+    : { tab: "guias" as const, id: part, prepare: false, month };
 }
 
 export function AccountingWorkspace({
@@ -73,10 +76,12 @@ export function AccountingWorkspace({
         {route.tab === "facturas" && (
           <AccountingInvoices
             selected={
-              ["solicitadas", "por-cobrar"].includes(route.id || "")
+              ["solicitadas", "por-cobrar", "sunat"].includes(route.id || "")
                 ? ""
                 : route.id || ""
             }
+            review={route.id === "sunat"}
+            initialMonth={route.month}
             queue={
               route.id === "solicitadas"
                 ? "requested"
@@ -84,20 +89,26 @@ export function AccountingWorkspace({
                   ? "collect"
                   : ""
             }
-            key={route.id || "list"}
+            key={`${route.id || "list"}:${route.month || ""}`}
           />
         )}
         {route.tab === "gastos" && (
           <AccountingCosts
-            key={`${route.id || "all"}:${route.prepare}`}
+            key={`${route.id || "all"}:${route.prepare}:${route.month || ""}`}
             purchaseId={route.id}
             preparePurchase={route.prepare}
             inventoryAccess={inventoryAccess}
+            initialMonth={route.month}
           />
         )}
         {route.tab === "personal" &&
           user.permissions.includes("accounting_labor") && <LaborWorkspace />}
-        {route.tab === "impuestos" && <TaxPeriod />}
+        {route.tab === "impuestos" && (
+          <TaxPeriod
+            key={route.month || "current"}
+            initialMonth={route.month}
+          />
+        )}
         {route.tab === "margen" && <Margin />}
       </main>
     </AccountingAccess.Provider>

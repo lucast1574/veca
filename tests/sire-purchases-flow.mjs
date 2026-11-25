@@ -46,6 +46,7 @@ try {
     return { status: response.status, data: await response.json() };
   }
   const syncPath = `/period/${month}/reconcile/purchases/automatic`;
+  const periodBefore = (await request(`/period/${month}`)).data;
   const before = (await request(`/sire/purchases?month=${month}&state=all`))
     .data;
   assert.ok(before.checkedAt, "the server supplies the refresh baseline");
@@ -60,6 +61,13 @@ try {
   let list = await inbox();
   assert.equal(list.total, 2);
   assert.equal(list.pending, 2);
+  const periodDownloaded = (await request(`/period/${month}`)).data;
+  assert.equal(
+    periodDownloaded.costsNet,
+    periodBefore.costsNet,
+    "downloaded purchases are not saved costs yet",
+  );
+  assert.equal(periodDownloaded.sirePurchases.pending, 2);
   const first = list.items.find((row) => row.reference === "FQA-1");
   const second = list.items.find((row) => row.reference === "FQA-2");
   ids.push(first.id, second.id);
@@ -164,6 +172,11 @@ try {
   assert.equal(cost.netCents, 10000);
   assert.equal(cost.reviewed, false);
   assert.equal(cost.kind, "transport");
+  const periodSaved = (await request(`/period/${month}`)).data;
+  assert.equal(periodSaved.costsNet, periodBefore.costsNet + 10000);
+  assert.equal(periodSaved.costsTax, periodBefore.costsTax + 1800);
+  assert.equal(periodSaved.pendingCosts, periodBefore.pendingCosts + 1);
+  assert.equal(periodSaved.sirePurchases.pending, 1);
   assert.deepEqual(cost.allocations, []);
   const again = await request(importPath, "POST", body);
   assert.equal(again.data.alreadyRegistered, true);

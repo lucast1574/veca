@@ -719,22 +719,54 @@ export class AccountingService {
   }
 
   async period(month: string): Promise<AccountingPeriod> {
+    const start = new Date(`${month}-01T00:00:00-05:00`);
+    const end = new Date(start);
+    end.setUTCMonth(end.getUTCMonth() + 1);
+    const isIssued = { $in: ["$status", issued] };
     const [sales, costs] = await Promise.all([
       this.invoices
         .aggregate<{
           net: number;
           tax: number;
           count: number;
+          toIssue: number;
+          toConfirm: number;
+          toCorrect: number;
         }>([
           {
-            $match: { issueDate: monthBounds(month), status: { $in: issued } },
+            $match: {
+              $or: [
+                { issueDate: monthBounds(month) },
+                {
+                  status: { $nin: issued },
+                  issueDate: { $in: ["", null] },
+                  createdAt: {
+                    $gte: start.toISOString(),
+                    $lt: end.toISOString(),
+                  },
+                },
+              ],
+            },
           },
           {
             $group: {
               _id: null,
-              net: { $sum: "$netCents" },
-              tax: { $sum: "$taxCents" },
-              count: { $sum: 1 },
+              net: { $sum: { $cond: [isIssued, "$netCents", 0] } },
+              tax: { $sum: { $cond: [isIssued, "$taxCents", 0] } },
+              count: { $sum: { $cond: [isIssued, 1, 0] } },
+              toIssue: {
+                $sum: {
+                  $cond: [{ $in: ["$status", ["requested", "draft"]] }, 1, 0],
+                },
+              },
+              toConfirm: {
+                $sum: {
+                  $cond: [{ $in: ["$status", ["sending", "pending"]] }, 1, 0],
+                },
+              },
+              toCorrect: {
+                $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] },
+              },
             },
           },
         ])
@@ -767,6 +799,11 @@ export class AccountingService {
       costsTax: costs?.tax || 0,
       costsCount: costs?.count || 0,
       pendingCosts: costs?.pending || 0,
+      pendingInvoices: {
+        toIssue: sales?.toIssue || 0,
+        toConfirm: sales?.toConfirm || 0,
+        toCorrect: sales?.toCorrect || 0,
+      },
     };
   }
 

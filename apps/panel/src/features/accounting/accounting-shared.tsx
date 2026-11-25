@@ -186,3 +186,16 @@ export function Pagination({
     </nav>
   );
 }
+
+export function Summary({ entries }: { entries: [string, number][] }) {
+  return (
+    <div className="accounting-summary">
+      {entries.map(([name, value]) => (
+        <div key={name}>
+          <span>{name}</span>
+          <strong>{amount(value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}

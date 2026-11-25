@@ -13,6 +13,7 @@ import { Select } from "@veca/ui/src/Select";
 import { Button, Field, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import { API_BASE, api } from "../../lib/api";
+import { SireSalesReview } from "./SireSalesReview";
 import {
   accountingPost,
   accountingPath,
@@ -24,6 +25,7 @@ import {
   Refresh,
   today,
   useAccountingQuery,
+  Summary,
 } from "./accounting-shared";
 
 const root = accountingPath + "/invoices";
@@ -48,26 +50,33 @@ type InvoicePage = {
 export function AccountingInvoices({
   selected,
   queue = "",
+  review = false,
+  initialMonth,
 }: {
   selected: string;
   queue?: "" | "requested" | "collect";
+  review?: boolean;
+  initialMonth?: string;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const canIssue = useAccountingPermission("accounting_issue");
   const [page, setPage] = useState(1);
   const query = useAccountingQuery<InvoicePage>(
-    selected && selected !== "nueva"
+    review || (selected && selected !== "nueva")
       ? ""
       : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
   );
-  if (selected && selected !== "nueva") return <InvoiceDetail id={selected} />;
+  if (!review && selected && selected !== "nueva")
+    return <InvoiceDetail id={selected} />;
   const rows = query.data?.items || [];
   return (
     <section aria-labelledby="accounting-invoices">
       <header className="accounting-section-head">
         <h2 id="accounting-invoices">Facturas y cobros</h2>
         <div className="accounting-tools">
-          <Refresh loading={query.loading} onClick={query.refresh} />
+          {!review && (
+            <Refresh loading={query.loading} onClick={query.refresh} />
+          )}
           {canWrite && (
             <a
               className="btn btn-primary accounting-inline"
@@ -82,7 +91,7 @@ export function AccountingInvoices({
         <a
           className="accounting-inline"
           href={baseHash}
-          aria-current={!queue ? "page" : undefined}
+          aria-current={!queue && !review ? "page" : undefined}
         >
           Todas
         </a>
@@ -100,60 +109,80 @@ export function AccountingInvoices({
         >
           Por cobrar
         </a>
+        <a
+          className="accounting-inline"
+          href={`${baseHash}/sunat${initialMonth ? `?month=${initialMonth}` : ""}`}
+          aria-current={review ? "page" : undefined}
+        >
+          Revisión con SUNAT
+        </a>
       </nav>
-      {query.data && !query.data.enabled && (
-        <Notice>
-          Emisión electrónica pendiente de configuración. Puedes preparar
-          borradores.
-        </Notice>
+      {review ? (
+        <SireSalesReview initialMonth={initialMonth} />
+      ) : (
+        <>
+          {query.data && !query.data.enabled && (
+            <Notice>
+              Emisión electrónica pendiente de configuración. Puedes preparar
+              borradores.
+            </Notice>
+          )}
+          <QueryState
+            {...query}
+            empty={
+              queue
+                ? "No hay facturas en esta bandeja."
+                : "Todavía no hay facturas registradas."
+            }
+          >
+            {rows.length > 0 && (
+              <ul className="dispatch-list dispatch-queue">
+                {rows.map((row) => (
+                  <li key={row.id}>
+                    <div>
+                      <strong>{row.customer}</strong>
+                      <small>
+                        {row.number || row.workName || "Venta directa"}
+                      </small>
+                    </div>
+                    <div className="accounting-value">
+                      {row.status === "requested"
+                        ? "—"
+                        : amount(row.totalCents)}
+                      {isIssued(row) && (
+                        <small>
+                          Por cobrar {amount(row.totalCents - row.paidCents)}
+                        </small>
+                      )}
+                    </div>
+                    <span className="dispatch-pill" data-state={row.status}>
+                      {label[row.status]}
+                    </span>
+                    <a
+                      className="accounting-inline"
+                      href={`${baseHash}/${row.id}`}
+                    >
+                      Abrir <ChevronRight size={16} />
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </QueryState>
+          {selected === "nueva" && canWrite && (
+            <InvoiceForm
+              onClose={() => {
+                location.hash = baseHash;
+              }}
+            />
+          )}
+          <Pagination
+            page={page}
+            hasMore={Boolean(query.data?.hasMore)}
+            change={setPage}
+          />
+        </>
       )}
-      <QueryState
-        {...query}
-        empty={
-          queue
-            ? "No hay facturas en esta bandeja."
-            : "Todavía no hay facturas registradas."
-        }
-      >
-        {rows.length > 0 && (
-          <ul className="dispatch-list dispatch-queue">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <div>
-                  <strong>{row.customer}</strong>
-                  <small>{row.number || row.workName || "Venta directa"}</small>
-                </div>
-                <div className="accounting-value">
-                  {row.status === "requested" ? "—" : amount(row.totalCents)}
-                  {isIssued(row) && (
-                    <small>
-                      Por cobrar {amount(row.totalCents - row.paidCents)}
-                    </small>
-                  )}
-                </div>
-                <span className="dispatch-pill" data-state={row.status}>
-                  {label[row.status]}
-                </span>
-                <a className="accounting-inline" href={`${baseHash}/${row.id}`}>
-                  Abrir <ChevronRight size={16} />
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </QueryState>
-      {selected === "nueva" && canWrite && (
-        <InvoiceForm
-          onClose={() => {
-            location.hash = baseHash;
-          }}
-        />
-      )}
-      <Pagination
-        page={page}
-        hasMore={Boolean(query.data?.hasMore)}
-        change={setPage}
-      />
     </section>
   );
 }
@@ -683,18 +712,5 @@ function InvoiceDetail({ id }: { id: string }) {
         </Modal>
       )}
     </section>
-  );
-}
-
-export function Summary({ entries }: { entries: [string, number][] }) {
-  return (
-    <div className="accounting-summary">
-      {entries.map(([name, value]) => (
-        <div key={name}>
-          <span>{name}</span>
-          <strong>{amount(value)}</strong>
-        </div>
-      ))}
-    </div>
   );
 }

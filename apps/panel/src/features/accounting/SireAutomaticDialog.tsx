@@ -97,7 +97,7 @@ export function SireAutomaticDialog({
       title={
         book === "purchases"
           ? "Comparar compras con SUNAT"
-          : "Revisar ventas en SUNAT"
+          : "Comparar ventas con SUNAT"
       }
       description={
         book === "purchases"
@@ -121,7 +121,7 @@ export function SireAutomaticDialog({
                 ? "Reintentar consulta"
                 : book === "purchases"
                   ? "Comparar compras"
-                  : "Revisar ventas"}
+                  : "Comparar ventas"}
           </Button>
         </footer>
       }

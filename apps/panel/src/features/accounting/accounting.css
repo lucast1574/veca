@@ -242,3 +242,63 @@ a.accounting-inline.btn-primary {
 .accounting-invoice-form .accounting-line + .btn {
   margin-top: 12px;
 }
+
+.accounting-tax-cards {
+  margin-top: 24px;
+}
+.accounting-tax-cards > section {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.accounting-tax-heading h3 {
+  margin: 8px 0;
+}
+.accounting-tax-heading p,
+.accounting-period-pending p {
+  margin: 0;
+}
+.accounting-tax-heading p,
+.accounting-period-pending {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--panel-secondary);
+}
+.accounting-period-pending {
+  margin: 4px 0 16px;
+}
+.accounting-period-pending strong {
+  color: var(--panel-ink);
+  font-variant-numeric: tabular-nums;
+}
+.accounting-tax-cards .accounting-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.accounting-tax-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 24px;
+  font-size: 12px;
+}
+.accounting-tax-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--panel-secondary);
+  text-decoration: none;
+}
+.accounting-tax-download:hover,
+.accounting-tax-download:focus-visible {
+  outline: none;
+  color: var(--panel-accent);
+  text-decoration: underline;
+}
+@media (max-width: 600px) {
+  .accounting-tax-cards > section {
+    padding: 20px 16px;
+  }
+}

@@ -163,6 +163,28 @@ export type AccountingPeriod = {
   costsTax: number;
   costsCount: number;
   pendingCosts: number;
+  pendingInvoices?: {
+    toIssue: number;
+    toConfirm: number;
+    toCorrect: number;
+  };
+  sirePurchases?: Pick<
+    SirePurchasePage,
+    "pending" | "review" | "syncedAt" | "syncFailed" | "syncing"
+  >;
+};
+export type AccountingTrends = {
+  months: {
+    period: string;
+    salesNet: number;
+    salesTax: number;
+    costsNet: number;
+    costsTax: number;
+  }[];
+  costBreakdown: {
+    kind: Exclude<CostInput["kind"], "materials">;
+    netCents: number;
+  }[];
 };
 export const accountingTotals = (items: InvoiceInput["items"]) => {
   const bases = items.map((item) =>

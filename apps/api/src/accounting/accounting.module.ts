@@ -38,6 +38,7 @@ import { ManualCostCheckService } from "./manual-cost-check.service";
 import { PurchaseRoutingService } from "./purchase-routing.service";
 import { AccountingPurchasesController } from "./accounting-purchases.controller";
 import { AccountingService } from "./accounting.service";
+import { AccountingTrendsService } from "./accounting-trends.service";
 import { SireService } from "./sire.service";
 import { SireProvider } from "./sire-provider";
 import { SireSyncService } from "./sire-sync.service";
@@ -59,6 +60,7 @@ class AccountingController {
     private readonly sire: SireService,
     private readonly purchases: SirePurchasesService,
     private readonly manualCosts: ManualCostCheckService,
+    private readonly trends: AccountingTrendsService,
   ) {}
 
   @Get("cost-origins")
@@ -316,8 +318,27 @@ class AccountingController {
   }
 
   @Get("period/:month")
-  period(@Param("month") month: string) {
-    return this.accounts.period(parse(accountingMonth, month));
+  async period(@Param("month") raw: string) {
+    const month = parse(accountingMonth, raw);
+    const [report, purchases] = await Promise.all([
+      this.accounts.period(month),
+      this.purchases.list(month, 1, "all"),
+    ]);
+    return {
+      ...report,
+      sirePurchases: {
+        pending: purchases.pending,
+        review: purchases.review,
+        syncedAt: purchases.syncedAt,
+        syncing: purchases.syncing,
+        syncFailed: purchases.syncFailed,
+      },
+    };
+  }
+
+  @Get("period/:month/overview")
+  overview(@Param("month") month: string) {
+    return this.trends.overview(parse(accountingMonth, month));
   }
 
   @Get("period/:month/:export")
@@ -399,6 +420,7 @@ class FiscalConnectionController {
   exports: [AccountingService],
   providers: [
     AccountingService,
+    AccountingTrendsService,
     ManualCostCheckService,
     PurchaseRoutingService,
     InvoiceProvider,

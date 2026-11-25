@@ -4,6 +4,7 @@ import {
 } from "./AccountingPurchaseOrders";
 import { SirePurchaseDialog } from "./SirePurchaseDialog";
 import { SirePurchaseInbox } from "./SirePurchaseInbox";
+import { SireClosingGuide } from "./SireClosingGuide";
 import { useAccountingPermission } from "./AccountingAccess";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -41,14 +42,16 @@ export function AccountingCosts({
   purchaseId,
   inventoryAccess,
   preparePurchase = false,
+  initialMonth,
 }: {
   preparePurchase?: boolean;
   purchaseId?: string;
   inventoryAccess: boolean;
+  initialMonth?: string;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const [page, setPage] = useState(1);
-  const [month, setMonth] = useState(today().slice(0, 7));
+  const [month, setMonth] = useState(initialMonth || today().slice(0, 7));
   const query = useAccountingQuery<CostPage>(
     `${path}?page=${page}${month ? `&month=${month}` : ""}${purchaseId ? `&purchase=${encodeURIComponent(purchaseId)}` : ""}`,
   );
@@ -140,7 +143,7 @@ export function AccountingCosts({
       {!purchaseId && month && (
         <SirePurchaseInbox
           month={month}
-          key={month}
+          key={`sire-inbox:${month}`}
           revision={inboxRevision}
           onSaved={(orderId) => {
             query.refresh();
@@ -213,6 +216,9 @@ export function AccountingCosts({
         hasMore={Boolean(query.data?.hasMore)}
         change={setPage}
       />
+      {!purchaseId && month && (
+        <SireClosingGuide key={`sire-closing:${month}`} month={month} />
+      )}
       {entry && (
         <CostForm
           current={entry === "new" ? undefined : entry}

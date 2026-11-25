@@ -114,8 +114,20 @@ try {
         ],
       },
     };
+    const periodPath = root + "/period/" + date.slice(0, 7);
+    const beforeDraft = await request(periodPath);
     const invoice = await request(root + "/invoices", 201, "POST", creation);
     assert.equal(invoice.totalCents, 11800);
+    const withDraft = await request(periodPath);
+    assert.equal(
+      withDraft.salesNet,
+      beforeDraft.salesNet,
+      "a draft is not an accepted sale",
+    );
+    assert.equal(
+      withDraft.pendingInvoices.toIssue,
+      beforeDraft.pendingInvoices.toIssue + 1,
+    );
     assert.equal(
       (await request(root + "/invoices", 201, "POST", creation)).id,
       invoice.id,
@@ -132,6 +144,14 @@ try {
         version: invoice.version,
       });
       assert.equal(issued.status, "accepted");
+      const acceptedPeriod = await request(periodPath);
+      assert.equal(acceptedPeriod.salesCount, beforeDraft.salesCount + 1);
+      assert.equal(acceptedPeriod.salesNet, beforeDraft.salesNet + 10000);
+      assert.equal(acceptedPeriod.salesTax, beforeDraft.salesTax + 1800);
+      assert.equal(
+        acceptedPeriod.pendingInvoices.toIssue,
+        beforeDraft.pendingInvoices.toIssue,
+      );
       await request(path + "/issue", 409, "POST", { version: invoice.version });
       const collected = await request(path + "/payment", 201, "POST", {
         version: issued.version,
@@ -164,6 +184,11 @@ try {
     const cost = await request(root + "/costs", 201, "POST", gasoline);
     const retried = await request(root + "/costs", 201, "POST", gasoline);
     assert.equal(retried.id, cost.id);
+    const withCost = await request(periodPath);
+    assert.equal(withCost.costsNet, beforeDraft.costsNet + 2500);
+    assert.equal(withCost.costsTax, beforeDraft.costsTax + 450);
+    assert.equal(withCost.costsCount, beforeDraft.costsCount + 1);
+    assert.equal(withCost.pendingCosts, beforeDraft.pendingCosts + 1);
     await request(root + "/costs", 409, "POST", {
       ...gasoline,
       data: { ...gasoline.data, taxCents: 465 },
@@ -193,6 +218,13 @@ try {
       { version: attached.version },
     );
     assert.equal(reviewed.reviewed, true);
+    const afterReview = await request(periodPath);
+    assert.equal(afterReview.pendingCosts, beforeDraft.pendingCosts);
+    assert.equal(
+      afterReview.costsNet,
+      withCost.costsNet,
+      "reviewing does not count the purchase again",
+    );
     await request(costPath, 409, "PUT", {
       version: reviewed.version,
       data: gasoline.data,

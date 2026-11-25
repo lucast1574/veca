@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 import { WorksWorkspace } from "../../src/features/works/WorksWorkspace";
 import { AccountingWorkspace } from "../../src/features/accounting/AccountingWorkspace";
 import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
-import { SireReconciliation } from "../../src/features/accounting/SireReconciliation";
+import { SireSalesReview } from "../../src/features/accounting/SireSalesReview";
 import type { AccountingMargin } from "@veca/content";
 import { margin, user, works } from "./fixtures";
 import { StoryFrame as Frame } from "./StoryFrame";
@@ -31,11 +31,11 @@ export const ObrasConActividad: Story = {
   render: workScreen,
 };
 export const ConciliacionSunat: Story = {
-  name: "Conciliación con SUNAT · Ayuda",
+  name: "Ventas y comparación con SUNAT",
   render: () => (
     <Frame view="accounting">
       <AccountingAccess.Provider value={["accounting_write"]}>
-        <SireReconciliation month="2026-11" />
+        <SireSalesReview initialMonth="2026-11" />
       </AccountingAccess.Provider>
     </Frame>
   ),
