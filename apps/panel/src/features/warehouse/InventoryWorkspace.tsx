@@ -9,7 +9,7 @@ import "./warehouse.css";
 const sections = [
   ["solicitudes", "Solicitudes"],
   ["materiales", "Materiales"],
-  ["compras", "Compras"],
+  ["compras", "Pedidos y recepciones"],
   ["equipos", "Equipos"],
 ] as const;
 

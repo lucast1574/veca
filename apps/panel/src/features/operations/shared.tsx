@@ -137,7 +137,7 @@ export function Movements({ items }: { items: Movement[] }) {
             </small>
             {m.leadId && <a href={`#leads/${m.leadId}`}>Ver obra</a>}
             {m.purchaseId && (
-              <a href={`#inventory/compras/${m.purchaseId}`}>Ver compra</a>
+              <a href={`#inventory/compras/${m.purchaseId}`}>Ver pedido</a>
             )}
           </div>
           <strong>

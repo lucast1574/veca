@@ -30,6 +30,8 @@ Reservas para cotizaciones, presupuestos y costos, proveedores y compras, cortes
 
 ## Compras de SUNAT y registro interno
 
+En Inventario, **Pedidos y recepciones** organiza los materiales pedidos a proveedores y su llegada física. Nuevo pedido y Preparar pedido guardan los materiales y cantidades previstos; Registrar recepción confirma lo recibido y aumenta el stock. Los estados distinguen Por preparar, Por recibir, Recepción parcial, Recibido y Cancelado. Las facturas y gastos se revisan en Contabilidad → Compras y gastos, vinculados al mismo pedido cuando corresponde. Los enlaces desde Obras y Contabilidad usan esta misma terminología.
+
 En Contabilidad → Compras y gastos, **Compras por registrar** es una bandeja persistente de facturas de proveedores, no un registro de pagos. El servidor consulta el mes actual y el anterior cada 15 minutos, reanuda trabajos pendientes y reintenta fallos con una espera de 5 minutos. El panel refresca la bandeja visible cada 30 segundos. Actualizar compras permite consultar otro periodo; cerrar el modal conserva el trabajo para que el servidor lo termine. No hay presentación fiscal automática.
 
 Cada factura permite completar un concepto y elegir gasto general, gasto de una obra o factura de una compra de Inventario. Los datos fiscales vienen del TXT original de SUNAT. Solo las facturas en PEN, con fecha y desglose neto/IGV válido y sin otros cargos, pueden incorporarse por este flujo. Otros tipos, monedas, discrepancias y duplicados se conservan para revisión; no se convierten ni se estiman impuestos.

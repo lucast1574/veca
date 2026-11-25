@@ -93,12 +93,12 @@ export function AccountingCosts({
         </div>
       </div>
       <p className="hint">
-        Registra y revisa los comprobantes. Las solicitudes y recepciones se
-        gestionan desde Inventario.
+        Registra y revisa los comprobantes. Los materiales se gestionan en
+        Inventario, en Pedidos y recepciones.
       </p>
       {purchaseId && (
         <p className="hint">
-          Mostrando el sustento de la compra seleccionada.{" "}
+          Mostrando los comprobantes del pedido seleccionado.{" "}
           <a className="accounting-inline" href="#accounting/gastos">
             Ver todos los gastos
           </a>
@@ -110,7 +110,7 @@ export function AccountingCosts({
                 className="accounting-inline"
                 href={`#inventory/compras/${purchaseId}`}
               >
-                Ver compra en Inventario
+                Ver pedido y recepciones
               </a>
             </>
           )}
@@ -256,12 +256,12 @@ export function AccountingCosts({
               className="accounting-inline"
               href={`#inventory/compras/${active.purchaseId}`}
             >
-              Ver compra en Inventario
+              Ver pedido y recepciones
             </a>
           )}
           {active.purchaseId && (
             <RelatedCost
-              label="Compra asociada"
+              label="Pedido de materiales asociado"
               id={active.purchaseId}
               name="purchases"
             />
@@ -613,20 +613,20 @@ function CostForm({
             className="accounting-group"
             open={purchaseId || dispatchId ? true : undefined}
           >
-            <summary>Vincular compra o despacho</summary>
+            <summary>Vincular pedido de materiales o despacho</summary>
             {origins.error && <Notice error>{origins.error}</Notice>}
             <div className="accounting-grid">
               {kind !== "materials" && (
-                <Field label="Compra asociada">
+                <Field label="Pedido de materiales asociado">
                   <Select
-                    label="Compra asociada"
+                    label="Pedido de materiales asociado"
                     value={purchaseId}
                     onChange={(value) => {
                       setPurchase(value);
                       setDirty(true);
                     }}
                     options={[
-                      { value: "", label: "Sin compra asociada" },
+                      { value: "", label: "Sin pedido asociado" },
                       ...(origins.data?.purchases || []),
                     ]}
                   />

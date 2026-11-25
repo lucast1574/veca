@@ -71,6 +71,8 @@ export function Purchases({
         {query.data && (
           <PurchaseDetail
             row={query.data}
+            materials={materials.data || []}
+            materialsError={materials.error}
             refresh={query.refresh}
             accountingAccess={accountingAccess}
             canManage={canManage}
@@ -82,22 +84,23 @@ export function Purchases({
   return (
     <section className="warehouse-section" aria-labelledby="purchase-heading">
       <header className="accounting-section-head">
-        <h2 id="purchase-heading">Compras de materiales</h2>
+        <h2 id="purchase-heading">Pedidos y recepciones</h2>
         <div className="accounting-tools">
           <Refresh loading={list.loading} onClick={list.refresh} />
           {canManage && (
             <Button type="button" onClick={() => setCreate(true)}>
-              <Plus size={16} /> Nueva compra
+              <Plus size={16} /> Nuevo pedido
             </Button>
           )}
         </div>
       </header>
       <p className="hint">
-        Registra solicitudes, compras y recepciones aquí. Contabilidad revisa
-        los comprobantes en Compras y gastos.
+        Organiza los pedidos de materiales y registra lo recibido para
+        actualizar el stock. Las facturas se gestionan en Contabilidad, en
+        Compras y gastos.
       </p>
       <div className="accounting-filters">
-        <Field label="Buscar compras">
+        <Field label="Buscar pedidos">
           <input
             type="search"
             placeholder="Proveedor, obra o material"
@@ -110,7 +113,7 @@ export function Purchases({
           />
         </Field>
         <Select
-          label="Estado de la compra"
+          label="Estado del pedido"
           value={status}
           onChange={(value) => {
             setPage(1);
@@ -129,8 +132,8 @@ export function Purchases({
         {...list}
         empty={
           search || status
-            ? "No hay compras con estos filtros."
-            : "Todavía no se han registrado compras."
+            ? "No hay pedidos con estos filtros. Prueba otro estado o proveedor."
+            : "Aún no hay pedidos. Aquí aparecerán los materiales solicitados por las obras o derivados desde Contabilidad."
         }
       >
         {Boolean(list.data?.items.length) && (
@@ -140,7 +143,7 @@ export function Purchases({
                 <ClipboardList size={19} aria-hidden="true" />
                 <div>
                   <a href={`#inventory/compras/${row.id}`}>
-                    <strong>{row.supplier || "Solicitud de compra"}</strong>
+                    <strong>{row.supplier || "Pedido por preparar"}</strong>
                   </a>
                   <small>
                     {row.workName || "Almacén general"} · {date(row.createdAt)}
@@ -232,13 +235,11 @@ function PurchaseForm({
         requested?.invoiceSource
           ? "Preparar recepción de materiales"
           : requested
-            ? "Registrar compra solicitada"
-            : "Nueva compra"
+            ? "Preparar pedido de materiales"
+            : "Nuevo pedido de materiales"
       }
       action={
-        requested?.invoiceSource
-          ? "Guardar materiales de esta compra"
-          : "Registrar compra"
+        requested?.invoiceSource ? "Guardar materiales" : "Guardar pedido"
       }
       wide
       onClose={close}
@@ -280,12 +281,19 @@ function PurchaseForm({
     >
       {requested?.invoiceSource && (
         <Notice>
-          Esta compra viene de Contabilidad:{" "}
+          Factura enviada por Contabilidad:{" "}
           {requested.invoiceSource.reference || "sin número de factura"}.
           Identifica los materiales y distribuye{" "}
           {money(requested.invoiceSource.netCents)} sin IGV. Después registra lo
           recibido cuando llegue físicamente.
         </Notice>
+      )}
+      {!requested?.invoiceSource && (
+        <p className="hint">
+          Indica el proveedor, los materiales y las cantidades del pedido.
+          Guardarlo no aumenta el stock: registra la recepción cuando lleguen.
+          La factura se gestiona en Contabilidad.
+        </p>
       )}
       {loadError && <Notice error>{loadError}</Notice>}
       <div className="warehouse-grid">
@@ -317,7 +325,7 @@ function PurchaseForm({
           />
         </Field>
         {!requested && (
-          <Field label="Motivo de la compra">
+          <Field label="Motivo del pedido">
             <input name="reason" required maxLength={500} />
           </Field>
         )}
@@ -372,7 +380,7 @@ function PurchaseForm({
                   />
                 </Field>
               )}
-              <Field label="Cantidad comprada">
+              <Field label="Cantidad pedida">
                 <input
                   name={line.key + "-ordered"}
                   type="number"
@@ -391,7 +399,7 @@ function PurchaseForm({
                 />
               </Field>
             </div>
-            <Field label="¿Por qué se compró esa cantidad?">
+            <Field label="Motivo de esta cantidad">
               <input
                 name={line.key + "-reason"}
                 required
@@ -436,7 +444,7 @@ function PurchaseRequestForm({
   const id = useRef(recordId());
   return (
     <WarehouseForm
-      title="Solicitar compra para la obra"
+      title="Solicitar pedido para la obra"
       action="Enviar solicitud"
       wide
       onClose={close}
@@ -462,6 +470,10 @@ function PurchaseRequestForm({
         );
       }}
     >
+      <p className="hint">
+        Indica qué materiales faltan. Almacén revisará la solicitud y preparará
+        el pedido al proveedor.
+      </p>
       {loadError && <Notice error>{loadError}</Notice>}
       <Field label="Motivo de la solicitud">
         <input name="reason" maxLength={500} required />
@@ -518,12 +530,16 @@ function PurchaseRequestForm({
 
 function PurchaseDetail({
   row,
+  materials,
+  materialsError,
   refresh,
   accountingAccess,
   canManage,
   canReceive,
 }: {
   row: Purchase;
+  materials: Material[];
+  materialsError?: string;
   refresh: () => void;
   accountingAccess: boolean;
   canManage: boolean;
@@ -542,11 +558,11 @@ function PurchaseDetail({
   return (
     <section className="warehouse-section">
       <a href="#inventory/compras" className="warehouse-link">
-        Volver a compras
+        Volver a pedidos y recepciones
       </a>
       <header className="accounting-section-head">
         <div>
-          <h2>{row.supplier || "Solicitud de compra"}</h2>
+          <h2>{row.supplier || "Pedido por preparar"}</h2>
           <p className="hint">
             {row.workName || "Almacén general"} · {date(row.createdAt)} ·{" "}
             {row.actor}
@@ -560,7 +576,7 @@ function PurchaseDetail({
           </span>
           {canManage && row.status === "requested" && (
             <Button type="button" onClick={() => setOrdering(true)}>
-              {row.invoiceSource ? "Preparar recepción" : "Registrar compra"}
+              {row.invoiceSource ? "Preparar recepción" : "Preparar pedido"}
             </Button>
           )}
         </div>
@@ -573,13 +589,19 @@ function PurchaseDetail({
               {money(row.invoiceSource.netCents)} sin IGV
             </strong>
             <p>
-              Contabilidad derivó esta compra a Almacén. Identifica los
+              Contabilidad envió esta factura a Almacén. Identifica los
               materiales y confirma su recepción cuando lleguen. La factura ya
               está guardada; no necesitas registrarla otra vez.
             </p>
           </>
         ) : (
-          row.supplier && <strong>{money(total)} sin IGV</strong>
+          <>
+            {row.supplier && <strong>{money(total)} sin IGV</strong>}
+            <p>
+              Revisa los materiales del pedido y registra las cantidades que
+              llegan. Cada recepción confirmada aumenta el stock disponible.
+            </p>
+          </>
         )}
         {row.supplier && row.requestedAt && (
           <small>
@@ -590,11 +612,11 @@ function PurchaseDetail({
         {["open", "partial", "received"].includes(row.status) &&
           (accountingAccess ? (
             <a className="warehouse-link" href={`#accounting/gastos/${row.id}`}>
-              Ver o registrar sustento en Contabilidad
+              Ver o registrar factura en Contabilidad
             </a>
           ) : (
             <p className="hint">
-              Contabilidad registra y revisa el sustento de la compra.
+              La factura de este pedido se registra y revisa en Contabilidad.
             </p>
           ))}
       </div>
@@ -616,7 +638,7 @@ function PurchaseDetail({
                   {row.supplier && (
                     <>
                       {" "}
-                      · Comprado {amount(item.ordered)} · Recibido{" "}
+                      · Pedido {amount(item.ordered)} · Recibido{" "}
                       {amount(item.received)} {unitName(item.unit)} ·{" "}
                       {money(item.unitCents)} por unidad
                     </>
@@ -631,7 +653,7 @@ function PurchaseDetail({
                     variant="ghost"
                     onClick={() => setReceiving({ item, pending })}
                   >
-                    {pending ? "Continuar recepción" : "Recibir"}
+                    {pending ? "Continuar recepción" : "Registrar recepción"}
                   </Button>
                 )}
             </li>
@@ -640,7 +662,7 @@ function PurchaseDetail({
       </ul>
       {row.receipts.some((receipt) => receipt.applied) && (
         <section className="warehouse-panel">
-          <h3>Recepciones</h3>
+          <h3>Materiales recibidos</h3>
           <ul className="warehouse-list">
             {row.receipts
               .filter((receipt) => receipt.applied)
@@ -673,12 +695,13 @@ function PurchaseDetail({
         ["open", "requested"].includes(row.status) &&
         !row.receipts.length && (
           <Button type="button" variant="ghost" onClick={() => setCancel(true)}>
-            Cancelar compra
+            Cancelar pedido
           </Button>
         )}
       {ordering && (
         <PurchaseForm
-          materials={[]}
+          materials={materials}
+          loadError={materialsError}
           works={[]}
           initialWork={row.workId}
           requested={row}
@@ -702,7 +725,7 @@ function PurchaseDetail({
       )}
       {cancel && (
         <WarehouseForm
-          title="Cancelar compra"
+          title="Cancelar pedido"
           action="Confirmar cancelación"
           onClose={() => setCancel(false)}
           save={async () => {
@@ -712,7 +735,8 @@ function PurchaseDetail({
           }}
         >
           <p className="hint">
-            La compra se conservará en el historial como cancelada.
+            El pedido quedará cancelado y se conservará en el historial. La
+            factura vinculada, si la tiene, se conserva en Contabilidad.
           </p>
         </WarehouseForm>
       )}
@@ -737,8 +761,10 @@ function ReceiveForm({
   const remaining = Math.round((item.ordered - item.received) * 1000) / 1000;
   return (
     <WarehouseForm
-      title={pending ? "Continuar recepción" : "Recibir material"}
-      action="Confirmar entrada"
+      title={
+        pending ? "Continuar recepción" : "Registrar recepción de material"
+      }
+      action="Confirmar recepción"
       onClose={close}
       save={async (form) => {
         await postWarehouse(path + `/${row.id}/receive`, {
@@ -755,9 +781,13 @@ function ReceiveForm({
           {item.sku} · {item.name}
         </strong>
         <p>
-          Pendiente {amount(remaining)} {unitName(item.unit)}
+          Por recibir: {amount(remaining)} {unitName(item.unit)}
         </p>
       </div>
+      <p className="hint">
+        Registra solo la cantidad que llegó físicamente. Al confirmar, se sumará
+        al stock. Si falta material, el pedido seguirá pendiente.
+      </p>
       <Field label="Cantidad recibida">
         <input
           name="quantity"
@@ -770,7 +800,7 @@ function ReceiveForm({
           readOnly={Boolean(pending)}
         />
       </Field>
-      <Field label="Referencia de recepción">
+      <Field label="Guía, comprobante o referencia de la entrega">
         <input
           name="reference"
           maxLength={100}

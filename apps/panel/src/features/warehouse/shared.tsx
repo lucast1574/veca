@@ -31,11 +31,11 @@ export const materialOptions = (materials: Material[]) =>
     label: `${row.sku} · ${row.name}`,
   }));
 export const purchaseStatus = {
-  requested: "Solicitada",
+  requested: "Por preparar",
   open: "Por recibir",
   partial: "Recepción parcial",
-  received: "Recibida",
-  cancelled: "Cancelada",
+  received: "Recibido",
+  cancelled: "Cancelado",
 };
 export const conditionLabels = {
   good: "Operativo",

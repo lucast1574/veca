@@ -1,45 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { FlaskConical } from "lucide-react";
 import { http, HttpResponse } from "msw";
-import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
 import { WorksWorkspace } from "../../src/features/works/WorksWorkspace";
 import { AccountingWorkspace } from "../../src/features/accounting/AccountingWorkspace";
 import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
 import { SireReconciliation } from "../../src/features/accounting/SireReconciliation";
-import type { ReactNode } from "react";
 import type { AccountingMargin } from "@veca/content";
 import { margin, user, works } from "./fixtures";
+import { StoryFrame as Frame } from "./StoryFrame";
+import { warehouseHandlers } from "./warehouse-fixtures";
 import { expect, userEvent, within } from "storybook/test";
 const meta = { title: "VECA/Flujos de trabajo" } satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
-function Frame({
-  view,
-  children,
-}: {
-  view: "works" | "accounting";
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <WorkspaceShell
-        user={user}
-        view={view}
-        projectCount={12}
-        onNavigate={() => false}
-      >
-        <div className="storybook-demo">
-          <FlaskConical size={17} />
-          <span>
-            Vista de ejemplo · Datos ficticios para revisar la interfaz
-          </span>
-        </div>
-        {children}
-      </WorkspaceShell>
-      <div id="workspace-overlays" />
-    </>
-  );
-}
 const workScreen = () => (
   <Frame view="works">
     <WorksWorkspace
@@ -162,4 +134,32 @@ export const MargenSinMovimientos: Story = {
   }),
   render: marginScreen,
   play: selectMargin,
+};
+
+const insideWork = (tab: string, index = 0): Story => ({
+  beforeEach({ msw }) {
+    history.replaceState(null, "", `#works/${works[index].id}/${tab}`);
+    msw.use(...warehouseHandlers);
+  },
+  render: workScreen,
+});
+export const ObraInterior: Story = {
+  ...insideWork("work"),
+  name: "Dentro de una obra · Coordinación y equipo",
+};
+export const ObraSolicitudes: Story = {
+  ...insideWork("supplies"),
+  name: "Dentro de una obra · Solicitudes a Almacén",
+};
+export const ObraMateriales: Story = {
+  ...insideWork("materials"),
+  name: "Dentro de una obra · Materiales y equipos",
+};
+export const ObraDocumentos: Story = {
+  ...insideWork("financials"),
+  name: "Dentro de una obra · Guías, facturas y gastos",
+};
+export const ObraCierre: Story = {
+  ...insideWork("closeout"),
+  name: "Dentro de una obra · Cierre con pendientes",
 };

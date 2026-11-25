@@ -62,7 +62,7 @@ export function WorkSupply({
               className="warehouse-link"
               href={`#inventory/compras/nueva/${id}`}
             >
-              <Plus size={16} /> Solicitar compra
+              <Plus size={16} /> Solicitar pedido
             </a>
           )}
         </div>
@@ -84,7 +84,7 @@ export function WorkSupply({
                         "Material",
                         "Previsto",
                         "Solicitado",
-                        "Comprado",
+                        "Pedido",
                         "Recibido",
                         "Entregado",
                         "Usado",
@@ -140,7 +140,7 @@ export function WorkSupply({
                     <ClipboardList size={17} aria-hidden="true" />
                     <div>
                       <a href={`#inventory/compras/${purchase.id}`}>
-                        {purchase.supplier || "Solicitud de compra"}
+                        {purchase.supplier || "Pedido por preparar"}
                       </a>
                     </div>
                     <span className="ops-stock-status">

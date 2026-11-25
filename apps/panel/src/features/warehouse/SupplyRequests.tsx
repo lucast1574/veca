@@ -197,7 +197,7 @@ export function SupplyRequests({
                     {row.purchaseId &&
                       user.permissions.includes("inventory") && (
                         <a href={`#inventory/compras/${row.purchaseId}`}>
-                          Revisar compra del faltante
+                          Revisar pedido del faltante
                         </a>
                       )}
                     {row.cancelled && (
@@ -459,7 +459,7 @@ function RequestAction({
       )}
       {action === "cancel" && (
         <p className="hint">
-          Se liberará la reserva pendiente. Las entregas y compras registradas
+          Se liberará la reserva pendiente. Las entregas y pedidos registrados
           conservan su seguimiento.
         </p>
       )}

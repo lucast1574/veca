@@ -346,13 +346,13 @@ function PurchaseForm({
                 <Package size={20} />
                 <div>
                   <p>
-                    Elige una compra existente o envíala a Almacén para que
-                    identifique los materiales. El stock se actualizará cuando
-                    registren lo recibido.
+                    Vincula la factura a un pedido existente o envíala a
+                    Almacén para preparar uno. El stock aumentará cuando
+                    registren la recepción de los materiales.
                   </p>
-                  <Field label="Compra de Inventario">
+                  <Field label="Pedido de materiales">
                     <Select
-                      label="Compra de Inventario"
+                      label="Pedido de materiales"
                       value={purchaseId}
                       options={[
                         {
