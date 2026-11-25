@@ -78,7 +78,7 @@ export const purchaseReceipt = z
     operationId: z.uuid(),
     materialId: accountingId,
     quantity: quantitySchema,
-    reference: detail(100),
+    reference: z.string().trim().max(100).default(""),
   })
   .strict();
 

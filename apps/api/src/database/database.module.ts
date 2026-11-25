@@ -22,6 +22,13 @@ export class Database implements OnModuleInit, OnModuleDestroy {
     await this.client.connect();
     this.db = this.client.db(config.MONGODB_DATABASE);
     await Promise.all([
+      this.db.collection("suggestions").createIndex({ createdAt: -1, _id: -1 }),
+      this.db
+        .collection("suggestions")
+        .createIndex({ section: 1, createdAt: -1, _id: -1 }),
+      this.db
+        .collection("suggestion_comments")
+        .createIndex({ suggestionId: 1, createdAt: 1, _id: 1 }),
       this.db
         .collection("notifications")
         .createIndex({ userId: 1, createdAt: -1 }),

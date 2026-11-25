@@ -554,7 +554,7 @@ export class WarehouseService {
         leadId: row.workId || null,
         kind: "receipt",
         quantity: data.quantity,
-        reason: `Compra a ${row.supplier} · ${data.reference}`,
+        reason: `Compra a ${row.supplier}${data.reference ? ` · ${data.reference}` : ""}`,
       },
       reserved?.actor || actor,
       { purchaseId: String(row._id), unitCents: item.unitCents },

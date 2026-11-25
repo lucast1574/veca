@@ -3,13 +3,14 @@ import type { ReactNode } from "react";
 import { FlaskConical } from "lucide-react";
 import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
 import { user } from "./fixtures";
+import type { WorkspaceView } from "../../src/components/workspace/navigation";
 
 export function StoryFrame({
   view,
   children,
   sessionUser = user,
 }: {
-  view: "works" | "accounting" | "inventory";
+  view: WorkspaceView;
   children: ReactNode;
   sessionUser?: SessionUser;
 }) {

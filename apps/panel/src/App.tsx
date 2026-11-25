@@ -68,6 +68,11 @@ const Administration = lazy(() =>
     default: module.Administration,
   })),
 );
+const SuggestionsWorkspace = lazy(() =>
+  import("./features/suggestions/SuggestionsWorkspace").then((module) => ({
+    default: module.SuggestionsWorkspace,
+  })),
+);
 const PrivateGallery = lazy(() =>
   import("./features/gallery/PrivateGallery").then((module) => ({
     default: module.PrivateGallery,
@@ -475,6 +480,8 @@ export default function App() {
                   <Team currentId={session.user.id} />
                 ) : view === "administration" ? (
                   <Administration />
+                ) : view === "suggestions" ? (
+                  <SuggestionsWorkspace user={session.user} />
                 ) : view === "gallery" ? (
                   <PrivateGallery
                     canOpenLead={can("leads")}

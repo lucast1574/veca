@@ -423,7 +423,8 @@ function PurchaseDetail({
                 <li key={receipt.operationId}>
                   <div>
                     <strong>
-                      {receipt.reference} · {amount(receipt.quantity)}{" "}
+                      {receipt.reference || "Recepción sin documento"} ·{" "}
+                      {amount(receipt.quantity)}{" "}
                       {unitName(
                         row.items.find(
                           (line) => line.materialId === receipt.materialId,
@@ -516,13 +517,12 @@ function ReceiveForm({
         />
       </Field>
       <Field
-        label="Número de guía o documento de entrega"
-        hint="Lo encuentras en la guía o documento que entrega el proveedor junto al material."
+        label="Número de guía o documento de entrega (opcional)"
+        hint="Si el proveedor no entregó un documento, puedes dejarlo vacío."
       >
         <input
           name="reference"
           maxLength={100}
-          required
           placeholder="Ej.: T001-000185"
           defaultValue={pending?.reference}
           readOnly={Boolean(pending)}

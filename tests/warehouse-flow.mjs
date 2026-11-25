@@ -146,10 +146,17 @@ try {
       operationId: randomUUID(),
       materialId,
       quantity: 6,
-      reference: "Entrega QA 1",
     };
-    assert.equal((await call(receive, 201, first)).status, "partial");
+    const withoutDocument = await call(receive, 201, first);
+    assert.equal(withoutDocument.status, "partial");
+    assert.equal(withoutDocument.receipts[0].reference, "");
     assert.equal((await call(receive, 201, first)).items[0].received, 6);
+    assert.equal(
+      (await call(receive, 201, { ...first, reference: "   " })).items[0]
+        .received,
+      6,
+    );
+    await call(receive, 409, { ...first, reference: "Otro documento" });
     await call(receive, 409, { ...first, quantity: 5 });
     await call(receive, 400, {
       ...first,

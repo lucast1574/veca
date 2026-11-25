@@ -34,6 +34,8 @@ En **Contabilidad → Compras y gastos**, Materiales por completar reúne las so
 
 En **Inventario → Pedidos y recepciones**, Almacén consulta lo comprado y confirma la cantidad que llegó físicamente, incluyendo entregas parciales. No registra ni modifica cantidades compradas o precios. Si falta el detalle, la vista indica Pendiente de Contabilidad; únicamente quien puede escribir en Contabilidad recibe un acceso para completarlo allí. La confirmación conserva la cantidad pendiente y protege el stock ante reintentos. La cancelación del pedido también corresponde a Contabilidad y conserva el comprobante.
 
+El documento de entrega es opcional tanto en el panel como en la API. Si el proveedor no entregó uno, Almacén puede confirmar la recepción sin inventar una referencia. Se conservan material, cantidad, responsable, fecha y operación; el historial muestra Recepción sin documento y los reintentos mantienen la protección del stock.
+
 La API exige `accounting` y `accounting_write` para crear, preparar y cancelar compras, incluso en las rutas anteriores de Almacén. Los endpoints de Contabilidad para pedidos y catálogo no exigen acceso a Inventario. Confirmar la entrega física exige `inventory` e `inventory_receive`. La etiqueta de una pantalla o un permiso antiguo de administración de compras no permite saltar esa separación.
 
 En Contabilidad → Compras y gastos, **Compras por registrar** es una bandeja persistente de facturas de proveedores, no un registro de pagos. El servidor consulta el mes actual y el anterior cada 15 minutos, reanuda trabajos pendientes y reintenta fallos con una espera de 5 minutos. El panel refresca la bandeja visible cada 30 segundos. Actualizar compras permite consultar otro periodo; cerrar el modal conserva el trabajo para que el servidor lo termine. No hay presentación fiscal automática.
@@ -55,3 +57,13 @@ Al crear un gasto manual con RUC y serie/número identificables, el servidor com
 Los Select y SearchableSelect compartidos usan popover flotante por defecto. El menú conserva el tema y la relación con el control, se coloca según el espacio de la pantalla y no participa en el tamaño ni el scroll del modal. Escape cierra primero las opciones y las flechas desplazan solo la lista.
 
 Validar la clasificación con `node tests/purchase-classification-flow.mjs` en el mismo entorno aislado de QA con mocks SIRE. Cubre búsqueda fresca, redirección por duplicado, categorías sin almacén, tarea y aviso a Contabilidad, alta de catálogo con código único y sin stock, preparación por el contador sin stock, aviso a Almacén, aislamiento de permisos, recepción parcial e idempotente, caída del proveedor y registro manual sin coincidencias.
+
+## Sugerencias del equipo
+
+La sidebar incluye Sugerencias para todas las cuentas activas y verificadas, sin exigir un permiso de otro módulo. Es un foro interno: el equipo puede buscar por texto, filtrar por sección, publicar ideas y comentar las de otras personas. Las sugerencias y conversaciones solo están disponibles con sesión; no son contenido público de la web.
+
+Nueva sugerencia, edición y comentarios usan los modales compartidos. El autor puede editar su idea y Administración puede editar o cambiar el estado: Nueva, En revisión, Aplicada o Cerrada. Administración conserva la misma comprobación de acceso usada en el resto del panel. Los empleados no pueden editar ideas ajenas ni cambiar estados. La identidad del autor procede de la sesión, nunca del formulario.
+
+Los mensajes son texto simple con límites de longitud. La lista y los comentarios tienen paginación; las consultas visibles se actualizan cada 30 segundos. Los identificadores de envío evitan repetir ideas o comentarios al reintentar, y la edición y los estados comprueban la versión para evitar sobrescribir cambios simultáneos. No se generan sugerencias de ejemplo en producción.
+
+Validar con `node tests/suggestions-flow.mjs` sobre el entorno aislado de QA. Cubre cuentas activas, pendientes, no verificadas y suspendidas, sesión y CSRF, autoría, reintentos, edición propia, estados de Administración, conflictos, búsquedas literales y paginación. Storybook incluye foro con actividad, conversación, nueva sugerencia, publicación y comentario, recuperación de errores y seguimiento de Administración con datos ficticios.

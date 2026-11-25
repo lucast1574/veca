@@ -8,16 +8,23 @@ import {
   Images,
   ShieldCheck,
   ReceiptText,
+  MessageSquare,
 } from "lucide-react";
 import {
   canViewAdministration,
   type Permission,
   type SessionUser,
 } from "@veca/content";
-export type WorkspaceView = Permission | "profile" | "administration";
+export type WorkspaceView =
+  | Permission
+  | "profile"
+  | "administration"
+  | "suggestions";
 export function canOpenWorkspace(view: WorkspaceView, user: SessionUser) {
   if (view === "profile") return true;
   if (view === "administration") return canViewAdministration(user);
+  if (view === "suggestions")
+    return user.status === "active" && user.emailVerified;
   return (
     user.status === "active" &&
     user.emailVerified &&
@@ -86,6 +93,13 @@ export const WORKSPACE_ITEMS = [
     label: "Administración",
     description: "Conexiones y actividad",
     Icon: ShieldCheck,
+    group: "Empresa",
+  },
+  {
+    id: "suggestions",
+    label: "Sugerencias",
+    description: "Ideas y conversaciones del equipo",
+    Icon: MessageSquare,
     group: "Empresa",
   },
 ] as const;

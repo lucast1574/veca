@@ -1,4 +1,5 @@
 import { WorkControlModule } from "./workflow/work-control.module";
+import { SuggestionsModule } from "./suggestions/suggestions.module";
 import { WarehouseModule } from "./inventory/warehouse.module";
 import { Controller, Get, Module, Res } from "@nestjs/common";
 import type { Response } from "express";
@@ -57,6 +58,7 @@ class HealthController {
     AccountingModule,
     WarehouseModule,
     WorkControlModule,
+    SuggestionsModule,
   ],
   controllers: [HealthController],
 })
