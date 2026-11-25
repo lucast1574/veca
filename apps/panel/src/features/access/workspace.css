@@ -190,6 +190,9 @@
   box-shadow: 0 24px 90px #10192d30;
   outline: none;
 }
+.ve-modal.ve-modal-wide {
+  width: min(1060px, 100%);
+}
 .ve-modal > header {
   display: flex;
   align-items: flex-start;

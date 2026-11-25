@@ -80,7 +80,6 @@ export function AccountingWorkspace({
                 ? ""
                 : route.id || ""
             }
-            review={route.id === "sunat"}
             initialMonth={route.month}
             queue={
               route.id === "solicitadas"

@@ -33,7 +33,16 @@ try {
   const invoice = (status, issueDate, createdAt, netCents = 10000) => {
     const _id = new ObjectId();
     invoiceIds.push(_id);
-    return { _id, status, issueDate, createdAt, netCents, taxCents: 1800 };
+    return {
+      _id,
+      status,
+      issueDate,
+      createdAt,
+      netCents,
+      taxCents: 1800,
+      totalCents: netCents + 1800,
+      paidCents: 0,
+    };
   };
   await db
     .collection("accounting_invoices")
@@ -143,8 +152,63 @@ try {
     ).status,
     400,
   );
+  async function invoiceList(query = "") {
+    const response = await fetch(`${base}/admin/accounting/invoices${query}`, {
+      headers,
+    });
+    assert.equal(response.status, 200);
+    return (await response.json()).items;
+  }
+  const monthly = await invoiceList(`?month=${month}`);
+  assert.deepEqual(
+    monthly.map((row) => row.id).sort(),
+    invoiceIds.slice(0, 7).map(String).sort(),
+  );
+  assert.equal(
+    monthly.filter((row) => ["accepted", "observed"].includes(row.status))
+      .length,
+    after.salesCount,
+  );
+  const allDates = await invoiceList();
+  assert.ok(allDates.some((row) => row.id === String(invoiceIds[7])));
+  assert.ok(allDates.some((row) => row.id === String(invoiceIds[8])));
+  assert.ok(
+    (await invoiceList("?queue=requested")).some(
+      (row) => row.id === String(invoiceIds[3]),
+    ),
+  );
+  assert.ok(
+    (await invoiceList("?queue=collect")).some(
+      (row) => row.id === String(invoiceIds[9]),
+    ),
+    "collection queue keeps accepted invoices from previous months",
+  );
+  const missingDate = invoice("draft", "", "2031-05-20T12:00:00.000Z");
+  delete missingDate.issueDate;
+  const nullDate = invoice("draft", null, "2031-05-20T12:00:00.000Z");
+  await db
+    .collection("accounting_invoices")
+    .insertMany([missingDate, nullDate]);
+  const legacy = await invoiceList(`?month=${month}`);
+  assert.equal(legacy.length, 9);
+  assert.equal(
+    (await report()).pendingInvoices.toIssue,
+    after.pendingInvoices.toIssue + 2,
+  );
+  assert.equal(
+    (
+      await fetch(`${base}/admin/accounting/invoices?month=invalid`, {
+        headers,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await fetch(`${base}/admin/accounting/invoices?month=${month}`)).status,
+    401,
+  );
   console.log(
-    "PASS tax period: accepted/observed sales, unissued/unconfirmed/rejected counts, Lima month boundaries, single purchase accounting, pending review, CSV consistency and empty month.",
+    "PASS tax period and invoice list: matching monthly scope, Lima boundaries, legacy undated drafts, unfiltered operational queues, accepted totals, purchase integrity, CSV and empty month.",
   );
 } finally {
   await db

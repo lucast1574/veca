@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { ObjectId, MongoServerError } from "mongodb";
+import { ObjectId, MongoServerError, type Filter } from "mongodb";
 import {
   matchingPurchaseCosts,
   purchaseDocumentKey,
@@ -93,6 +93,25 @@ const monthBounds = (month: string) => ({
   $gte: month + "-01",
   $lte: month + "-31",
 });
+function invoicePeriodScope(month: string): Filter<InvoiceRecord> {
+  const start = new Date(`${month}-01T00:00:00-05:00`);
+  const end = new Date(start);
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  return {
+    $or: [
+      { issueDate: monthBounds(month) },
+      {
+        status: { $nin: issued },
+        createdAt: { $gte: start.toISOString(), $lt: end.toISOString() },
+        $or: [
+          { issueDate: "" },
+          { issueDate: { $exists: false } },
+          { issueDate: { $type: "null" } },
+        ],
+      },
+    ],
+  };
+}
 
 @Injectable()
 export class AccountingService {
@@ -147,7 +166,11 @@ export class AccountingService {
     return work;
   }
 
-  async listInvoices(page: number, queue?: "requested" | "collect") {
+  async listInvoices(
+    page: number,
+    queue?: "requested" | "collect",
+    month?: string,
+  ) {
     const filter =
       queue === "requested"
         ? { status: "requested" as const }
@@ -158,7 +181,7 @@ export class AccountingService {
             }
           : {};
     const rows = await this.invoices
-      .find(filter)
+      .find({ ...filter, ...(month ? invoicePeriodScope(month) : {}) })
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize + 1)
@@ -719,9 +742,6 @@ export class AccountingService {
   }
 
   async period(month: string): Promise<AccountingPeriod> {
-    const start = new Date(`${month}-01T00:00:00-05:00`);
-    const end = new Date(start);
-    end.setUTCMonth(end.getUTCMonth() + 1);
     const isIssued = { $in: ["$status", issued] };
     const [sales, costs] = await Promise.all([
       this.invoices
@@ -734,19 +754,7 @@ export class AccountingService {
           toCorrect: number;
         }>([
           {
-            $match: {
-              $or: [
-                { issueDate: monthBounds(month) },
-                {
-                  status: { $nin: issued },
-                  issueDate: { $in: ["", null] },
-                  createdAt: {
-                    $gte: start.toISOString(),
-                    $lt: end.toISOString(),
-                  },
-                },
-              ],
-            },
+            $match: invoicePeriodScope(month),
           },
           {
             $group: {

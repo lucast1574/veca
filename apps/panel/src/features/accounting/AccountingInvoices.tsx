@@ -14,6 +14,7 @@ import { Button, Field, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import { API_BASE, api } from "../../lib/api";
 import { SireSalesReview } from "./SireSalesReview";
+import { SireClosingGuide } from "./SireClosingGuide";
 import {
   accountingPost,
   accountingPath,
@@ -50,37 +51,39 @@ type InvoicePage = {
 export function AccountingInvoices({
   selected,
   queue = "",
-  review = false,
   initialMonth,
 }: {
   selected: string;
   queue?: "" | "requested" | "collect";
-  review?: boolean;
   initialMonth?: string;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
-  const canIssue = useAccountingPermission("accounting_issue");
   const [page, setPage] = useState(1);
+  const [month, setMonth] = useState(initialMonth || today().slice(0, 7));
   const query = useAccountingQuery<InvoicePage>(
-    review || (selected && selected !== "nueva")
+    selected && selected !== "nueva"
       ? ""
-      : `${root}?page=${page}${queue ? "&queue=" + queue : ""}`,
+      : `${root}?page=${page}${queue ? `&queue=${queue}` : month ? `&month=${month}` : ""}`,
   );
-  if (!review && selected && selected !== "nueva")
-    return <InvoiceDetail id={selected} />;
+  if (selected && selected !== "nueva")
+    return <InvoiceDetail id={selected} returnMonth={initialMonth} />;
   const rows = query.data?.items || [];
+  function refreshInvoices() {
+    setPage(1);
+    query.refresh();
+  }
   return (
     <section aria-labelledby="accounting-invoices">
       <header className="accounting-section-head">
         <h2 id="accounting-invoices">Facturas y cobros</h2>
         <div className="accounting-tools">
-          {!review && (
+          {(queue || !month) && (
             <Refresh loading={query.loading} onClick={query.refresh} />
           )}
           {canWrite && (
             <a
               className="btn btn-primary accounting-inline"
-              href={baseHash + "/nueva"}
+              href={`${baseHash}/nueva${!queue && month ? `?month=${month}` : ""}`}
             >
               <Plus size={16} /> Nueva factura
             </a>
@@ -90,8 +93,8 @@ export function AccountingInvoices({
       <nav className="accounting-tabs" aria-label="Filtrar facturas">
         <a
           className="accounting-inline"
-          href={baseHash}
-          aria-current={!queue && !review ? "page" : undefined}
+          href={`${baseHash}${!queue && month ? `?month=${month}` : ""}`}
+          aria-current={!queue ? "page" : undefined}
         >
           Todas
         </a>
@@ -109,79 +112,101 @@ export function AccountingInvoices({
         >
           Por cobrar
         </a>
-        <a
-          className="accounting-inline"
-          href={`${baseHash}/sunat${initialMonth ? `?month=${initialMonth}` : ""}`}
-          aria-current={review ? "page" : undefined}
-        >
-          Revisión con SUNAT
-        </a>
       </nav>
-      {review ? (
-        <SireSalesReview initialMonth={initialMonth} />
-      ) : (
-        <>
-          {query.data && !query.data.enabled && (
-            <Notice>
-              Emisión electrónica pendiente de configuración. Puedes preparar
-              borradores.
-            </Notice>
-          )}
-          <QueryState
-            {...query}
-            empty={
-              queue
-                ? "No hay facturas en esta bandeja."
-                : "Todavía no hay facturas registradas."
-            }
+      {!queue && (
+        <div className="accounting-filters">
+          <Field
+            label="Periodo de ventas"
+            hint="Sin periodo se muestran todas las fechas."
           >
-            {rows.length > 0 && (
-              <ul className="dispatch-list dispatch-queue">
-                {rows.map((row) => (
-                  <li key={row.id}>
-                    <div>
-                      <strong>{row.customer}</strong>
-                      <small>
-                        {row.number || row.workName || "Venta directa"}
-                      </small>
-                    </div>
-                    <div className="accounting-value">
-                      {row.status === "requested"
-                        ? "—"
-                        : amount(row.totalCents)}
-                      {isIssued(row) && (
-                        <small>
-                          Por cobrar {amount(row.totalCents - row.paidCents)}
-                        </small>
-                      )}
-                    </div>
-                    <span className="dispatch-pill" data-state={row.status}>
-                      {label[row.status]}
-                    </span>
-                    <a
-                      className="accounting-inline"
-                      href={`${baseHash}/${row.id}`}
-                    >
-                      Abrir <ChevronRight size={16} />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </QueryState>
-          {selected === "nueva" && canWrite && (
-            <InvoiceForm
-              onClose={() => {
-                location.hash = baseHash;
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => {
+                setPage(1);
+                setMonth(event.target.value);
               }}
             />
-          )}
-          <Pagination
-            page={page}
-            hasMore={Boolean(query.data?.hasMore)}
-            change={setPage}
-          />
-        </>
+          </Field>
+        </div>
+      )}
+      {!queue && month && (
+        <SireSalesReview
+          key={`sales-summary:${month}`}
+          month={month}
+          refreshing={query.loading}
+          onRefresh={refreshInvoices}
+        />
+      )}
+      {!queue && (
+        <h3 className="sire-saved-title">
+          {month ? "Facturas del periodo" : "Facturas registradas"}
+        </h3>
+      )}
+      {query.data && !query.data.enabled && (
+        <Notice>
+          Emisión electrónica pendiente de configuración. Puedes preparar
+          borradores.
+        </Notice>
+      )}
+      <QueryState
+        {...query}
+        empty={
+          queue
+            ? "No hay facturas en esta bandeja."
+            : month
+              ? "No hay facturas en este periodo."
+              : "Todavía no hay facturas registradas."
+        }
+      >
+        {rows.length > 0 && (
+          <ul className="dispatch-list dispatch-queue">
+            {rows.map((row) => (
+              <li key={row.id}>
+                <div>
+                  <strong>{row.customer}</strong>
+                  <small>{row.number || row.workName || "Venta directa"}</small>
+                </div>
+                <div className="accounting-value">
+                  {row.status === "requested" ? "—" : amount(row.totalCents)}
+                  {isIssued(row) && (
+                    <small>
+                      Por cobrar {amount(row.totalCents - row.paidCents)}
+                    </small>
+                  )}
+                </div>
+                <span className="dispatch-pill" data-state={row.status}>
+                  {label[row.status]}
+                </span>
+                <a
+                  className="accounting-inline"
+                  href={`${baseHash}/${row.id}${!queue && month ? `?month=${month}` : ""}`}
+                >
+                  Abrir <ChevronRight size={16} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </QueryState>
+      {selected === "nueva" && canWrite && (
+        <InvoiceForm
+          onClose={() => {
+            location.hash = baseHash + (month ? `?month=${month}` : "");
+          }}
+        />
+      )}
+      <Pagination
+        page={page}
+        hasMore={Boolean(query.data?.hasMore)}
+        change={setPage}
+      />
+      {!queue && month && (
+        <SireClosingGuide
+          key={`sales-closing:${month}`}
+          month={month}
+          book="sales"
+        />
       )}
     </section>
   );
@@ -463,7 +488,13 @@ function InvoiceForm({
   );
 }
 
-function InvoiceDetail({ id }: { id: string }) {
+function InvoiceDetail({
+  id,
+  returnMonth,
+}: {
+  id: string;
+  returnMonth?: string;
+}) {
   const canWrite = useAccountingPermission("accounting_write");
   const canIssue = useAccountingPermission("accounting_issue");
   const path = `${root}/${id}`;
@@ -521,7 +552,10 @@ function InvoiceDetail({ id }: { id: string }) {
           }}
         />
       )}
-      <a className="accounting-inline" href={baseHash}>
+      <a
+        className="accounting-inline"
+        href={baseHash + (returnMonth ? `?month=${returnMonth}` : "")}
+      >
         <ArrowLeft size={16} /> Facturas y cobros
       </a>
       <QueryState {...query}>

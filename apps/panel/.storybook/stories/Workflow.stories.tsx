@@ -35,7 +35,7 @@ export const ConciliacionSunat: Story = {
   render: () => (
     <Frame view="accounting">
       <AccountingAccess.Provider value={["accounting_write"]}>
-        <SireSalesReview initialMonth="2026-11" />
+        <SireSalesReview month="2026-11" />
       </AccountingAccess.Provider>
     </Frame>
   ),

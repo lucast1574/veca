@@ -1,80 +1,80 @@
 import { useState } from "react";
 import { CloudDownload, FileCheck2, LoaderCircle } from "lucide-react";
 import type { AccountingPeriod, SireReconciliation } from "@veca/content";
-import { Button, Field } from "../../components/ui";
+import { Button } from "../../components/ui";
+import { Modal } from "../../components/Modal";
 import { useAccountingPermission } from "./AccountingAccess";
 import { SalesPending } from "./AccountingPeriodPending";
 import { SireAutomaticDialog } from "./SireAutomaticDialog";
 import { SireFileDialog } from "./SireFileDialog";
-import { SireClosingGuide } from "./SireClosingGuide";
 import { SireComparisonResult } from "./SireComparisonResult";
 import {
   accountingPath,
   QueryState,
   Summary,
-  today,
   useAccountingQuery,
 } from "./accounting-shared";
 import "./sire.css";
 
-export function SireSalesReview({ initialMonth }: { initialMonth?: string }) {
-  const [month, setMonth] = useState(initialMonth || today().slice(0, 7));
-  return (
-    <>
-      <div className="accounting-filters">
-        <Field label="Periodo de ventas">
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </Field>
-      </div>
-      {month && <SalesPeriod month={month} key={month} />}
-    </>
-  );
-}
-function SalesPeriod({ month }: { month: string }) {
+export function SireSalesReview({
+  month,
+  refreshing = false,
+  onRefresh,
+}: {
+  month: string;
+  refreshing?: boolean;
+  onRefresh?: () => void;
+}) {
   const canWrite = useAccountingPermission("accounting_write");
   const report = useAccountingQuery<AccountingPeriod>(
     `${accountingPath}/period/${month}`,
   );
-  const [open, setOpen] = useState<"automatic" | "file" | null>(null);
+  const [open, setOpen] = useState<"automatic" | "file" | "result" | null>(
+    null,
+  );
   const [result, setResult] = useState<SireReconciliation>();
-  const done = (next: SireReconciliation) => {
-    setResult(next);
-    setOpen(null);
+  const busy = refreshing || report.loading;
+  function refresh() {
     report.refresh();
-  };
+    onRefresh?.();
+  }
+  function done(next: SireReconciliation) {
+    setResult(next);
+    setOpen("result");
+    refresh();
+  }
   return (
     <>
       <section
-        className="ops-card sire-inbox"
+        className="ops-card sire-inbox sire-sales-summary"
         aria-labelledby="sire-sales-title"
       >
         <header className="sire-inbox-header">
           <div>
-            <span className="sire-eyebrow">FACTURAS A TUS CLIENTES</span>
             <h3 id="sire-sales-title">Ventas del periodo</h3>
-            <p>
-              Revisa las facturas que VECA emite a sus clientes y comprueba que
-              coincidan con SUNAT.
-            </p>
+            {report.data && !report.error && (
+              <p>
+                {report.data.salesCount}{" "}
+                {report.data.salesCount === 1
+                  ? "factura aceptada"
+                  : "facturas aceptadas"}
+              </p>
+            )}
           </div>
           <div className="sire-inbox-actions">
             <Button
               type="button"
               variant="ghost"
-              disabled={report.loading}
-              aria-busy={report.loading}
-              onClick={report.refresh}
+              disabled={busy}
+              aria-busy={busy}
+              onClick={refresh}
             >
-              {report.loading ? (
+              {busy ? (
                 <LoaderCircle size={17} className="sire-refresh-spinner" />
               ) : (
                 <CloudDownload size={17} />
               )}
-              {report.loading ? "Actualizando…" : "Actualizar ventas"}
+              {busy ? "Actualizando…" : "Actualizar ventas"}
             </Button>
             <Button
               type="button"
@@ -90,9 +90,6 @@ function SalesPeriod({ month }: { month: string }) {
         <QueryState {...report}>
           {report.data && !report.error && (
             <>
-              <p className="sire-sales-count">
-                {report.data.salesCount} facturas aceptadas
-              </p>
               <Summary
                 entries={[
                   ["Venta neta", report.data.salesNet],
@@ -104,17 +101,10 @@ function SalesPeriod({ month }: { month: string }) {
                 ]}
               />
               <SalesPending report={report.data} />
-              <p className="hint">
-                Los importes incluyen las facturas aceptadas por SUNAT, también
-                las aceptadas con observaciones. Los borradores y envíos por
-                confirmar se muestran como pendientes.
-              </p>
             </>
           )}
         </QueryState>
-        {result && <SireComparisonResult result={result} />}
       </section>
-      <SireClosingGuide month={month} book="sales" />
       {open === "automatic" && (
         <SireAutomaticDialog
           month={month}
@@ -133,6 +123,23 @@ function SalesPeriod({ month }: { month: string }) {
           close={() => setOpen(null)}
           done={done}
         />
+      )}
+      {open === "result" && result && (
+        <Modal
+          title={`Comparación de ventas · ${month}`}
+          description="Revisa las coincidencias y las facturas que necesitan atención."
+          size="wide"
+          onClose={() => setOpen(null)}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button type="button" onClick={() => setOpen(null)}>
+                Volver a las facturas
+              </Button>
+            </footer>
+          }
+        >
+          <SireComparisonResult result={result} />
+        </Modal>
       )}
     </>
   );

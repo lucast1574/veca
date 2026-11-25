@@ -86,7 +86,7 @@ export function TaxPeriod({ initialMonth }: { initialMonth?: string }) {
               <footer className="accounting-tax-actions">
                 <a
                   className="accounting-inline"
-                  href={`#accounting/facturas/sunat?month=${month}`}
+                  href={`#accounting/facturas?month=${month}`}
                 >
                   Ver ventas y facturas <ArrowRight size={15} />
                 </a>

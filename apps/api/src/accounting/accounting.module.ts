@@ -74,10 +74,15 @@ class AccountingController {
   }
 
   @Get("invoices")
-  async invoices(@Query("page") page = "1", @Query("queue") queue?: string) {
+  async invoices(
+    @Query("page") page = "1",
+    @Query("queue") queue?: string,
+    @Query("month") month?: string,
+  ) {
     const list = await this.accounts.listInvoices(
       parse(pageIndex, page),
       queue ? parse(z.enum(["requested", "collect"]), queue) : undefined,
+      parse(accountingMonth.optional(), month),
     );
     return { ...list, enabled: this.accounts.enabled };
   }

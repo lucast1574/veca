@@ -332,9 +332,6 @@
   font-size: 12px;
   color: var(--panel-secondary);
 }
-.ve-modal.ve-modal-wide {
-  width: min(1060px, 100%);
-}
 .gallery-viewer {
   color: var(--panel-ink);
 }

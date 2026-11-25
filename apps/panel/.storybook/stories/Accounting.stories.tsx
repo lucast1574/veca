@@ -76,6 +76,7 @@ const invoices: AccountingInvoice[] = (
 });
 let failReport = false;
 let fiscalPath = "";
+let lastInvoiceMonth: string | null | undefined;
 const zero: AccountingPeriod = {
   salesNet: 0,
   salesTax: 0,
@@ -147,9 +148,31 @@ const mocks = [
     }
     return HttpResponse.json(params.month === "2032-01" ? zero : report);
   }),
-  http.get("*/admin/accounting/invoices", () =>
-    HttpResponse.json({ items: invoices, hasMore: false, enabled: true }),
-  ),
+  http.get("*/admin/accounting/works", () => HttpResponse.json([])),
+  http.get("*/admin/accounting/invoices", ({ request }) => {
+    const params = new URL(request.url).searchParams;
+    lastInvoiceMonth = params.get("month");
+    const queue = params.get("queue");
+    const filtered = invoices.filter((row) =>
+      queue === "requested"
+        ? row.status === "requested"
+        : queue === "collect"
+          ? ["accepted", "observed"].includes(row.status) &&
+            row.paidCents < row.totalCents
+          : true,
+    );
+    return HttpResponse.json({
+      items: filtered.map((row) => ({
+        ...row,
+        ...(lastInvoiceMonth && {
+          createdAt: `${lastInvoiceMonth}-20T14:00:00Z`,
+          issueDate: row.issueDate ? `${lastInvoiceMonth}-20` : "",
+        }),
+      })),
+      hasMore: false,
+      enabled: true,
+    });
+  }),
   http.get("*/admin/accounting/costs", ({ request }) => {
     const month = new URL(request.url).searchParams.get("month") || "2026-11";
     const lines: [CostInput["kind"], number][] = [
@@ -243,6 +266,7 @@ const meta = {
   beforeEach() {
     failReport = false;
     fiscalPath = "";
+    lastInvoiceMonth = undefined;
     history.replaceState(null, "", "#accounting/impuestos");
   },
   render: () => (
@@ -271,7 +295,7 @@ export const ImpuestosConGraficos: Story = {
     ).not.toBeInTheDocument();
     await expect(
       page.getByRole("link", { name: "Ver ventas y facturas" }),
-    ).toHaveAttribute("href", "#accounting/facturas/sunat?month=2026-11");
+    ).toHaveAttribute("href", "#accounting/facturas?month=2026-11");
   },
 };
 export const IrACompras: Story = {
@@ -322,31 +346,35 @@ export const IrAVentas: Story = {
     await expect(await page.findByLabelText("Periodo de ventas")).toHaveValue(
       "2026-10",
     );
+    await expect(page.getByRole("link", { name: /^Todas$/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect(
-      page.getByRole("link", { name: "Revisión con SUNAT" }),
-    ).toHaveAttribute("aria-current", "page");
+      page.queryByRole("link", { name: "Revisión con SUNAT" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(lastInvoiceMonth).toBe("2026-10"));
     await expect(
       page.getByText("Presentar el registro de ventas del mes"),
     ).toBeVisible();
   },
 };
 export const FacturasYVentas: Story = {
-  name: "Facturas y cobros: lista y pestaña de revisión",
+  name: "Todas: resumen compacto y facturas del periodo",
   beforeEach() {
     history.replaceState(null, "", "#accounting/facturas");
   },
 };
 export const RevisionVentas: Story = {
-  name: "Ventas: revisión del periodo y comparación",
+  name: "Todas: diferencias en modal y regreso al listado",
   beforeEach() {
-    history.replaceState(null, "", "#accounting/facturas/sunat");
+    history.replaceState(null, "", "#accounting/facturas");
   },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await expect(await page.findByText("3 facturas aceptadas")).toBeVisible();
-    await userEvent.click(
-      page.getByRole("button", { name: "Comparar con SUNAT" }),
-    );
+    const trigger = page.getByRole("button", { name: "Comparar con SUNAT" });
+    await userEvent.click(trigger);
     const compare = await page.findByRole("button", {
       name: "Comparar ventas",
     });
@@ -361,14 +389,52 @@ export const RevisionVentas: Story = {
     ).toBeVisible();
     await expect(fiscalPath).toBe("sales");
     await expect(page.getByText("Importe distinto")).toBeVisible();
+    await expect(
+      page.getByRole("dialog", { name: "Comparación de ventas · 2026-11" }),
+    ).toBeVisible();
+    await expect(
+      within(
+        page.getByRole("region", { name: "Ventas del periodo" }),
+      ).queryByText("Importe distinto"),
+    ).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await expect(
+      page.getByRole("heading", { name: "Facturas del periodo" }),
+    ).toBeVisible();
   },
 };
 export const ActualizarVentas: Story = {
-  name: "Ventas: actualización directa del resumen",
+  name: "Todas: actualizar resumen y listado juntos",
   beforeEach({ msw }) {
-    history.replaceState(null, "", "#accounting/facturas/sunat");
+    history.replaceState(null, "", "#accounting/facturas");
     let reads = 0;
+    let invoiceReads = 0;
     msw.use(
+      http.get("*/admin/accounting/invoices", async () => {
+        invoiceReads++;
+        if (invoiceReads > 1) await delay(600);
+        return HttpResponse.json({
+          items:
+            invoiceReads > 1
+              ? [
+                  ...invoices,
+                  {
+                    ...invoices[0],
+                    id: "888888888888888888888888",
+                    customer: "Cliente actualizado · Ejemplo",
+                    netCents: 100000,
+                    taxCents: 18000,
+                    totalCents: 118000,
+                    number: "F001-8",
+                  },
+                ]
+              : invoices,
+          hasMore: false,
+          enabled: true,
+        });
+      }),
       http.get("*/admin/accounting/period/:month", async () => {
         reads++;
         if (reads > 1) await delay(500);
@@ -392,15 +458,20 @@ export const ActualizarVentas: Story = {
     await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
     await expect(await page.findByText("4 facturas aceptadas")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Actualizar ventas" }),
-    ).toBeEnabled();
+      await page.findByText("Cliente actualizado · Ejemplo"),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        page.getByRole("button", { name: "Actualizar ventas" }),
+      ).toBeEnabled(),
+    );
     await expect(fiscalPath).toBe("");
   },
 };
 export const VentasArchivoManual: Story = {
   name: "Ventas: archivo manual siempre del RVIE",
   beforeEach() {
-    history.replaceState(null, "", "#accounting/facturas/sunat");
+    history.replaceState(null, "", "#accounting/facturas");
   },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
@@ -443,5 +514,81 @@ export const ImpuestosConError: Story = {
     ).not.toBeInTheDocument();
     await userEvent.click(page.getByRole("button", { name: "Reintentar" }));
     await expect(await page.findByText("8 registros guardados")).toBeVisible();
+  },
+};
+
+export const EnlaceAnteriorVentas: Story = {
+  name: "Enlace anterior de SUNAT abre Todas",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/facturas/sunat?month=2026-10");
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      await page.findByRole("heading", { name: "Facturas del periodo" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Todas$/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(page.getByLabelText("Periodo de ventas")).toHaveValue(
+      "2026-10",
+    );
+    await expect(
+      page.queryByRole("link", { name: "Revisión con SUNAT" }),
+    ).not.toBeInTheDocument();
+  },
+};
+export const SolicitadasSinFiltroMensual: Story = {
+  name: "Solicitadas: pendientes de cualquier mes",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/facturas/solicitadas");
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(
+      await page.findByText("Solicitada", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.queryByLabelText("Periodo de ventas"),
+    ).not.toBeInTheDocument();
+    await expect(
+      page.queryByRole("region", { name: "Ventas del periodo" }),
+    ).not.toBeInTheDocument();
+    await expect(lastInvoiceMonth).toBe(null);
+  },
+};
+export const PorCobrarSinFiltroMensual: Story = {
+  name: "Por cobrar: saldos de cualquier mes",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/facturas/por-cobrar");
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await expect(await page.findAllByText(/Por cobrar S/)).toHaveLength(3);
+    await expect(
+      page.queryByRole("region", { name: "Ventas del periodo" }),
+    ).not.toBeInTheDocument();
+    await expect(lastInvoiceMonth).toBe(null);
+  },
+};
+export const NuevaFacturaDesdeTodas: Story = {
+  name: "Todas: nueva factura conserva su modal",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/facturas?month=2026-10");
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(
+      await page.findByRole("link", { name: "Nueva factura" }),
+    );
+    await expect(
+      await page.findByRole("dialog", { name: "Nueva factura" }),
+    ).toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "Cancelar" }));
+    await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
+    await expect(await page.findByLabelText("Periodo de ventas")).toHaveValue(
+      "2026-10",
+    );
   },
 };

@@ -66,7 +66,7 @@ export function SireComparisonResult({
       {Boolean(result.issues.length) && (
         <>
           <div className="ops-table-wrap">
-            <table className="ops-material-table warehouse-plan-table">
+            <table className="ops-material-table sire-comparison-table">
               <thead>
                 <tr>
                   {["Comprobante", "SUNAT", "VECA", "Resultado"].map(
@@ -81,19 +81,21 @@ export function SireComparisonResult({
                   .slice((page - 1) * size, page * size)
                   .map((issue, index) => (
                     <tr key={index}>
-                      <td>
+                      <td data-label="Comprobante">
                         <strong>{issue.reference || "Sin número"}</strong>
                         <small>{issue.taxId}</small>
                       </td>
-                      <td>
+                      <td data-label="SUNAT">
                         {issue.sunat == null
                           ? "—"
                           : issue.currency === "PEN"
                             ? amount(issue.sunat)
                             : `${issue.currency} ${(issue.sunat / 100).toFixed(2)}`}
                       </td>
-                      <td>{issue.panel == null ? "—" : amount(issue.panel)}</td>
-                      <td>
+                      <td data-label="VECA">
+                        {issue.panel == null ? "—" : amount(issue.panel)}
+                      </td>
+                      <td data-label="Resultado">
                         <strong>{labels[issue.status]}</strong>
                         {issue.note && <small>{issue.note}</small>}
                       </td>
