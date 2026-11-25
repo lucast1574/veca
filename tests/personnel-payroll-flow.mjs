@@ -57,10 +57,22 @@ async function login(username) {
 }
 const adminDoc = await db.collection("users").findOne({ username: "admin" });
 const ids = Object.fromEntries(
-  ["coordinator", "other", "worker", "worker2"].map((k) => [k, new ObjectId()]),
+  ["coordinator", "other", "worker", "worker2", "accountant", "laboronly"].map(
+    (k) => [k, new ObjectId()],
+  ),
 );
 const prefix = "personnel-" + randomUUID();
 try {
+  for (const [id, permissions] of [
+    [
+      "qa-personnel-accounting",
+      ["dashboard", "accounting", "accounting_labor"],
+    ],
+    ["qa-personnel-labor-only", ["dashboard", "accounting_labor"]],
+  ])
+    await db
+      .collection("roles")
+      .insertOne({ id, name: id, permissions, revision: 1 });
   for (const [name, _id] of Object.entries(ids))
     await db.collection("users").insertOne({
       _id,
@@ -68,7 +80,14 @@ try {
       name,
       status: "active",
       emailVerified: true,
-      role: name.startsWith("worker") ? "worker" : "operations",
+      role:
+        name === "accountant"
+          ? "qa-personnel-accounting"
+          : name === "laboronly"
+            ? "qa-personnel-labor-only"
+            : name.startsWith("worker")
+              ? "worker"
+              : "operations",
       passwordHash: adminDoc.passwordHash,
     });
   const sessions = { admin: await login("admin") };
@@ -79,6 +98,14 @@ try {
     w = sessions.worker,
     o = sessions.other,
     w2 = sessions.worker2;
+  const pushToken = "personnel-token-" + prefix;
+  await req(
+    "/account/notifications/push/register",
+    sessions.accountant,
+    { token: pushToken },
+    "POST",
+    201,
+  );
   const employeeData = {
     name: "Técnico principal QA",
     documentType: "DNI",
@@ -212,6 +239,81 @@ try {
       )
     ).body;
   await authorize(record.id);
+  const notices = async (session) =>
+    (await req("/account/notifications", session)).body.items.filter(
+      (item) => item.title === "Descuento al personal por aprobar",
+    );
+  const notice = (await notices(sessions.accountant))[0];
+  assert.ok(notice);
+  assert.equal(
+    notice.href,
+    `#accounting/personal?month=${period}&section=descuentos`,
+  );
+  assert.equal((await notices(w)).length, 0);
+  assert.equal((await notices(sessions.laboronly)).length, 0);
+  assert.equal(
+    "notificationPending" in (await req(path, c)).body.items[0],
+    false,
+  );
+  await db.collection("roles").updateOne(
+    { id: "qa-personnel-accounting" },
+    {
+      $set: { permissions: ["dashboard", "accounting_labor"] },
+      $inc: { revision: 1 },
+    },
+  );
+  assert.equal((await notices(sessions.accountant)).length, 0);
+  await db.collection("roles").updateOne(
+    { id: "qa-personnel-accounting" },
+    {
+      $set: { permissions: ["dashboard", "accounting", "accounting_labor"] },
+      $inc: { revision: 1 },
+    },
+  );
+  // Replaying an interrupted notification outbox does not create another notice.
+  await db
+    .collection("work_payroll_incidents")
+    .updateOne(
+      { _id: new ObjectId(record.id) },
+      { $set: { notificationPending: true } },
+    );
+  const deadline = Date.now() + 8000;
+  while (
+    Date.now() < deadline &&
+    (
+      await db
+        .collection("work_payroll_incidents")
+        .findOne({ _id: new ObjectId(record.id) })
+    ).notificationPending
+  )
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(
+    (
+      await db
+        .collection("work_payroll_incidents")
+        .findOne({ _id: new ObjectId(record.id) })
+    ).notificationPending,
+    false,
+  );
+  assert.equal((await notices(sessions.accountant)).length, 1);
+  const pushDeadline = Date.now() + 8000;
+  let push;
+  while (Date.now() < pushDeadline) {
+    push = (
+      await (await fetch("http://localhost:4510/push-messages")).json()
+    ).find(
+      (message) => message.token === pushToken && message.data.id === notice.id,
+    );
+    if (push) break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  assert.ok(
+    push,
+    "The accountant receives the existing Firebase mock notification",
+  );
+  assert.ok(push.data.url.endsWith(notice.href));
+  assert.equal(push.data.body.includes(employee.name), false);
+
   const foreign = (
     await req(
       path,
@@ -598,7 +700,7 @@ try {
     false,
   );
   console.log(
-    "Personal: vínculo opcional único, privacidad salarial, encargado real de obra, bonos/CTS, sustento, aprobación desde Personal y reflejo automático antes/después de crear la planilla, sin duplicar, recuperación y planilla cerrada y Resumen por permisos: OK.",
+    "Personal: vínculo opcional único, privacidad salarial, encargado real de obra, bonos/CTS, avisos contables sin duplicar y protegidos por ambos permisos, sustento, aprobación desde Personal y reflejo automático antes/después de crear la planilla, sin duplicar, recuperación y planilla cerrada y Resumen por permisos: OK.",
   );
 } finally {
   await client.close();

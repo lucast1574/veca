@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { initializeApp } from "@firebase/app";
 import { getMessaging, onBackgroundMessage } from "@firebase/messaging/sw";
+import { isNotificationHref } from "./notification-route";
 declare const self: ServiceWorkerGlobalScope;
 const configuration = JSON.parse(
   new URL(self.location.href).searchParams.get("config") || "{}",
@@ -19,7 +20,7 @@ self.addEventListener("notificationclick", (event) => {
   }
   if (
     destination.origin !== self.location.origin ||
-    !/^#(?:works|leads|projects|profile)(?:\/|$)/.test(destination.hash)
+    !isNotificationHref(destination.hash)
   )
     return;
   event.waitUntil(

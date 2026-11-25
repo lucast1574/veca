@@ -16,6 +16,7 @@ import {
 } from "../accounting/accounting-shared";
 import "./notifications.css";
 import { readPushPreference, writePushPreference } from "./push-preferences";
+import { isNotificationHref } from "./notification-route";
 
 export function NotificationBell({ user }: { user: SessionUser }) {
   const query = useAccountingQuery<NotificationPage>("/account/notifications");
@@ -49,7 +50,7 @@ export function NotificationBell({ user }: { user: SessionUser }) {
       if (
         event.data?.type === "veca-notification-open" &&
         typeof event.data.href === "string" &&
-        /^#(?:works|leads|projects|profile)(?:\/|$)/.test(event.data.href)
+        isNotificationHref(event.data.href)
       ) {
         markNativeRead(event.data.id);
         location.hash = event.data.href;

@@ -36,6 +36,7 @@ import {
   ReceiptRecords,
   type Dialog,
 } from "./LaborRecords";
+import { useLiveRefresh } from "../../operations/shared";
 import { laborPath } from "./labor-shared";
 import "./labor.css";
 
@@ -60,8 +61,11 @@ const sections = [
 type Section = (typeof sections)[number]["id"];
 export function LaborWorkspace({
   initialPeriod,
-}: { initialPeriod?: string } = {}) {
-  const [section, setSection] = useState<Section>("runs");
+  initialDiscounts = false,
+}: { initialPeriod?: string; initialDiscounts?: boolean } = {}) {
+  const [section, setSection] = useState<Section>(
+    initialDiscounts ? "incidents" : "runs",
+  );
   const [period, setPeriod] = useState(initialPeriod || today().slice(0, 7));
   const [year, month] = period.split("-");
   const latestYear = Math.max(Number(today().slice(0, 4)) + 1, Number(year));
@@ -72,7 +76,14 @@ export function LaborWorkspace({
   const [dialog, setDialog] = useState<Dialog>();
   const [feedback, setFeedback] = useState("");
   const query = useAccountingQuery<Ledger>(laborPath + "?period=" + period);
+  useLiveRefresh(query.refresh, false, true, "/account/notifications/events");
   const data = query.data;
+  const pendingCount =
+    data?.incidents?.filter(
+      (incident) =>
+        !incident.payrollRunId &&
+        (incident.status === "authorized" || incident.status === "approved"),
+    ).length || 0;
   const allocations = new Map(
     data?.allocations.map((row) => [laborSourceKey(row.source), row]),
   );
@@ -173,9 +184,22 @@ export function LaborWorkspace({
                       key={id}
                       type="button"
                       aria-pressed={section === id}
+                      aria-label={
+                        id === "incidents" && pendingCount
+                          ? `${label}, ${pendingCount} ${pendingCount === 1 ? "pendiente" : "pendientes"}`
+                          : label
+                      }
                       onClick={() => setSection(id)}
                     >
                       <Icon size={17} aria-hidden="true" /> {label}
+                      {id === "incidents" && pendingCount > 0 && (
+                        <span
+                          className="labor-pending-count"
+                          aria-hidden="true"
+                        >
+                          {pendingCount > 99 ? "99+" : pendingCount}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </nav>

@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
@@ -20,12 +21,14 @@ import type { z } from "zod";
 import { Database } from "../database/database.module";
 import { LaborProvider } from "../accounting/labor-provider";
 import { fiscalIssuerRuc } from "../common/fiscal-config";
+import { Notifications } from "../notifications/notifications.service";
 import { WorkAccess } from "../crm/work-access.service";
 
 type Incident = Omit<WorkPayrollIncident, "id" | "payrollStatus"> & {
   _id: ObjectId;
   issuerRuc: string;
   claimId?: string;
+  notificationPending?: boolean;
   events: { action: string; by: string; at: string }[];
 };
 type Link = {
@@ -39,10 +42,12 @@ type Link = {
 };
 @Injectable()
 export class PersonnelService {
+  private readonly logger = new Logger(PersonnelService.name);
   constructor(
     private readonly database: Database,
     private readonly provider: LaborProvider,
     private readonly access: WorkAccess,
+    private readonly notices: Notifications,
   ) {}
   get incidents() {
     return this.database.db.collection<Incident>("work_payroll_incidents");
@@ -51,7 +56,8 @@ export class PersonnelService {
     return this.database.db.collection<Link>("labor_employee_accounts");
   }
   view(row: Incident, runs: PayrollRun[] = []): WorkPayrollIncident {
-    const { _id, issuerRuc, claimId, events, ...data } = row;
+    const { _id, issuerRuc, claimId, events, notificationPending, ...data } =
+      row;
     return {
       ...data,
       id: String(_id),
@@ -305,6 +311,7 @@ export class PersonnelService {
       {
         $set: {
           status: authorization ? "authorized" : "cancelled",
+          notificationPending: !!authorization,
           ...(authorization
             ? {
                 authorization: {
@@ -331,6 +338,15 @@ export class PersonnelService {
       throw new ConflictException(
         "La incidencia cambió o ya está incorporada en una planilla. Actualiza los datos.",
       );
+    if (authorization) {
+      try {
+        await this.notices.forPayrollDeduction(String(saved._id));
+      } catch {
+        this.logger.warn(
+          "El aviso de un descuento al personal se volverá a intentar.",
+        );
+      }
+    }
     return this.view(saved);
   }
   async mine(userId: string, period: string): Promise<MyPayroll> {

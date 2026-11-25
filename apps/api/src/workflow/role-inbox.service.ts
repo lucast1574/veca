@@ -74,7 +74,7 @@ export class RoleInbox {
             id: String(row._id),
             title: row.employeeName,
             detail: `${row.workName} · Planilla ${row.period}`,
-            href: `#accounting/personal?month=${row.period}`,
+            href: `#accounting/personal?month=${row.period}&section=descuentos`,
           }),
         ),
       );

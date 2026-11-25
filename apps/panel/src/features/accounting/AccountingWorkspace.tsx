@@ -22,10 +22,11 @@ function locationSection() {
   const [, part, id, action] = path.split("/");
   const rawMonth = new URLSearchParams(search).get("month") || "";
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(rawMonth) ? rawMonth : undefined;
+  const discounts = new URLSearchParams(search).get("section") === "descuentos";
   const tab = tabs.find(([value]) => value === part);
   return tab
-    ? { tab: tab[0], id, prepare: action === "preparar", month }
-    : { tab: "guias" as const, id: part, prepare: false, month };
+    ? { tab: tab[0], id, prepare: action === "preparar", month, discounts }
+    : { tab: "guias" as const, id: part, prepare: false, month, discounts };
 }
 
 export function AccountingWorkspace({
@@ -102,7 +103,11 @@ export function AccountingWorkspace({
         )}
         {route.tab === "personal" &&
           user.permissions.includes("accounting_labor") && (
-            <LaborWorkspace key={route.month} initialPeriod={route.month} />
+            <LaborWorkspace
+              key={`${route.month}:${route.discounts}`}
+              initialPeriod={route.month}
+              initialDiscounts={route.discounts}
+            />
           )}
         {route.tab === "impuestos" && (
           <TaxPeriod

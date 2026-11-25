@@ -194,9 +194,34 @@ const summary = {
   publishedProjects: 12,
   pendingUsers: 2,
 };
+let noticeRead = false;
 let current = structuredClone(run);
 let currentIncidents = structuredClone([incident, reported]);
 const mocks = [
+  http.get("*/account/notifications", () =>
+    HttpResponse.json({
+      unread: noticeRead ? 0 : 1,
+      items: [
+        {
+          id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          title: "Descuento al personal por aprobar",
+          body: "Luis Medina · Edificio Alameda. Revisa el sustento del descuento del periodo 2026-11.",
+          href: "#accounting/personal?month=2026-11&section=descuentos",
+          createdAt: "2026-11-25T16:00:00Z",
+          readAt: noticeRead ? "2026-11-25T16:10:00Z" : null,
+        },
+      ],
+    }),
+  ),
+  http.post("*/account/notifications/:id/read", () => {
+    noticeRead = true;
+    return HttpResponse.json({ ok: true });
+  }),
+  http.post("*/account/notifications/read", () => {
+    noticeRead = true;
+    return HttpResponse.json({ ok: true });
+  }),
+
   http.get("*/admin/dashboard", () => HttpResponse.json(summary)),
   http.get("*/admin/dashboard/inbox", () => HttpResponse.json(queue)),
   http.get("*/admin/accounting/period/:month/overview", () =>
@@ -301,6 +326,7 @@ const meta = {
   title: "VECA/Personal y nuevo Resumen",
   parameters: { msw: mocks },
   beforeEach() {
+    noticeRead = false;
     current = structuredClone(run);
     currentIncidents = structuredClone([incident, reported]);
   },
@@ -438,7 +464,7 @@ export const IncorporarDescuento: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      await page.findByRole("button", { name: "Descuentos al personal" }),
+      await page.findByRole("button", { name: /^Descuentos al personal/ }),
     );
     await userEvent.click(
       await page.findByRole("button", { name: "Aprobar descuento" }),

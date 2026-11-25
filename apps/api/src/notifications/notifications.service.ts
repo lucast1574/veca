@@ -15,6 +15,7 @@ import { Database } from "../database/database.module";
 import { AuthService } from "../auth/auth.service";
 import { digest } from "../auth/auth.crypto";
 import { FirebasePush } from "./firebase-push";
+import { fiscalIssuerRuc } from "../common/fiscal-config";
 type Scope = "team" | "coordinator" | "commercial" | "editorial" | "self";
 type NotificationDocument = {
   _id: string;
@@ -23,6 +24,7 @@ type NotificationDocument = {
   workRef?: ObjectId;
   scope: Scope;
   permission: Permission;
+  requiredPermissions?: Permission[];
   title: string;
   body: string;
   href: string;
@@ -47,6 +49,7 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(Notifications.name);
   private timer?: NodeJS.Timeout;
   private processing = false;
+  private reconcilingPayroll = false;
   private peopleCache?: { at: number; users: SessionUser[] };
   constructor(
     private readonly db: Database,
@@ -61,9 +64,11 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
   }
   onModuleInit() {
     this.timer = setInterval(() => {
-      void this.deliver().catch(() =>
-        this.logger.warn("No se pudo procesar la cola de avisos."),
-      );
+      void this.recoverPayrollDeductions()
+        .then(() => this.deliver())
+        .catch(() =>
+          this.logger.warn("No se pudo procesar la cola de avisos."),
+        );
     }, 5000);
     this.timer.unref();
   }
@@ -100,6 +105,12 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
         $match: {
           userId: user.id,
           permission: { $in: user.permissions },
+          $expr: {
+            $setIsSubset: [
+              { $ifNull: ["$requiredPermissions", []] },
+              user.permissions,
+            ],
+          },
           ...(!user.permissions.includes("works")
             ? { scope: { $nin: ["team", "coordinator"] } }
             : {}),
@@ -204,10 +215,22 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     user: SessionUser,
     notice: Pick<
       NotificationDocument,
-      "scope" | "permission" | "title" | "body" | "href" | "workId"
+      | "scope"
+      | "permission"
+      | "requiredPermissions"
+      | "title"
+      | "body"
+      | "href"
+      | "workId"
     >,
   ) {
     if (!user.permissions.includes(notice.permission)) return;
+    if (
+      notice.requiredPermissions?.some(
+        (permission) => !user.permissions.includes(permission),
+      )
+    )
+      return;
     if (
       ["team", "coordinator"].includes(notice.scope) &&
       !user.permissions.includes("works")
@@ -232,14 +255,60 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     );
     if (result.upsertedCount) this.changes.next({ userId: user.id });
   }
+  async forPayrollDeduction(id: string) {
+    const incidents = this.db.db.collection("work_payroll_incidents");
+    const row = await incidents.findOne({
+      _id: new ObjectId(id),
+      issuerRuc: fiscalIssuerRuc,
+    });
+    if (!row) return;
+    if (row.status === "authorized" && !row.payrollRunId) {
+      this.refreshAudience();
+      await Promise.all(
+        (await this.people())
+          .filter(
+            (user) =>
+              user.permissions.includes("accounting") &&
+              user.permissions.includes("accounting_labor"),
+          )
+          .map((user) =>
+            this.add("payroll-deduction:" + id, user, {
+              scope: "self",
+              permission: "accounting_labor",
+              requiredPermissions: ["accounting", "accounting_labor"],
+              title: "Descuento al personal por aprobar",
+              body: `${row.employeeName} · ${row.workName}. Revisa el sustento del descuento del periodo ${row.period}.`,
+              href: `#accounting/personal?month=${row.period}&section=descuentos`,
+            }),
+          ),
+      );
+    }
+    await incidents.updateOne(
+      { _id: row._id, revision: row.revision },
+      { $set: { notificationPending: false } },
+    );
+  }
+  private async recoverPayrollDeductions() {
+    if (this.reconcilingPayroll) return;
+    this.reconcilingPayroll = true;
+    try {
+      const rows = await this.db.db
+        .collection("work_payroll_incidents")
+        .find({ issuerRuc: fiscalIssuerRuc, notificationPending: true })
+        .project({ _id: 1 })
+        .limit(100)
+        .toArray();
+      for (const row of rows) await this.forPayrollDeduction(String(row._id));
+    } finally {
+      this.reconcilingPayroll = false;
+    }
+  }
   async forGuideRequest(id: string) {
-    const guide = await this.db.db
-      .collection("dispatches")
-      .findOne({
-        _id: new ObjectId(id),
-        status: "review",
-        supplyRequestId: { $exists: true },
-      });
+    const guide = await this.db.db.collection("dispatches").findOne({
+      _id: new ObjectId(id),
+      status: "review",
+      supplyRequestId: { $exists: true },
+    });
     if (!guide) return;
     const people = await this.people();
     await Promise.all(
