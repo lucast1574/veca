@@ -6,6 +6,7 @@ import {
   type LaborReceipt,
   type LaborSource,
   type PayrollRun,
+  type WorkPayrollIncident,
 } from "@veca/content";
 import { Button } from "../../../components/ui";
 import { amount } from "../accounting-shared";
@@ -14,7 +15,7 @@ import type { AllocationTarget } from "./LaborAllocationForm";
 export type Dialog =
   | { kind: "employee"; record?: LaborEmployee }
   | { kind: "account"; record: LaborEmployee }
-  | { kind: "deductions"; record: PayrollRun }
+  | { kind: "deductionApproval"; record: WorkPayrollIncident }
   | { kind: "payroll"; record?: PayrollRun }
   | { kind: "fee"; record?: LaborReceipt }
   | { kind: "payment"; record: PayrollRun | LaborReceipt }
@@ -176,18 +177,13 @@ export function PayrollRecords({
             );
           })}
         </ul>
+        {run.deductionPending && (
+          <p className="hint">
+            Hay una actualización pendiente de descuentos al personal. Revísala
+            desde su pestaña antes de aprobar esta planilla.
+          </p>
+        )}
         <div className="labor-record-actions">
-          {run.status === "draft" && (
-            <Button
-              variant="ghost"
-              disabled={!canWrite}
-              onClick={() => open({ kind: "deductions", record: run })}
-            >
-              {run.deductionPending
-                ? "Continuar incorporación de descuentos"
-                : "Descuentos de obra"}
-            </Button>
-          )}
           {run.status === "draft" && (
             <>
               <Button

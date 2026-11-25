@@ -267,7 +267,7 @@ export type WorkPayrollIncident = z.infer<typeof workPayrollIncidentInput> & {
   workName: string;
   employeeName: string;
   revision: number;
-  status: "reported" | "authorized" | "cancelled";
+  status: "reported" | "authorized" | "approved" | "cancelled";
   createdAt: string;
   createdBy: string;
   authorization?: {
@@ -276,6 +276,7 @@ export type WorkPayrollIncident = z.infer<typeof workPayrollIncidentInput> & {
     by: string;
     at: string;
   };
+  approval?: { by: string; at: string };
   payrollRunId?: string;
   payrollStatus?: PayrollRun["status"];
 };

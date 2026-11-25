@@ -1,6 +1,6 @@
 import {
   EmployeeAccountDialog,
-  PayrollDeductionDialog,
+  ApprovePayrollDeductionDialog,
   incidentState,
 } from "./PersonnelDialogs";
 import "./personnel.css";
@@ -55,7 +55,7 @@ const sections = [
   { id: "runs", label: "Planilla", Icon: Wallet },
   { id: "receipts", label: "Honorarios", Icon: FileText },
   { id: "employees", label: "Trabajadores", Icon: Users },
-  { id: "incidents", label: "Descuentos de obra", Icon: FileText },
+  { id: "incidents", label: "Descuentos al personal", Icon: FileText },
 ] as const;
 type Section = (typeof sections)[number]["id"];
 export function LaborWorkspace({
@@ -225,6 +225,11 @@ export function LaborWorkspace({
               )}
               {section === "incidents" && (
                 <div className="personnel-incidents">
+                  <p className="hint">
+                    Aprueba los descuentos sustentados del trabajador. Se
+                    reflejarán automáticamente en su planilla; la obra indica
+                    dónde ocurrió la incidencia.
+                  </p>
                   {data.incidents?.length ? (
                     data.incidents.map((i) => (
                       <article key={i.id}>
@@ -242,17 +247,46 @@ export function LaborWorkspace({
                           <span
                             className="labor-status"
                             data-state={
-                              i.status === "authorized" ? "approved" : "draft"
+                              i.status === "approved" || i.payrollRunId
+                                ? "approved"
+                                : "draft"
                             }
                           >
                             {incidentState(i)}
                           </span>
-                          <a
-                            className="warehouse-link"
-                            href={`#works/${i.workId}`}
-                          >
-                            Abrir obra
-                          </a>
+                          <div className="personnel-actions">
+                            {!i.payrollRunId &&
+                              (i.status === "authorized" ||
+                                (i.status === "approved" &&
+                                  data.runs.some(
+                                    (run) =>
+                                      run.status === "draft" &&
+                                      run.lines.some(
+                                        (line) =>
+                                          line.employeeId === i.employeeId,
+                                      ),
+                                  ))) && (
+                                <Button
+                                  disabled={!canWrite}
+                                  onClick={() =>
+                                    open({
+                                      kind: "deductionApproval",
+                                      record: i,
+                                    })
+                                  }
+                                >
+                                  {i.status === "approved"
+                                    ? "Reintentar actualización"
+                                    : "Aprobar descuento"}
+                                </Button>
+                              )}
+                            <a
+                              className="warehouse-link"
+                              href={`#works/${i.workId}`}
+                            >
+                              Abrir obra
+                            </a>
+                          </div>
                         </footer>
                         {i.authorization && (
                           <small>Sustento: {i.authorization.reference}</small>
@@ -338,12 +372,17 @@ export function LaborWorkspace({
           }
         />
       )}
-      {data && dialog?.kind === "deductions" && (
-        <PayrollDeductionDialog
-          run={dialog.record}
-          incidents={data.incidents || []}
+      {data && dialog?.kind === "deductionApproval" && (
+        <ApprovePayrollDeductionDialog
+          incident={dialog.record}
           close={close}
-          done={() => saved("Descuentos incorporados al borrador.")}
+          done={(applied) =>
+            saved(
+              applied
+                ? "Descuento aprobado y reflejado en la planilla del trabajador."
+                : "Descuento aprobado. Se aplicará automáticamente al preparar la planilla del mes.",
+            )
+          }
         />
       )}
       {data && dialog?.kind === "employee" && (

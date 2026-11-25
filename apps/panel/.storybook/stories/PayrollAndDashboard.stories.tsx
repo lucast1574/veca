@@ -140,7 +140,7 @@ const queue = [
   },
   {
     key: "work_deductions",
-    title: "Descuentos de obra",
+    title: "Descuentos al personal",
     count: 1,
     href: "#accounting/personal",
     items: [
@@ -195,6 +195,7 @@ const summary = {
   pendingUsers: 2,
 };
 let current = structuredClone(run);
+let currentIncidents = structuredClone([incident, reported]);
 const mocks = [
   http.get("*/admin/dashboard", () => HttpResponse.json(summary)),
   http.get("*/admin/dashboard/inbox", () => HttpResponse.json(queue)),
@@ -227,7 +228,7 @@ const mocks = [
       runs: [current],
       receipts: [],
       allocations: [],
-      incidents: [incident, reported],
+      incidents: currentIncidents,
     }),
   ),
   http.get("*/admin/accounting/labor/accounts", () =>
@@ -245,7 +246,7 @@ const mocks = [
       employees: [
         { id: employee.id, name: employee.name, position: employee.position },
       ],
-      items: [incident, reported],
+      items: currentIncidents,
     }),
   ),
   http.get("*/account/payroll", () =>
@@ -269,28 +270,31 @@ const mocks = [
       ],
     }),
   ),
-  http.post(
-    "*/admin/accounting/labor/runs/:id/work-deductions",
-    async ({ request }) => {
-      const data = (await request.json()) as { incidentIds: string[] };
-      const included = data.incidentIds.includes(incident.id);
+  http.post("*/admin/accounting/labor/incidents/:id/approve", ({ params }) => {
+    const row = currentIncidents.find((i) => i.id === params.id)!;
+    if (!row.payrollRunId) {
+      row.status = "approved";
+      row.revision++;
+      row.payrollRunId = run.id;
+      row.approval = { by: "Andrea Salas", at: "2026-11-25T14:00:00Z" };
       current = {
-        ...run,
-        revision: 3,
-        lines: [
-          {
-            ...line,
-            otherDeductionCents: included ? 6000 : 1000,
-            netCents: included ? 237600 : 242600,
-          },
+        ...current,
+        revision: current.revision + 1,
+        lines: current.lines.map((l) => ({
+          ...l,
+          otherDeductionCents: l.otherDeductionCents + row.cents,
+          netCents: l.netCents - row.cents,
+        })),
+        netCents: current.netCents - row.cents,
+        deductionCents: current.deductionCents + row.cents,
+        workDeductions: [
+          ...(current.workDeductions || []),
+          structuredClone(row),
         ],
-        netCents: included ? 237600 : 242600,
-        deductionCents: included ? 42400 : 37400,
-        workDeductions: included ? [{ ...incident, payrollRunId: run.id }] : [],
       };
-      return HttpResponse.json(current);
-    },
-  ),
+    }
+    return HttpResponse.json({ item: row, applied: true });
+  }),
   ...handlers,
 ];
 const meta = {
@@ -298,6 +302,7 @@ const meta = {
   parameters: { msw: mocks },
   beforeEach() {
     current = structuredClone(run);
+    currentIncidents = structuredClone([incident, reported]);
   },
 } satisfies Meta;
 export default meta;
@@ -429,16 +434,17 @@ export const SustentarDescuento: Story = {
 };
 export const IncorporarDescuento: Story = {
   ...PlanillaBonos,
-  name: "08 · Incorporar descuentos al borrador",
+  name: "08 · Aprobar descuento y actualizar Planilla",
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      (await page.findAllByRole("button", { name: "Descuentos de obra" })).at(
-        -1,
-      )!,
+      await page.findByRole("button", { name: "Descuentos al personal" }),
+    );
+    await userEvent.click(
+      await page.findByRole("button", { name: "Aprobar descuento" }),
     );
     await expect(
-      page.findByRole("dialog", { name: "Descuentos de obra en planilla" }),
+      page.findByRole("dialog", { name: "Aprobar descuento al personal" }),
     ).resolves.toBeVisible();
   },
 };

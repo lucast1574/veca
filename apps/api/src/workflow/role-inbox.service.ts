@@ -57,13 +57,13 @@ export class RoleInbox {
       sections.push(
         this.queue(
           "work_deductions",
-          "Descuentos de obra",
+          "Descuentos al personal",
           "work_payroll_incidents",
           [
             {
               $match: {
                 issuerRuc: fiscalIssuerRuc,
-                status: "authorized",
+                status: { $in: ["authorized", "approved"] },
                 payrollRunId: { $exists: false },
                 period: { $lte: limaDate(new Date()).slice(0, 7) },
               },

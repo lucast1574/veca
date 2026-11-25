@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { MongoClient, ObjectId } from "mongodb";
 import { crmLeadDefaults } from "@veca/content";
 const client = await new MongoClient("mongodb://127.0.0.1:27099").connect(),
@@ -242,6 +242,21 @@ try {
     fifthCategoryCents: 0,
     otherDeductionCents: 1000,
   };
+  const approve = (id, revision = 1, session = a, status = 201) =>
+    req(
+      root + `/incidents/${id}/approve`,
+      session,
+      { revision },
+      "POST",
+      status,
+    );
+  await approve(record.id, 1, c, 403);
+  await approve(record.id, 1, w, 403);
+  await approve(foreign.id, 0, a, 409);
+  const waiting = (await approve(record.id)).body;
+  assert.equal(waiting.item.status, "approved");
+  assert.equal(waiting.applied, false);
+  assert.equal((await approve(record.id)).body.applied, false);
   let run = (
     await req(
       root + "/runs",
@@ -251,60 +266,40 @@ try {
       201,
     )
   ).body;
+  const loadRun = async () =>
+    (await req(root + "?period=" + period, a)).body.runs.find(
+      (r) => r.id === run.id,
+    );
   assert.equal(run.lines[0].grossCents, 280000);
-  assert.equal(run.lines[0].netCents, 242600);
+  assert.equal(run.lines[0].otherDeductionCents, 6000);
+  assert.equal(run.lines[0].netCents, 237600);
+  assert.equal((await loadRun()).workDeductions.length, 1);
   await req(
-    root + `/runs/${run.id}/status`,
+    root + "/runs",
     a,
-    { revision: run.revision, status: "approved" },
+    { period, minimumWageCents: 113000, lines: [line] },
     "POST",
     409,
   );
+
+  await approve(record.id);
+  assert.equal((await loadRun()).lines[0].otherDeductionCents, 6000);
+  // Bound discounts from the previous workflow remain intact after editing.
+  await db
+    .collection("work_payroll_incidents")
+    .updateOne(
+      { _id: new ObjectId(record.id) },
+      { $set: { status: "authorized" } },
+    );
+
   await req(
     root + `/runs/${run.id}/work-deductions`,
     a,
-    {
-      revision: run.revision,
-      operationId: randomUUID(),
-      incidentIds: [foreign.id],
-    },
+    { revision: run.revision, operationId: randomUUID(), incidentIds: [] },
     "POST",
-    409,
+    404,
   );
-  const apply = {
-    revision: run.revision,
-    operationId: randomUUID(),
-    incidentIds: [record.id],
-  };
-  run = (
-    await req(root + `/runs/${run.id}/work-deductions`, a, apply, "POST", 201)
-  ).body;
-  assert.equal(run.lines[0].otherDeductionCents, 6000);
-  assert.equal(run.lines[0].netCents, 237600);
-  assert.equal(
-    (await req(root + `/runs/${run.id}/work-deductions`, a, apply, "POST", 201))
-      .body.lines[0].otherDeductionCents,
-    6000,
-  );
-  const ledger = await req(root + "?period=" + period, a);
-  assert.equal(
-    ledger.body.runs.find((r) => r.id === run.id).workDeductions.length,
-    1,
-  );
-  const again = (
-    await req(
-      root + `/runs/${run.id}/work-deductions`,
-      a,
-      {
-        revision: run.revision,
-        operationId: randomUUID(),
-        incidentIds: [record.id],
-      },
-      "POST",
-      201,
-    )
-  ).body;
-  assert.equal(again.lines[0].otherDeductionCents, 6000);
+  await req(path + `/${record.id}/cancel`, c, { revision: 2 }, "POST", 409);
   await req(
     root + `/runs/${run.id}`,
     a,
@@ -324,24 +319,97 @@ try {
         manualOtherDeductions: true,
       },
       "PUT",
-      200,
     )
   ).body;
   assert.equal(run.lines[0].otherDeductionCents, 6000);
   assert.equal(run.lines[0].grossCents, 290000);
-  await req(path + `/${record.id}/cancel`, c, { revision: 1 }, "POST", 409);
-  run = (
+  const second = (
     await req(
-      root + `/runs/${run.id}/work-deductions`,
-      a,
-      { revision: run.revision, operationId: randomUUID(), incidentIds: [] },
+      path,
+      c,
+      { ...data, id: String(new ObjectId()), cents: 1000 },
       "POST",
       201,
     )
   ).body;
-  assert.equal(run.lines[0].otherDeductionCents, 1000);
-  await req(path + `/${record.id}/cancel`, c, { revision: 1 }, "POST", 201);
-  // Simulate an interrupted operation before incident claims were persisted.
+  await authorize(second.id);
+  await req(
+    root + `/runs/${run.id}/status`,
+    a,
+    { revision: run.revision, status: "approved" },
+    "POST",
+    409,
+  );
+  assert.equal((await approve(second.id)).body.applied, true);
+  run = await loadRun();
+  assert.equal(run.lines[0].otherDeductionCents, 7000);
+  const appliedNet = run.lines[0].netCents;
+  await approve(second.id);
+  assert.equal((await loadRun()).lines[0].netCents, appliedNet);
+  const excessive = (
+    await req(
+      path,
+      c,
+      { ...data, id: String(new ObjectId()), cents: 900000 },
+      "POST",
+      201,
+    )
+  ).body;
+  await authorize(excessive.id);
+  await approve(excessive.id, 1, a, 400);
+  assert.equal(
+    (
+      await db
+        .collection("work_payroll_incidents")
+        .findOne({ _id: new ObjectId(excessive.id) })
+    ).status,
+    "authorized",
+  );
+  await req(path + `/${excessive.id}/cancel`, c, { revision: 1 }, "POST", 201);
+  await approve(excessive.id, 1, a, 409);
+  await authorize(foreign.id);
+  assert.equal((await approve(foreign.id)).body.applied, false);
+  assert.equal((await loadRun()).lines.length, 1);
+  const otherLine = {
+    ...line,
+    employeeId: other.id,
+    taxableExtraCents: 0,
+    otherDeductionCents: 0,
+  };
+  run = (
+    await req(
+      root + `/runs/${run.id}`,
+      a,
+      {
+        period,
+        minimumWageCents: 113000,
+        lines: [{ ...line, taxableExtraCents: 30000 }, otherLine],
+        revision: run.revision,
+        manualOtherDeductions: true,
+      },
+      "PUT",
+    )
+  ).body;
+  assert.equal(run.lines[0].otherDeductionCents, 7000);
+  assert.equal(run.lines[1].otherDeductionCents, 5000);
+  // Recover a provider success whose local source linkage was interrupted.
+  const operation = await db
+    .collection("payroll_deduction_operations")
+    .findOne({ runId: run.id, state: "done" }, { sort: { createdAt: -1 } });
+  await db
+    .collection("payroll_deduction_operations")
+    .updateOne({ _id: operation._id }, { $set: { state: "pending" } });
+  await db
+    .collection("work_payroll_incidents")
+    .updateOne(
+      { _id: new ObjectId(second.id) },
+      { $unset: { payrollRunId: "" }, $set: { claimId: operation._id } },
+    );
+  const recovered = await loadRun();
+  assert.equal(recovered.workDeductions.length, 3);
+  assert.equal(recovered.deductionPending, undefined);
+  assert.equal(recovered.lines[0].netCents, run.lines[0].netCents);
+  // A cancelled source with an equal monetary snapshot cannot be resurrected by recovery.
   const interrupted = (
     await req(
       path,
@@ -352,29 +420,29 @@ try {
     )
   ).body;
   await authorize(interrupted.id);
-  const operationId = randomUUID(),
-    input = {
-      period,
-      minimumWageCents: run.minimumWageCents,
-      lines: [{ ...line, taxableExtraCents: 30000, otherDeductionCents: 2000 }],
-    };
+  await db
+    .collection("work_payroll_incidents")
+    .updateOne(
+      { _id: new ObjectId(interrupted.id) },
+      { $set: { status: "approved", revision: 2 } },
+    );
+  const opId = randomUUID();
+  const input = {
+    period,
+    minimumWageCents: run.minimumWageCents,
+    lines: run.lines.map((row) =>
+      Object.fromEntries(Object.keys(line).map((k) => [k, row[k]])),
+    ),
+  };
   await db.collection("payroll_deduction_operations").insertOne({
-    _id: `20616656156:${operationId}`,
+    _id: `20616656156:${opId}`,
     issuerRuc: "20616656156",
     runId: run.id,
     revision: run.revision,
     ids: [interrupted.id],
     previousIds: [],
     input,
-    hash: createHash("sha256")
-      .update(
-        JSON.stringify({
-          runId: run.id,
-          revision: run.revision,
-          ids: [interrupted.id],
-        }),
-      )
-      .digest("hex"),
+    hash: "recovery-only",
     state: "pending",
     actor: "QA",
     createdAt: new Date().toISOString(),
@@ -382,49 +450,16 @@ try {
   await req(
     path + `/${interrupted.id}/cancel`,
     c,
-    { revision: 1 },
+    { revision: 2 },
     "POST",
     201,
   );
-  await req(
-    root + `/runs/${run.id}/work-deductions`,
-    a,
-    { revision: run.revision, operationId, incidentIds: [interrupted.id] },
-    "POST",
-    409,
-  );
+  await loadRun();
   assert.equal(
     (
       await db
         .collection("payroll_deduction_operations")
-        .findOne({ _id: `20616656156:${operationId}` })
-    ).state,
-    "failed",
-  );
-  // Equal monetary snapshots must not resurrect a source cancelled before claims.
-  const noChangeId = randomUUID();
-  await db.collection("payroll_deduction_operations").insertOne({
-    _id: `20616656156:${noChangeId}`,
-    issuerRuc: "20616656156",
-    runId: run.id,
-    revision: run.revision,
-    ids: [interrupted.id],
-    previousIds: [],
-    input: {
-      ...input,
-      lines: [{ ...input.lines[0], otherDeductionCents: 1000 }],
-    },
-    hash: "recovery-only",
-    state: "pending",
-    actor: "QA",
-    createdAt: new Date().toISOString(),
-  });
-  await req(root + "?period=" + period, a);
-  assert.equal(
-    (
-      await db
-        .collection("payroll_deduction_operations")
-        .findOne({ _id: `20616656156:${noChangeId}` })
+        .findOne({ _id: `20616656156:${opId}` })
     ).state,
     "failed",
   );
@@ -436,44 +471,6 @@ try {
     ).payrollRunId,
     undefined,
   );
-  // A saved provider response with an unfinished local binding is recovered without another deduction.
-  const finalIncident = (
-    await req(path, c, { ...data, id: String(new ObjectId()) }, "POST", 201)
-  ).body;
-  await authorize(finalIncident.id);
-  const lastApply = {
-    revision: run.revision,
-    operationId: randomUUID(),
-    incidentIds: [finalIncident.id],
-  };
-  run = (
-    await req(
-      root + `/runs/${run.id}/work-deductions`,
-      a,
-      lastApply,
-      "POST",
-      201,
-    )
-  ).body;
-  await db
-    .collection("payroll_deduction_operations")
-    .updateOne(
-      { _id: `20616656156:${lastApply.operationId}` },
-      { $set: { state: "pending" } },
-    );
-  await db.collection("work_payroll_incidents").updateOne(
-    { _id: new ObjectId(finalIncident.id) },
-    {
-      $unset: { payrollRunId: "" },
-      $set: { claimId: `20616656156:${lastApply.operationId}` },
-    },
-  );
-  const recovered = (await req(root + "?period=" + period, a)).body.runs.find(
-    (r) => r.id === run.id,
-  );
-  assert.equal(recovered.workDeductions.length, 1);
-  assert.equal(recovered.lines[0].otherDeductionCents, 6000);
-  assert.equal(recovered.deductionPending, undefined);
   const reportedBeforeClose = (
     await req(path, c, { ...data, id: String(new ObjectId()) }, "POST", 201)
   ).body;
@@ -512,17 +509,10 @@ try {
     "PUT",
     409,
   );
-  await req(
-    root + `/runs/${run.id}/work-deductions`,
-    a,
-    { revision: run.revision, operationId: randomUUID(), incidentIds: [] },
-    "POST",
-    409,
-  );
   const profile = (await req("/account/payroll?period=" + period, w)).body;
   assert.equal(profile.linked, true);
   assert.equal(profile.line.employeeId, employee.id);
-  assert.equal(profile.line.otherDeductionCents, 6000);
+  assert.equal(profile.line.otherDeductionCents, 7000);
   assert.equal(profile.line.taxableExtraCents, 30000);
   assert.equal(profile.line.ctsCents, 65000);
   assert.equal(profile.run.status, "approved");
@@ -535,7 +525,44 @@ try {
     await req(`/account/payroll?period=${period}&userId=${ids.worker}`, w2)
   ).body;
   assert.equal(otherProfile.employeeName, other.name);
-  assert.equal(otherProfile.line, null);
+  assert.equal(otherProfile.line.employeeId, other.id);
+  // A new approval cannot change an already approved payroll.
+  await db
+    .collection("work_payroll_incidents")
+    .updateOne(
+      { _id: new ObjectId(reportedBeforeClose.id) },
+      { $set: { status: "authorized", revision: 1 } },
+    );
+  await approve(reportedBeforeClose.id, 1, a, 409);
+  await req(
+    path + `/${reportedBeforeClose.id}/cancel`,
+    c,
+    { revision: 1 },
+    "POST",
+    201,
+  );
+  await req(
+    root + `/runs/${run.id}/status`,
+    a,
+    { revision: run.revision, status: "void" },
+    "POST",
+    201,
+  );
+  const replacement = (
+    await req(
+      root + "/runs",
+      a,
+      { period, minimumWageCents: 113000, lines: [line, otherLine] },
+      "POST",
+      201,
+    )
+  ).body;
+  assert.equal(replacement.lines[0].otherDeductionCents, 2000);
+  assert.equal(replacement.lines[1].otherDeductionCents, 5000);
+  // A legacy source can be approved through the new inbox after its old payroll is voided.
+  run = replacement;
+  await approve(record.id, 2);
+  assert.equal((await loadRun()).lines[0].otherDeductionCents, 7000);
   const stockId = new ObjectId();
   await db.collection("inventory_materials").insertOne({
     _id: stockId,
@@ -571,7 +598,7 @@ try {
     false,
   );
   console.log(
-    "Personal: vínculo opcional único, privacidad salarial, encargado real de obra, bonos/CTS, sustento, descuentos sin duplicar, recuperación, planilla cerrada y Resumen por permisos: OK.",
+    "Personal: vínculo opcional único, privacidad salarial, encargado real de obra, bonos/CTS, sustento, aprobación desde Personal y reflejo automático antes/después de crear la planilla, sin duplicar, recuperación y planilla cerrada y Resumen por permisos: OK.",
   );
 } finally {
   await client.close();

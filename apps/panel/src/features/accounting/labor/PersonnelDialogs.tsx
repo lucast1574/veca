@@ -1,9 +1,5 @@
-import { useRef, useState } from "react";
-import type {
-  LaborEmployee,
-  PayrollRun,
-  WorkPayrollIncident,
-} from "@veca/content";
+import { useState } from "react";
+import type { LaborEmployee, WorkPayrollIncident } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { Field, Notice } from "../../../components/ui";
 import { amount, useAccountingQuery } from "../accounting-shared";
@@ -15,9 +11,11 @@ export const incidentState = (i: WorkPayrollIncident) =>
     ? "Cancelado"
     : i.payrollRunId
       ? "Incluido en planilla"
-      : i.status === "authorized"
-        ? "Listo para incorporar"
-        : "Pendiente de sustento";
+      : i.status === "approved"
+        ? "Aprobado · Pendiente de planilla"
+        : i.status === "authorized"
+          ? "Pendiente de aprobación"
+          : "Pendiente de sustento";
 export function EmployeeAccountDialog({
   employee,
   close,
@@ -77,114 +75,60 @@ export function EmployeeAccountDialog({
     </WarehouseForm>
   );
 }
-export function PayrollDeductionDialog({
-  run,
-  incidents,
+export function ApprovePayrollDeductionDialog({
+  incident,
   close,
   done,
 }: {
-  run: PayrollRun;
-  incidents: WorkPayrollIncident[];
+  incident: WorkPayrollIncident;
   close: () => void;
-  done: () => void;
+  done: (applied: boolean) => void;
 }) {
-  const pending = run.deductionPending;
-  const [selected, setSelected] = useState(
-    pending?.incidentIds || run.workDeductions?.map((i) => i.id) || [],
-  );
-  const operation = useRef(pending?.operationId || crypto.randomUUID());
-  const available = incidents.filter(
-    (i) =>
-      i.status === "authorized" &&
-      i.period === run.period &&
-      run.lines.some((l) => l.employeeId === i.employeeId) &&
-      (!i.payrollRunId || i.payrollRunId === run.id),
-  );
+  const retry = incident.status === "approved";
   return (
     <WarehouseForm
-      title="Descuentos de obra en planilla"
-      action={
-        pending ? "Confirmar incorporación" : "Guardar descuentos en borrador"
+      title={
+        retry
+          ? "Actualizar descuento en Planilla"
+          : "Aprobar descuento al personal"
       }
+      action={retry ? "Reintentar actualización" : "Aprobar descuento"}
       onClose={close}
-      wide
-      hasChanges={
-        !pending &&
-        [...selected].sort().join() !==
-          (run.workDeductions || [])
-            .map((i) => i.id)
-            .sort()
-            .join()
-      }
       save={async () => {
-        await api(laborPath + `/runs/${run.id}/work-deductions`, {
-          method: "POST",
-          body: JSON.stringify({
-            revision: pending?.revision ?? run.revision,
-            operationId: operation.current,
-            incidentIds: selected,
-          }),
-        });
-        done();
+        const result = await api<{ applied: boolean }>(
+          laborPath + `/incidents/${incident.id}/approve`,
+          {
+            method: "POST",
+            body: JSON.stringify({ revision: incident.revision }),
+          },
+        );
+        done(result.applied);
       }}
     >
-      <p className="hint">
-        Periodo {run.period}. Solo aparecen incidencias autorizadas para los
-        trabajadores incluidos. Se sumarán a Otros descuentos; el sueldo bruto y
-        el costo de la obra conservan su cálculo.
-      </p>
-      {pending && (
-        <Notice>
-          Hay una incorporación por confirmar. Reintenta esta misma solicitud
-          para comprobar el resultado.
-        </Notice>
-      )}
-      {available.length ? (
-        <div className="personnel-check-list">
-          {available.map((i) => (
-            <label key={i.id}>
-              <input
-                type="checkbox"
-                checked={selected.includes(i.id)}
-                disabled={!!pending}
-                onChange={(e) => {
-                  setSelected((v) =>
-                    e.target.checked
-                      ? [...v, i.id]
-                      : v.filter((id) => id !== i.id),
-                  );
-                  operation.current = crypto.randomUUID();
-                }}
-              />
-              <span>
-                <strong>{i.employeeName}</strong>
-                <small>
-                  {i.workName} · {i.item}
-                </small>
-                <small>{i.authorization?.reference}</small>
-              </span>
-              <b>{amount(i.cents)}</b>
-            </label>
-          ))}
-        </div>
-      ) : (
-        <p className="hint">
-          No hay descuentos autorizados para esta planilla.
-        </p>
-      )}
-      <div className="purchase-detail-total">
+      <div className="warehouse-preview">
         <strong>
-          Total seleccionado ·{" "}
-          {amount(
-            available
-              .filter((i) => selected.includes(i.id))
-              .reduce((s, i) => s + i.cents, 0),
-          )}
+          {incident.employeeName} · {amount(incident.cents)}
         </strong>
         <p>
-          La planilla debe permanecer en borrador para cambiar esta selección.
+          {incident.workName} · {incident.item}
         </p>
       </div>
+      <p>
+        Este importe se descontará del sueldo neto del trabajador en la planilla
+        de{" "}
+        {new Intl.DateTimeFormat("es-PE", {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date(incident.period + "-01T12:00:00Z"))}
+        .
+      </p>
+      <p className="hint">
+        Si ya existe el borrador con este trabajador, se actualizará
+        automáticamente. Si aún no existe, el descuento se aplicará al
+        prepararlo.
+      </p>
+      <p className="hint">Sustento: {incident.authorization?.reference}</p>
     </WarehouseForm>
   );
 }

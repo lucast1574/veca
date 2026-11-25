@@ -26,6 +26,7 @@ import type { AuthenticatedRequest } from "../auth/auth.types";
 import { parse } from "../common/validation";
 import { PersonnelService } from "./personnel.service";
 import { PayrollDeductions } from "./payroll-deductions.service";
+import { PayrollApproval } from "./payroll-approval.service";
 import { LaborProvider } from "../accounting/labor-provider";
 
 @Controller("admin/works/:workId/payroll-incidents")
@@ -137,7 +138,17 @@ class MyPayrollController {
     PayrollAccountsController,
     MyPayrollController,
   ],
-  providers: [LaborProvider, PersonnelService, PayrollDeductions],
-  exports: [LaborProvider, PersonnelService, PayrollDeductions],
+  providers: [
+    LaborProvider,
+    PersonnelService,
+    PayrollDeductions,
+    PayrollApproval,
+  ],
+  exports: [
+    LaborProvider,
+    PersonnelService,
+    PayrollDeductions,
+    PayrollApproval,
+  ],
 })
 export class PersonnelModule {}

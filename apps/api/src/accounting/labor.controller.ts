@@ -1,4 +1,5 @@
 import { PayrollDeductions } from "../personnel/payroll-deductions.service";
+import { PayrollApproval } from "../personnel/payroll-approval.service";
 import {
   Body,
   Controller,
@@ -11,6 +12,7 @@ import {
 } from "@nestjs/common";
 import {
   accountingMonth,
+  accountingId,
   employeeInput,
   laborEmployee,
   payrollInput,
@@ -39,6 +41,7 @@ export class LaborController {
     private readonly labor: LaborCostsService,
     private readonly provider: LaborProvider,
     private readonly deductions: PayrollDeductions,
+    private readonly approvals: PayrollApproval,
   ) {}
 
   @Get()
@@ -63,14 +66,18 @@ export class LaborController {
   }
 
   @Post("runs")
-  newRun(@Body() body: unknown) {
-    return this.provider.request("runs", payrollRun, {
-      method: "POST",
-      data: parse(payrollInput, body),
-    });
+  newRun(@Body() body: unknown, @Req() req: AuthenticatedRequest) {
+    return this.approvals.create(
+      parse(payrollInput, body),
+      req.session.user.username,
+    );
   }
   @Put("runs/:id")
-  editRun(@Param("id") raw: string, @Body() body: unknown) {
+  editRun(
+    @Param("id") raw: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
     const id = parse(idSchema, raw);
     const { manualOtherDeductions, ...data } = parse(
       payrollInput.extend({
@@ -79,7 +86,12 @@ export class LaborController {
       }),
       body,
     );
-    return this.deductions.edit(id, data, manualOtherDeductions === true);
+    return this.approvals.edit(
+      id,
+      data,
+      manualOtherDeductions === true,
+      req.session.user.username,
+    );
   }
   @Post("runs/:id/status")
   async runStatus(@Param("id") raw: string, @Body() body: unknown) {
@@ -94,28 +106,16 @@ export class LaborController {
     return saved;
   }
 
-  @Post("runs/:id/work-deductions")
-  applyDeductions(
+  @Post("incidents/:id/approve")
+  approveDeduction(
     @Param("id") raw: string,
     @Body() body: unknown,
     @Req() req: AuthenticatedRequest,
   ) {
-    const data = parse(
-      z.strictObject({
-        revision,
-        operationId: z.uuid(),
-        incidentIds: z
-          .array(z.string().regex(/^[a-f0-9]{24}$/))
-          .max(100)
-          .refine((ids) => new Set(ids).size === ids.length),
-      }),
-      body,
-    );
-    return this.deductions.apply(
-      parse(idSchema, raw),
+    const data = parse(z.strictObject({ revision }), body);
+    return this.approvals.approve(
+      parse(accountingId, raw),
       data.revision,
-      data.operationId,
-      data.incidentIds,
       req.session.user.username,
     );
   }

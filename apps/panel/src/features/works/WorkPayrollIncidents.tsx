@@ -136,7 +136,7 @@ export function WorkPayrollIncidents({ workId }: { workId: string }) {
           }
           action={
             dialog.action === "authorize"
-              ? "Autorizar para Planilla"
+              ? "Enviar a Contabilidad"
               : "Confirmar cancelación"
           }
           onClose={() => setDialog(undefined)}
@@ -167,8 +167,8 @@ export function WorkPayrollIncidents({ workId }: { workId: string }) {
             <>
               <p className="hint">
                 Registra la autorización expresa del trabajador o el mandato
-                aplicable. Contabilidad incorporará el importe en el borrador
-                del periodo {dialog.row.period}.
+                aplicable. Contabilidad revisará y aprobará el descuento para la
+                planilla del periodo {dialog.row.period}.
               </p>
               <AuthorizationFields />
             </>
@@ -331,7 +331,8 @@ function IncidentForm({
       </Field>
       <p className="hint">
         Guardar la incidencia no descuenta dinero. Después registra el sustento
-        para que Contabilidad pueda incorporarla a Planilla.
+        para que Contabilidad pueda aprobar el descuento en Descuentos al
+        personal.
       </p>
     </WarehouseForm>
   );

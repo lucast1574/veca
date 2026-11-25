@@ -64,6 +64,14 @@ export class PayrollDeductions {
     if (!run) throw new NotFoundException("Planilla no encontrada.");
     return run;
   }
+  async resumePending(id: string) {
+    const operation = await this.operations.findOne({
+      issuerRuc: fiscalIssuerRuc,
+      runId: id,
+      state: "pending",
+    });
+    return operation ? this.resume(operation) : this.get(id);
+  }
   async assertUnlocked(id: string) {
     if (
       await this.operations.findOne({
@@ -92,7 +100,7 @@ export class PayrollDeductions {
       .toArray();
     if (incidents.length && !manual)
       throw new ConflictException(
-        "Actualiza el panel para conservar los descuentos de obra.",
+        "Actualiza el panel para conservar los descuentos al personal.",
       );
     if (
       incidents.some(
@@ -100,7 +108,7 @@ export class PayrollDeductions {
       )
     )
       throw new ConflictException(
-        "Retira primero los descuentos de obra antes de quitar al trabajador de la planilla.",
+        "Este trabajador tiene descuentos aprobados en esta planilla. Anula el borrador antes de preparar uno sin él.",
       );
     const totals = new Map<string, number>();
     for (const i of incidents)
@@ -127,12 +135,12 @@ export class PayrollDeductions {
         issuerRuc: fiscalIssuerRuc,
         period: run.period,
         employeeId: { $in: run.lines.map((l) => l.employeeId) },
-        status: "authorized",
+        status: { $in: ["authorized", "approved"] },
         payrollRunId: { $exists: false },
       })
     )
       throw new ConflictException(
-        "Hay descuentos de obra autorizados por incorporar a esta planilla.",
+        "Revisa los descuentos al personal pendientes de aprobación o de actualizar esta planilla.",
       );
   }
   async afterVoid(id: string) {
@@ -178,7 +186,13 @@ export class PayrollDeductions {
         .find({
           _id: { $in: ids.map((id) => new ObjectId(id)) },
           issuerRuc: fiscalIssuerRuc,
-          status: "authorized",
+          $or: [
+            { status: "approved" },
+            {
+              status: { $in: ["authorized", "approved"] },
+              payrollRunId: runId,
+            },
+          ],
           period: run.period,
         })
         .toArray(),
@@ -192,7 +206,7 @@ export class PayrollDeductions {
       )
     )
       throw new ConflictException(
-        "Selecciona descuentos autorizados de este periodo y de los trabajadores incluidos.",
+        "Selecciona descuentos aprobados de este periodo y de los trabajadores incluidos.",
       );
     const sum = (rows: typeof selected, id: string) =>
       rows.filter((r) => r.employeeId === id).reduce((a, r) => a + r.cents, 0);
@@ -249,7 +263,7 @@ export class PayrollDeductions {
           {
             _id: new ObjectId(id),
             issuerRuc: fiscalIssuerRuc,
-            status: "authorized",
+            status: { $in: ["authorized", "approved"] },
             $or: [{ claimId: { $exists: false } }, { claimId: key }],
           },
           { $set: { claimId: key } },
@@ -283,7 +297,7 @@ export class PayrollDeductions {
         {
           _id: new ObjectId(id),
           issuerRuc: fiscalIssuerRuc,
-          status: "authorized",
+          status: { $in: ["authorized", "approved"] },
           $and: [
             { $or: [{ claimId: { $exists: false } }, { claimId: op._id }] },
             {
@@ -308,7 +322,7 @@ export class PayrollDeductions {
       {
         _id: { $in: op.ids.map((id) => new ObjectId(id)) },
         issuerRuc: fiscalIssuerRuc,
-        status: "authorized",
+        status: { $in: ["authorized", "approved"] },
         claimId: op._id,
       },
       { $set: { payrollRunId: run.id }, $unset: { claimId: "" } },
@@ -350,7 +364,7 @@ export class PayrollDeductions {
         {
           _id: new ObjectId(id),
           issuerRuc: fiscalIssuerRuc,
-          status: "authorized",
+          status: { $in: ["authorized", "approved"] },
           $or: [{ claimId: { $exists: false } }, { claimId: op._id }],
         },
         { $set: { claimId: op._id } },
