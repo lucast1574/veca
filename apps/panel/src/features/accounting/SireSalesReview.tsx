@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileCheck2, LoaderCircle, RefreshCw } from "lucide-react";
+import { CloudDownload, FileCheck2, LoaderCircle } from "lucide-react";
 import type { AccountingPeriod, SireReconciliation } from "@veca/content";
 import { Button, Field } from "../../components/ui";
 import { useAccountingPermission } from "./AccountingAccess";
@@ -72,7 +72,7 @@ function SalesPeriod({ month }: { month: string }) {
               {report.loading ? (
                 <LoaderCircle size={17} className="sire-refresh-spinner" />
               ) : (
-                <RefreshCw size={17} />
+                <CloudDownload size={17} />
               )}
               {report.loading ? "Actualizando…" : "Actualizar ventas"}
             </Button>
