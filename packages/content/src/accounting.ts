@@ -1,3 +1,4 @@
+import type { WorkQuotation } from "./crm.js";
 import type { LaborMargin } from "./labor.js";
 import { z } from "zod";
 
@@ -138,6 +139,7 @@ export type AccountingCost = CostInput & {
 
 export type AccountingWork = { id: string; name: string };
 export type AccountingMargin = {
+  quotation?: WorkQuotation;
   workId: string;
   workName: string;
   sales: number;

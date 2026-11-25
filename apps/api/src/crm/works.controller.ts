@@ -25,7 +25,12 @@ import { parse } from "../common/validation";
 import { literalSearch } from "../common/literal-search";
 import { CrmRepository } from "./crm.repository";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { CrmFiles, photoMetadataFromForm } from "./crm.files";
+import {
+  CrmFiles,
+  photoMetadataFromForm,
+  documentMetadataFromForm,
+  attachmentDisposition,
+} from "./crm.files";
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { CrmEvents } from "./crm.events";
 import { WorkAccess } from "./work-access.service";
@@ -225,12 +230,17 @@ export class WorksController {
         "El coordinador debe aceptar primero la entrega.",
       );
     const metadata = photoMetadataFromForm(body);
+    const document = documentMetadataFromForm(body);
     if (!user.permissions.includes("works_manage")) {
-      if (!file || file.buffer.subarray(0, 5).toString() === "%PDF-")
+      if (
+        document ||
+        !file ||
+        file.buffer.subarray(0, 5).toString() === "%PDF-"
+      )
         throw new BadRequestException("Selecciona una foto de avance.");
       metadata.sharing = "internal";
     }
-    const saved = await this.files.upload(id, file, metadata);
+    const saved = await this.files.upload(id, file, metadata, document);
     return { ...saved, url: `/admin/works/${id}/files/${saved.id}` };
   }
 
@@ -241,6 +251,7 @@ export class WorksController {
       .filter(
         (file) =>
           file.type === "photo" ||
+          file.type === "plan" ||
           req.session.user.permissions.some(
             (p) => p === "works_all" || p === "works_manage",
           ),
@@ -272,7 +283,8 @@ export class WorksController {
     });
     if (
       !document ||
-      (document.type === "contract" &&
+      (document.type !== "photo" &&
+        document.type !== "plan" &&
         !req.session.user.permissions.some(
           (p) => p === "works_all" || p === "works_manage",
         ))
@@ -284,10 +296,7 @@ export class WorksController {
       "Content-Type": doc.mime,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
-      "Content-Disposition":
-        doc.type === "contract"
-          ? 'attachment; filename="contrato.pdf"'
-          : 'inline; filename="foto.webp"',
+      "Content-Disposition": attachmentDisposition(doc),
     });
     (file.Body as Readable).pipe(res);
   }

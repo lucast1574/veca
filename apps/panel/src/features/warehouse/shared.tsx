@@ -1,3 +1,4 @@
+import { ChevronLeft } from "lucide-react";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useEffect,
@@ -206,5 +207,20 @@ export function PickWork({
         ...works.map((row) => ({ value: row.id, label: row.name })),
       ]}
     />
+  );
+}
+
+export function WarehouseBack({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  return (
+    <a href={href} className="warehouse-link">
+      <ChevronLeft size={17} aria-hidden="true" />
+      {children}
+    </a>
   );
 }

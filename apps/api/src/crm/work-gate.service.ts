@@ -12,7 +12,8 @@ type WorkOperationKind =
   | "departure"
   | "submit"
   | "issue-guide"
-  | "cancel-delivery";
+  | "cancel-delivery"
+  | "guide-request";
 export type WorkOperationKey = `${WorkOperationKind}:${string}`;
 @Injectable()
 export class WorkGate {
@@ -38,6 +39,14 @@ export class WorkGate {
           [kind === "guide" ? "leadId" : "workId"]: id,
         }));
       }
+      if (kind === "guide-request")
+        confirmed = !!(await this.db.db
+          .collection("dispatches")
+          .findOne({
+            supplyRequestId: key,
+            leadId: id,
+            status: { $ne: "draft" },
+          }));
       if (kind === "supply" || kind === "cancel-delivery")
         confirmed = !!(await this.db.db.collection("supply_requests").findOne({
           workId: id,

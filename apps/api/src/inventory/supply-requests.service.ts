@@ -1,3 +1,4 @@
+import { Notifications } from "../notifications/notifications.service";
 import {
   BadRequestException,
   ConflictException,
@@ -42,6 +43,7 @@ export class SupplyRequests {
     private readonly events: CrmEvents,
     private readonly gate: WorkGate,
     private readonly supplyDispatches: SupplyDispatches,
+    private readonly notices: Notifications,
   ) {}
   get collection() {
     return this.db.db.collection<Document>("supply_requests");
@@ -90,12 +92,38 @@ export class SupplyRequests {
     );
     return this.view((await this.collection.findOne({ _id: row._id }))!);
   }
+  async requestGuide(
+    id: string,
+    version: number,
+    transferAt: string,
+    user: SessionUser,
+  ) {
+    this.authorize("deliver", user, true);
+    const guide = await this.dispatches.requestSupplyGuide(
+      id,
+      version,
+      transferAt,
+      user.username,
+    );
+    await this.notices.forGuideRequest(guide.id);
+    this.events.emit("supplies");
+    return guide;
+  }
   async detail(id: string) {
     const row = await this.collection.findOne({ _id: this.inventory.id(id) });
     if (!row) throw new NotFoundException();
     const material = await this.inventory.detail(row.materialId);
+    const guideRequests = await this.dispatches.supplyGuideRequests([
+      String(row._id),
+    ]);
     return {
-      items: [{ ...this.view(row), available: material.available }],
+      items: [
+        {
+          ...this.view(row),
+          guideRequest: guideRequests.get(String(row._id)),
+          available: material.available,
+        },
+      ],
       hasMore: false,
     };
   }
@@ -138,8 +166,12 @@ export class SupplyRequests {
         this.inventory.view(row).available,
       ]),
     );
+    const guideRequests = await this.dispatches.supplyGuideRequests(
+      rows.slice(0, 30).map((row) => String(row._id)),
+    );
     return {
       items: rows.slice(0, 30).map((row) => ({
+        guideRequest: guideRequests.get(String(row._id)),
         ...this.view(row),
         ...(!workId ? { available: available.get(row.materialId) || 0 } : {}),
       })),

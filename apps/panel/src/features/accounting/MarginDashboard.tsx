@@ -1,3 +1,5 @@
+import { MarginProjection } from "./MarginProjection";
+import { Button } from "../../components/ui";
 import { useState } from "react";
 import {
   ArrowDownLeft,
@@ -202,6 +204,9 @@ function MarginReport({ report }: { report: AccountingMargin }) {
                 </div>
               </dl>
               <p className="margin-footnote">
+                {report.quotation && (
+                  <>Según cotización {report.quotation.reference}. </>
+                )}
                 {percentLabel(percentage(report.costs, report.budgetCents))}{" "}
                 utilizado.
                 {(!available || provisional) &&
@@ -261,6 +266,7 @@ function MarginReport({ report }: { report: AccountingMargin }) {
 export function Margin() {
   const works = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
   const [selected, setSelected] = useState("");
+  const [tab, setTab] = useState("summary");
   const work = selected || works.data?.[0]?.id || "";
   const query = useAccountingQuery<AccountingMargin>(
     work ? accountingPath + "/margin/" + work : "",
@@ -291,13 +297,40 @@ export function Margin() {
           />
         </div>
       </header>
+      <nav
+        className="accounting-tabs margin-tabs"
+        aria-label="Vista del margen"
+      >
+        <Button
+          variant="ghost"
+          aria-current={tab === "summary" ? "page" : undefined}
+          onClick={() => setTab("summary")}
+        >
+          Resumen
+        </Button>
+        <Button
+          variant="ghost"
+          aria-current={tab === "projection" ? "page" : undefined}
+          onClick={() => setTab("projection")}
+        >
+          Proyección
+        </Button>
+      </nav>
       <QueryState
         {...works}
         empty={!work ? "Aún no hay obras para consultar." : undefined}
       >
         {work && (
           <QueryState {...query}>
-            {query.data && <MarginReport report={query.data} />}
+            {query.data &&
+              (tab === "projection" ? (
+                <MarginProjection
+                  key={`${work}:${query.data.quotation?.attachmentId}:${query.data.costs}`}
+                  report={query.data}
+                />
+              ) : (
+                <MarginReport report={query.data} />
+              ))}
           </QueryState>
         )}
       </QueryState>

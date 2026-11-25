@@ -96,6 +96,29 @@ export class SupplyRequestsController {
   guides(@Param("id") id: string) {
     return this.requests.guides(id);
   }
+  @Post(":id/guide-request")
+  @RequirePermission("inventory_dispatch", "inventory")
+  requestGuide(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const data = parse(
+      z
+        .object({
+          version: z.number().int().positive(),
+          transferAt: z.string().max(30),
+        })
+        .strict(),
+      body,
+    );
+    return this.requests.requestGuide(
+      id,
+      data.version,
+      data.transferAt,
+      req.session.user,
+    );
+  }
   @Post(":id/cancel-delivery")
   cancelDelivery(
     @Param("id") id: string,

@@ -232,6 +232,34 @@ export class Notifications implements OnModuleInit, OnModuleDestroy {
     );
     if (result.upsertedCount) this.changes.next({ userId: user.id });
   }
+  async forGuideRequest(id: string) {
+    const guide = await this.db.db
+      .collection("dispatches")
+      .findOne({
+        _id: new ObjectId(id),
+        status: "review",
+        supplyRequestId: { $exists: true },
+      });
+    if (!guide) return;
+    const people = await this.people();
+    await Promise.all(
+      people
+        .filter(
+          (user) =>
+            user.permissions.includes("accounting") &&
+            user.permissions.includes("accounting_write"),
+        )
+        .map((user) =>
+          this.add("supply-guide:" + id, user, {
+            scope: "self",
+            permission: "accounting",
+            title: "Guía de remisión solicitada",
+            body: `Almacén solicita preparar el traslado a ${String(guide.workName)}. Revisa los datos del transporte antes de emitir.`,
+            href: `#accounting/guias/${id}`,
+          }),
+        ),
+    );
+  }
   async forAccountingPurchase(id: string) {
     const order = await this.db.db
       .collection("warehouse_purchases")

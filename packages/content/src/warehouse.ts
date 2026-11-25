@@ -108,14 +108,25 @@ export type Purchase = Omit<z.infer<typeof purchaseInput>, "items"> & {
   })[];
 };
 
+export const EQUIPMENT_CATEGORIES = [
+  { id: "machine", name: "Máquina" },
+  { id: "tool", name: "Herramienta" },
+  { id: "support", name: "Equipo de apoyo" },
+] as const;
+export const equipmentCategory = z.enum(["machine", "tool", "support"]);
 export const equipmentInput = z
   .object({
     id: accountingId,
     code: detail(60).transform((value) => value.toUpperCase()),
     name: detail(150),
+    category: equipmentCategory.optional(),
     location: detail(150),
     condition: z.enum(["good", "maintenance", "retired"]),
   })
+  .strict();
+export const equipmentUpdateInput = equipmentInput
+  .omit({ id: true, condition: true })
+  .extend({ version: recordRevision })
   .strict();
 export const equipmentAction = z.discriminatedUnion("action", [
   z
@@ -157,7 +168,7 @@ export type Equipment = z.infer<typeof equipmentInput> & {
     at: string;
   } | null;
   events: {
-    action: "assign" | "return" | "condition";
+    action: "assign" | "return" | "condition" | "details";
     at: string;
     actor: string;
     note: string;
@@ -193,7 +204,9 @@ export const workPlanInput = z
     "No repitas códigos en el plan.",
   );
 
-export type WorkPlan = z.infer<typeof workPlanInput>;
+export type WorkPlan = z.infer<typeof workPlanInput> & {
+  budgetSource?: { attachmentId: string; reference: string; date: string };
+};
 export type WorkSupply = {
   plan: WorkPlan;
   materials: {

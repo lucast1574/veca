@@ -20,6 +20,7 @@ import {
   isDemoLead,
   DEMO_CASES,
   type DemoLink,
+  type SupplyRequest,
   type Dispatch,
   type DispatchInput,
   type DispatchStatus,
@@ -42,6 +43,8 @@ type DispatchRecord = {
   _id: ObjectId;
   leadId: string;
   workName: string;
+  supplyRequestId?: string;
+  activeSupplyRequestId?: string;
   accountingCreationHash?: string;
   creationHash?: string;
   demo: boolean;
@@ -380,6 +383,142 @@ export class DispatchService {
     return { dispatch: view(doc), issues: guideIssues(doc.data) };
   }
 
+  async requestSupplyGuide(
+    requestId: string,
+    version: number,
+    transferAt: string,
+    actor: string,
+  ) {
+    const requests = this.database.db.collection<
+      Omit<SupplyRequest, "id"> & { _id: ObjectId }
+    >("supply_requests");
+    const source = await requests.findOne({ _id: idOf(requestId) });
+    if (!source) throw new NotFoundException("Solicitud no encontrada.");
+    return this.gate.run(
+      source.workId,
+      `guide-request:${requestId}`,
+      async () => {
+        const row = await requests.findOne({ _id: source._id });
+        if (!row || row.cancelled || row.pending || row.reserved <= 0)
+          throw new ConflictException(
+            "Reserva primero el material y actualiza la solicitud.",
+          );
+        const existing = await this.collection.findOne({
+          supplyRequestId: requestId,
+          status: { $ne: "discarded" },
+          departedAt: { $exists: false },
+        });
+        if (existing) {
+          if (existing.status === "draft")
+            return this.submitRecord(
+              row.workId,
+              String(existing._id),
+              existing.version,
+              actor,
+            );
+          return view(existing);
+        }
+        if (row.version !== version)
+          throw new ConflictException(
+            "La solicitud cambió. Actualízala antes de pedir la guía.",
+          );
+        if (
+          !validTransfer(transferAt) ||
+          Date.parse(transferAt + ":00-05:00") <= Date.now()
+        )
+          throw new BadRequestException(
+            "Indica una fecha y hora futura para el traslado.",
+          );
+        const material = await this.inventory.detail(row.materialId);
+        const lead = await this.leads.get(row.workId);
+        const data: DispatchInput = {
+          startAddress: "",
+          startUbigeo: "",
+          arrivalAddress: lead.address || lead.workLocation || "",
+          arrivalUbigeo: "",
+          transferAt,
+          motiveCode: "13",
+          motiveDescription: "Traslado de materiales a obra",
+          recipientType: "6",
+          recipientNumber: "",
+          recipientName: lead.name,
+          transportMode: "02",
+          carrierRuc: "",
+          carrierName: "",
+          vehiclePlate: "",
+          driverDocument: "",
+          driverName: "",
+          driverLastName: "",
+          driverLicense: "",
+          weightKg: 0,
+          items: [
+            {
+              code: material.sku,
+              materialId: row.materialId,
+              description: material.name,
+              unitCode: guideUnitForMaterial[material.unit],
+              quantity: row.reserved,
+            },
+          ],
+        };
+        const previous = await this.collection.findOne(
+          {
+            supplyRequestId: requestId,
+            $or: [{ status: "discarded" }, { departedAt: { $exists: true } }],
+          },
+          { sort: { createdAt: -1, _id: -1 } },
+        );
+        const id = createHash("sha256")
+          .update(
+            `supply-guide:${requestId}:${version}:${previous?._id || "first"}`,
+          )
+          .digest("hex")
+          .slice(0, 24);
+        let draft: Dispatch;
+        try {
+          draft = await this.createRecord(
+            row.workId,
+            data,
+            actor,
+            undefined,
+            id,
+            requestId,
+          );
+        } catch (error) {
+          const active = await this.collection.findOne({
+            activeSupplyRequestId: requestId,
+          });
+          if (!active) throw error;
+          if (active.status !== "draft") return view(active);
+          draft = view(active);
+        }
+        return this.submitRecord(row.workId, draft.id, draft.version, actor);
+      },
+    );
+  }
+  async supplyGuideRequests(ids: string[]) {
+    const rows = await this.collection
+      .find({
+        supplyRequestId: { $in: ids },
+        status: { $ne: "discarded" },
+        departedAt: { $exists: false },
+      })
+      .sort({ createdAt: -1, _id: -1 })
+      .toArray();
+    const result = new Map<
+      string,
+      { id: string; status: DispatchStatus; number: string }
+    >();
+    for (const row of rows)
+      if (!result.has(row.supplyRequestId!))
+        result.set(row.supplyRequestId!, {
+          id: String(row._id),
+          status: row.status,
+          number: row.guideNumber,
+        });
+    return result;
+  }
+
   async create(
     leadId: string,
     input: unknown,
@@ -406,6 +545,7 @@ export class DispatchService {
     actor: string,
     accountingId?: string,
     creationId?: string,
+    supplyRequestId?: string,
   ) {
     const data = parse(dispatchSchema, input);
     const lead = await this.leads.get(leadId);
@@ -419,6 +559,9 @@ export class DispatchService {
     const now = new Date().toISOString();
     const record: DispatchRecord = {
       _id: idOf(accountingId || creationId!),
+      ...(supplyRequestId
+        ? { supplyRequestId, activeSupplyRequestId: supplyRequestId }
+        : {}),
       leadId: lead._id.toHexString(),
       workName: lead.workName || lead.name,
       data,
@@ -823,6 +966,7 @@ export class DispatchService {
       { _id: row._id, departedAt: { $exists: false } },
       {
         $set: { departedAt: at },
+        $unset: { activeSupplyRequestId: "" },
         $inc: { version: 1 },
         $push: { events: { action: "depart", actor, at } },
       },
@@ -899,6 +1043,9 @@ export class DispatchService {
       { _id: doc._id, version, status: { $in: [...allowed] } },
       {
         $set: { ...set, updatedAt: now },
+        ...(set.status === "discarded"
+          ? { $unset: { activeSupplyRequestId: "" as const } }
+          : {}),
         $inc: { version: 1 },
         $push: { events: { action, actor, at: now } },
       },

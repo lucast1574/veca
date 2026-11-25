@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
-import { Plus, Package } from "lucide-react";
+import { Plus, Package, Truck, ChevronDown } from "lucide-react";
 import { Select } from "@veca/ui/src/Select";
 import {
+  DISPATCH_STATUS,
   supplyActionLabels,
   type SessionUser,
   type SupplyRequest,
@@ -15,7 +16,7 @@ import {
   useAccountingQuery,
 } from "../accounting/accounting-shared";
 import { amount, unitName, useLiveRefresh } from "../operations/shared";
-import { WarehouseForm, stringField } from "./shared";
+import { WarehouseForm, WarehouseBack, stringField } from "./shared";
 import "./warehouse.css";
 type MaterialOption = { id: string; name: string; sku: string; unit: string };
 const actionPermissions = {
@@ -76,6 +77,8 @@ export function SupplyRequests({
       ? `/admin/supply-requests/${selectedId}`
       : "/admin/supply-requests";
   const [page, setPage] = useState(1);
+  const [guide, setGuide] = useState<SupplyRequest>();
+  const [message, setMessage] = useState("");
   const [filter, setFilter] = useState(workId ? "all" : "open");
   const query = useAccountingQuery<{
     items: SupplyRequest[];
@@ -111,9 +114,9 @@ export function SupplyRequests({
         )}
       </header>
       {selectedId && (
-        <a className="warehouse-link" href="#inventory/solicitudes">
+        <WarehouseBack href="#inventory/solicitudes">
           Ver todas las solicitudes
-        </a>
+        </WarehouseBack>
       )}
       <div className="accounting-tools supply-filters">
         <Select
@@ -129,6 +132,57 @@ export function SupplyRequests({
           ]}
         />
       </div>
+      <p className="hint">
+        Las obras indican qué necesitan y para cuándo. Reserva el material
+        disponible y solicita la guía antes de confirmar su salida.
+      </p>
+      {message && (
+        <p className="warehouse-message" role="status">
+          {message}
+        </p>
+      )}
+      {guide && (
+        <WarehouseForm
+          title="Solicitar guía de remisión"
+          action="Enviar solicitud a Contabilidad"
+          onClose={() => setGuide(undefined)}
+          save={async (form) => {
+            await api(`/admin/supply-requests/${guide.id}/guide-request`, {
+              method: "POST",
+              body: JSON.stringify({
+                version: guide.version,
+                transferAt: stringField(form, "transferAt"),
+              }),
+            });
+            setGuide(undefined);
+            setMessage(
+              "Solicitud enviada a Contabilidad. Cuando la guía esté aceptada, podrás confirmar la salida.",
+            );
+            query.refresh();
+          }}
+        >
+          <div className="warehouse-preview">
+            <strong>{guide.materialName}</strong>
+            <p>
+              {guide.workName} · {amount(guide.reserved)} {unitName(guide.unit)}{" "}
+              reservados
+            </p>
+          </div>
+          <p>
+            Contabilidad recibirá una solicitud con este material y su cantidad
+            reservada. Completará los datos del transporte y revisará la guía
+            antes de emitirla.
+          </p>
+          <Field label="Fecha y hora previstas del traslado">
+            <input name="transferAt" type="datetime-local" required />
+          </Field>
+          <p className="hint">
+            Enviar esta solicitud no emite la guía en SUNAT ni descuenta stock.
+            Confirma la salida cuando el traslado ocurra y la guía esté
+            aceptada.
+          </p>
+        </WarehouseForm>
+      )}
       <QueryState {...query}>
         {!query.data?.items.length && (
           <p className="hint">No hay solicitudes en esta vista.</p>
@@ -151,10 +205,25 @@ export function SupplyRequests({
               return (
                 <li key={row.id}>
                   <div className="supply-summary">
-                    <strong>
-                      <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
-                      {row.materialName}
-                    </strong>
+                    <div className="supply-title">
+                      <strong>
+                        <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
+                        {row.materialName}
+                      </strong>
+                      <span className="ops-stock-status">
+                        {row.cancelled
+                          ? "Cancelada"
+                          : row.returnRequested > 0
+                            ? "Devolución por recibir"
+                            : row.reserved > 0
+                              ? "Material reservado"
+                              : row.quantity > row.delivered
+                                ? "Por preparar"
+                                : row.delivered > row.received
+                                  ? "En camino a obra"
+                                  : "Entregada a obra"}
+                      </span>
+                    </div>
                     {!workId &&
                       (user.permissions.includes("works") &&
                       user.permissions.some(
@@ -169,20 +238,60 @@ export function SupplyRequests({
                       · {unitName(row.unit)}
                     </small>
                     <p>{row.reason}</p>
-                    <dl className="supply-quantities">
-                      {[
-                        ["Solicitado", row.quantity],
-                        ["Reservado", row.reserved],
-                        ["Entregado", row.delivered],
-                        ["Recibido", row.received],
-                        ["Devuelto", row.returned],
-                      ].map(([label, value]) => (
-                        <div key={String(label)}>
-                          <dt>{label}</dt>
-                          <dd>{amount(Number(value))}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                    <div className="supply-next-summary">
+                      <div>
+                        <span>
+                          {row.cancelled
+                            ? "Pendiente cancelado"
+                            : "Por entregar a la obra"}
+                        </span>
+                        <strong>
+                          {amount(Math.max(0, row.quantity - row.delivered))}{" "}
+                          <small>{unitName(row.unit)}</small>
+                        </strong>
+                        <small>
+                          De {amount(row.quantity)} {unitName(row.unit)}{" "}
+                          solicitados · {amount(row.delivered)} entregados
+                        </small>
+                      </div>
+                      <p>
+                        {row.cancelled
+                          ? "Revisa el historial para consultar los movimientos realizados."
+                          : row.pending
+                            ? "Hay un movimiento por terminar. Continúa la operación pendiente."
+                            : row.returnRequested > 0
+                              ? "La obra solicita devolver material. Confirma lo que llegue al almacén."
+                              : row.reserved > 0
+                                ? "Ya hay material separado. La salida requiere una guía aceptada."
+                                : row.quantity > row.delivered
+                                  ? "Separa existencias con Reservar. Si no alcanzan, solicita la compra del faltante."
+                                  : row.received < row.delivered
+                                    ? "El material salió del almacén. La obra debe confirmar su recepción."
+                                    : "La obra confirmó lo recibido."}
+                      </p>
+                    </div>
+                    <details className="supply-tracking">
+                      <summary>
+                        Ver seguimiento de cantidades <ChevronDown size={15} />
+                      </summary>
+                      <dl className="supply-quantities">
+                        {[
+                          ["Solicitado", row.quantity],
+                          ["Reservado", row.reserved],
+                          ["Entregado", row.delivered],
+                          ["Recibido", row.received],
+                          ["Devuelto", row.returned],
+                        ].map(([label, value]) => (
+                          <div key={String(label)}>
+                            <dt>{label}</dt>
+                            <dd>
+                              {amount(Number(value))}{" "}
+                              <small>{unitName(row.unit)}</small>
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </details>
                     {!workId && (
                       <p className="hint">
                         Disponible en Almacén · {amount(row.available || 0)}{" "}
@@ -213,19 +322,65 @@ export function SupplyRequests({
                         el movimiento.
                       </p>
                     )}
+                    {row.guideRequest && (
+                      <p className="hint">
+                        <Truck size={15} aria-hidden="true" /> Guía de remisión
+                        ·{" "}
+                        {row.guideRequest.number ||
+                          DISPATCH_STATUS[row.guideRequest.status]}
+                        {["review", "draft", "returned", "rejected"].includes(
+                          row.guideRequest.status,
+                        )
+                          ? " · Contabilidad debe completar o revisar el traslado."
+                          : ""}
+                      </p>
+                    )}
                     <div className="supply-actions">
-                      {offered.map((action) => (
-                        <Button
-                          variant="ghost"
-                          key={action}
-                          onClick={() => setSelected({ row, action })}
-                        >
-                          {row.pending
-                            ? "Reintentar " +
-                              supplyActionLabels[action].toLowerCase()
-                            : supplyActionLabels[action]}
-                        </Button>
-                      ))}
+                      {!workId &&
+                        !row.cancelled &&
+                        !row.pending &&
+                        row.reserved > 0 &&
+                        !row.guideRequest &&
+                        user.permissions.includes("inventory_dispatch") && (
+                          <Button onClick={() => setGuide(row)}>
+                            <Truck size={15} />
+                            Solicitar guía de remisión
+                          </Button>
+                        )}
+                      {offered
+                        .sort(
+                          (a, b) =>
+                            Number(a === "cancel") - Number(b === "cancel"),
+                        )
+                        .map((action) => (
+                          <Button
+                            variant={
+                              (action === "reserve" && row.reserved === 0) ||
+                              action === "receive" ||
+                              (action === "deliver" &&
+                                !!row.guideRequest &&
+                                ["accepted", "observed"].includes(
+                                  row.guideRequest.status,
+                                ))
+                                ? "primary"
+                                : "ghost"
+                            }
+                            disabled={
+                              action === "deliver" &&
+                              !!row.guideRequest &&
+                              !["accepted", "observed"].includes(
+                                row.guideRequest.status,
+                              )
+                            }
+                            key={action}
+                            onClick={() => setSelected({ row, action })}
+                          >
+                            {row.pending
+                              ? "Reintentar " +
+                                supplyActionLabels[action].toLowerCase()
+                              : supplyActionLabels[action]}
+                          </Button>
+                        ))}
                     </div>
                   </div>
                 </li>

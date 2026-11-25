@@ -333,12 +333,49 @@ export type GalleryPage = {
   page: number;
   pages: number;
 };
+const quotationMoney = z.number().int().nonnegative().max(999_999_999);
+export const quotationSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(100),
+    date: z.iso.date(),
+    validUntil: z.iso.date(),
+    currency: z.literal("PEN"),
+    salesNetCents: quotationMoney.positive(),
+    taxRate: z.union([z.literal(0), z.literal(18)]),
+    taxCents: quotationMoney,
+    costBudgetCents: quotationMoney.positive(),
+    advanceCents: quotationMoney,
+    paymentTerms: z.string().trim().min(3).max(1000),
+    durationDays: z.number().int().positive().max(3650),
+    durationType: z.enum(["calendar", "working"]),
+    executionTerms: z.string().trim().min(3).max(1000),
+    notes: z.string().trim().max(2000).default(""),
+  })
+  .strict()
+  .refine(
+    (q) => q.validUntil >= q.date,
+    "La vigencia debe ser igual o posterior a la fecha de cotización.",
+  )
+  .refine(
+    (q) => q.taxCents === Math.round((q.salesNetCents * q.taxRate) / 100),
+    "El IGV no corresponde a la venta y tasa indicadas.",
+  )
+  .refine(
+    (q) => q.advanceCents <= q.salesNetCents + q.taxCents,
+    "El adelanto no puede superar el total cotizado.",
+  );
+export type Quotation = z.infer<typeof quotationSchema>;
+export type WorkQuotation = Quotation & {
+  attachmentId: string;
+  createdAt: string;
+};
 export type LeadAttachment = PhotoMetadata & {
   revision: number;
   id: string;
   leadId: string;
   name: string;
-  type: "photo" | "contract";
+  type: "photo" | "contract" | "plan" | "quotation";
+  quotation?: Quotation;
   caption: string;
   url: string;
   createdAt: string;

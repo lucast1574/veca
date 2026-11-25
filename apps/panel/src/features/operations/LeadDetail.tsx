@@ -1,3 +1,4 @@
+import { LeadDocuments } from "./LeadDocuments";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useCallback,
@@ -559,6 +560,34 @@ export function LeadDetail({
         </p>
       )}
       {["overview", "work"].includes(tab) && (
+        <LeadDocuments
+          attachments={data.attachments}
+          path={detailPath}
+          canUpload={
+            !readOnly &&
+            !commercialLocked &&
+            (!workView ||
+              !lead.workHandoff ||
+              lead.workHandoff.status === "accepted")
+          }
+          canReadQuotation={
+            !workView ||
+            !!user?.permissions.some(
+              (p) => p === "works_all" || p === "works_manage",
+            )
+          }
+          saved={async () => {
+            const next = await api<LeadDetailData>(detailPath);
+            setData((old) =>
+              old ? { ...old, attachments: next.attachments } : old,
+            );
+            setNotice(
+              "Documento guardado. El presupuesto usa la última cotización.",
+            );
+          }}
+        />
+      )}
+      {["overview", "work"].includes(tab) && (
         <div className="lead-detail-content">
           <section className="ops-card lead-detail-panel">
             <div className="lead-detail-section-head">
@@ -820,6 +849,7 @@ export function LeadDetail({
               <h2>Fotos de obra y contratos</h2>
               <p className="hint">
                 Archivos privados. Añadirlos aquí no los publica en la landing.
+                Los planos y cotizaciones se adjuntan desde Resumen.
               </p>
             </div>
             {(!readOnly || canReport) && (
@@ -869,7 +899,13 @@ export function LeadDetail({
                 ) : (
                   <div className="ops-pdf">
                     <FileText size={36} />
-                    <span>Contrato PDF</span>
+                    <span>
+                      {a.type === "plan"
+                        ? "Plano"
+                        : a.type === "quotation"
+                          ? "Cotización"
+                          : "Contrato PDF"}
+                    </span>
                   </div>
                 )}
                 <strong>{a.caption || a.name}</strong>

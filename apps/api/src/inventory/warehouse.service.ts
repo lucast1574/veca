@@ -1,3 +1,4 @@
+import { latestQuotation } from "../crm/quotation";
 import { createHash } from "node:crypto";
 import { WorkGate } from "../crm/work-gate.service";
 import { literalSearch } from "../common/literal-search";
@@ -10,6 +11,7 @@ import {
 import { ObjectId, type Filter } from "mongodb";
 import {
   equipmentInput,
+  equipmentUpdateInput,
   equipmentAction,
   isDemoLead,
   purchaseInput,
@@ -134,6 +136,8 @@ export class WarehouseService {
           $or: [
             "supplier",
             "supplierRuc",
+            "reason",
+            "invoiceSource.reference",
             "workName",
             "items.sku",
             "items.name",
@@ -615,6 +619,35 @@ export class WarehouseService {
     return equipmentView(row);
   }
 
+  async updateEquipment(id: string, raw: unknown, actor: string) {
+    const { version, ...data } = parse(equipmentUpdateInput, raw);
+    const saved = await this.equipment
+      .findOneAndUpdate(
+        { _id: safeId(id), version },
+        {
+          $set: data,
+          $inc: { version: 1 },
+          $push: {
+            events: {
+              action: "details",
+              actor,
+              at: new Date().toISOString(),
+              note: "Datos del equipo actualizados.",
+            },
+          },
+        },
+        { returnDocument: "after" },
+      )
+      .catch((error) => {
+        if ((error as { code?: number }).code === 11000)
+          throw new ConflictException("Ya existe un equipo con ese código.");
+        throw error;
+      });
+    if (!saved)
+      throw new ConflictException("El equipo cambió. Actualiza su ficha.");
+    return equipmentView(saved);
+  }
+
   async equipmentAction(id: string, raw: unknown, actor: string) {
     const data = parse(equipmentAction, raw);
     const current = await this.equipmentDetail(id);
@@ -704,14 +737,29 @@ export class WarehouseService {
 
   async plan(id: string) {
     const row = await this.plans.findOne({ _id: safeId(id) });
-    if (!row) return emptyPlan;
-    const { _id, ...values } = row;
-    return values;
+    const quotation = await latestQuotation(this.db.db, id);
+    const values = row ? (({ _id, ...rest }) => rest)(row) : emptyPlan;
+    return quotation
+      ? {
+          ...values,
+          budgetCents: quotation.costBudgetCents,
+          budgetSource: {
+            attachmentId: quotation.attachmentId,
+            reference: quotation.reference,
+            date: quotation.date,
+          },
+        }
+      : values;
   }
 
   async savePlan(id: string, raw: unknown) {
     const work = await this.work(id);
     const { revision, ...data } = parse(workPlanInput, raw);
+    const quotation = await latestQuotation(this.db.db, id);
+    if (quotation && data.budgetCents !== quotation.costBudgetCents)
+      throw new ConflictException(
+        "El presupuesto proviene de la cotización vigente. Actualiza la ficha y vuelve a abrir el plan.",
+      );
     const materials = data.materials.map((row) => ({
       ...row,
       materialId: String(safeId(row.materialId)),

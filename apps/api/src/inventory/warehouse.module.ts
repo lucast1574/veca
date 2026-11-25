@@ -155,6 +155,16 @@ class WarehouseController {
   ) {
     return this.warehouse.equipmentAction(id, raw, req.session.user.username);
   }
+
+  @Put("equipment/:id")
+  @RequirePermission("inventory_equipment", "inventory")
+  updateEquipment(
+    @Param("id") id: string,
+    @Body() raw: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.warehouse.updateEquipment(id, raw, req.session.user.username);
+  }
 }
 
 @Module({

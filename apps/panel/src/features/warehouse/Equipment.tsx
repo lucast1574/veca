@@ -1,6 +1,14 @@
 import { useRef, useState } from "react";
-import { Plus, Wrench } from "lucide-react";
-import type { Equipment } from "@veca/content";
+import {
+  Plus,
+  Wrench,
+  ChevronRight,
+  MapPin,
+  UserRound,
+  Cog,
+  Boxes,
+} from "lucide-react";
+import { EQUIPMENT_CATEGORIES, type Equipment } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
 import {
   QueryState,
@@ -11,6 +19,8 @@ import {
 import { date } from "../operations/shared";
 import {
   conditionLabels,
+  putWarehouse,
+  WarehouseBack,
   PickWork,
   postWarehouse,
   stringField,
@@ -29,6 +39,7 @@ const actions = {
   assign: "Asignación",
   return: "Devolución",
   condition: "Actualización",
+  details: "Datos actualizados",
 };
 
 export function EquipmentList({
@@ -40,6 +51,8 @@ export function EquipmentList({
 }) {
   const [create, setCreate] = useState(false);
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [status, setStatus] = useState("");
   const list = useAccountingQuery<Equipment[]>(selected ? "" : path);
   const detail = useAccountingQuery<Equipment>(
     selected ? `${path}/${selected}` : "",
@@ -57,10 +70,21 @@ export function EquipmentList({
       </QueryState>
     );
   const rows =
-    list.data?.filter((row) =>
-      `${row.code} ${row.name} ${row.assignment?.workName ?? ""}`
-        .toLocaleLowerCase()
-        .includes(search.toLocaleLowerCase().trim()),
+    list.data?.filter(
+      (row) =>
+        `${row.code} ${row.name} ${row.location} ${row.assignment?.workName ?? ""} ${row.assignment?.responsible ?? ""}`
+          .toLocaleLowerCase()
+          .includes(search.toLocaleLowerCase().trim()) &&
+        (!category ||
+          (category === "unclassified"
+            ? !row.category
+            : row.category === category)) &&
+        (!status ||
+          (status === "assigned"
+            ? !!row.assignment
+            : status === "available"
+              ? !row.assignment && row.condition === "good"
+              : row.condition === status)),
     ) || [];
   return (
     <section className="warehouse-section">
@@ -77,13 +101,43 @@ export function EquipmentList({
           </Button>
         </div>
       </header>
-      <Field label="Buscar equipo">
-        <input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Código, equipo u obra"
+      <div className="warehouse-filters">
+        <Field label="Buscar equipo">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Código, equipo, ubicación o responsable"
+          />
+        </Field>
+        <WarehouseSelect
+          label="Categoría"
+          value={category}
+          onChange={setCategory}
+          options={[
+            { value: "", label: "Todas las categorías" },
+            ...EQUIPMENT_CATEGORIES.map((c) => ({
+              value: c.id,
+              label: c.name,
+            })),
+            { value: "unclassified", label: "Sin clasificar" },
+          ]}
         />
-      </Field>
+        <WarehouseSelect
+          label="Disponibilidad"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "", label: "Todos los equipos" },
+            { value: "available", label: "Disponibles en almacén" },
+            { value: "assigned", label: "Asignados a obra" },
+            { value: "maintenance", label: "En mantenimiento" },
+            { value: "retired", label: "Retirados" },
+          ]}
+        />
+      </div>
+      {list.data && list.data.length > 0 && !list.loading && !rows.length && (
+        <p className="hint">No hay equipos con estos filtros.</p>
+      )}
       <QueryState
         {...list}
         empty={
@@ -93,25 +147,54 @@ export function EquipmentList({
         }
       >
         {Boolean(rows.length) && (
-          <ul className="warehouse-list">
+          <ul className="warehouse-records equipment-records">
             {rows.map((row) => (
               <li key={row.id}>
-                <Wrench size={18} aria-hidden="true" />
-                <div>
-                  <a href={`#inventory/equipos/${row.id}`}>
-                    <strong>
-                      {row.code} · {row.name}
-                    </strong>
-                  </a>
+                <a
+                  href={`#inventory/equipos/${row.id}`}
+                  className="warehouse-record"
+                >
+                  <div className="warehouse-record-head">
+                    {row.category === "machine" ? (
+                      <Cog size={20} aria-hidden="true" />
+                    ) : row.category === "support" ? (
+                      <Boxes size={20} aria-hidden="true" />
+                    ) : (
+                      <Wrench size={20} aria-hidden="true" />
+                    )}
+                    <div>
+                      <small>
+                        {EQUIPMENT_CATEGORIES.find((c) => c.id === row.category)
+                          ?.name || "Sin clasificar"}{" "}
+                        · {row.code}
+                      </small>
+                      <strong>{row.name}</strong>
+                    </div>
+                    <span className="ops-stock-status">
+                      {conditionLabels[row.condition]}
+                    </span>
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </div>
+                  <dl className="equipment-custody">
+                    <div>
+                      <dt>
+                        <MapPin size={15} /> Ubicación actual
+                      </dt>
+                      <dd>{row.assignment?.workName || row.location}</dd>
+                    </div>
+                    <div>
+                      <dt>
+                        <UserRound size={15} /> Responsable
+                      </dt>
+                      <dd>{row.assignment?.responsible || "Sin asignar"}</dd>
+                    </div>
+                  </dl>
                   <small>
                     {row.assignment
-                      ? `${row.assignment.workName} · ${row.assignment.responsible}`
-                      : row.location}
+                      ? "Asignado a obra · Ver seguimiento"
+                      : "En almacén · Ver ficha"}
                   </small>
-                </div>
-                <span className="ops-stock-status">
-                  {row.assignment ? "Asignado" : conditionLabels[row.condition]}
-                </span>
+                </a>
               </li>
             ))}
           </ul>
@@ -133,45 +216,82 @@ export function EquipmentList({
 function NewEquipment({
   close,
   done,
+  row,
 }: {
   close: () => void;
   done: (row: Equipment) => void;
+  row?: Equipment;
 }) {
   const id = useRef(recordId());
-  const [condition, setCondition] = useState("good");
+  const [condition, setCondition] = useState(row?.condition || "good");
+  const [category, setCategory] = useState(row?.category || "");
   return (
     <WarehouseForm
-      title="Nuevo equipo"
-      action="Registrar equipo"
+      title={row ? "Editar equipo" : "Nuevo equipo"}
+      action={row ? "Guardar cambios" : "Registrar equipo"}
       onClose={close}
+      canSubmit={!!category}
       save={async (form) => {
         done(
-          await postWarehouse<Equipment>(path, {
-            id: id.current,
-            code: stringField(form, "code"),
-            name: stringField(form, "name"),
-            location: stringField(form, "location"),
-            condition,
-          }),
+          await (row ? putWarehouse<Equipment> : postWarehouse<Equipment>)(
+            row ? `${path}/${row.id}` : path,
+            {
+              ...(row ? { version: row.version } : { id: id.current }),
+              category,
+              code: stringField(form, "code"),
+              name: stringField(form, "name"),
+              location: stringField(form, "location"),
+              ...(!row ? { condition } : {}),
+            },
+          ),
         );
       }}
     >
       <div className="warehouse-grid">
         <Field label="Código">
-          <input name="code" maxLength={60} required />
+          <input name="code" defaultValue={row?.code} maxLength={60} required />
         </Field>
         <Field label="Nombre">
-          <input name="name" maxLength={150} required />
-        </Field>
-        <Field label="Ubicación">
-          <input name="location" maxLength={150} required />
+          <input
+            name="name"
+            defaultValue={row?.name}
+            maxLength={150}
+            required
+          />
         </Field>
         <WarehouseSelect
-          label="Estado"
-          value={condition}
-          options={options}
-          onChange={setCondition}
+          label="Categoría"
+          value={category}
+          onChange={setCategory}
+          options={EQUIPMENT_CATEGORIES.map((c) => ({
+            value: c.id,
+            label: c.name,
+          }))}
+          placeholder="Selecciona una categoría"
         />
+        <Field
+          label="Ubicación en almacén"
+          hint={
+            row?.assignment
+              ? "La ubicación actual sigue siendo la obra asignada."
+              : undefined
+          }
+        >
+          <input
+            name="location"
+            defaultValue={row?.location}
+            maxLength={150}
+            required
+          />
+        </Field>
+        {!row && (
+          <WarehouseSelect
+            label="Estado"
+            value={condition}
+            options={options}
+            onChange={(v) => setCondition(v as Equipment["condition"])}
+          />
+        )}
       </div>
     </WarehouseForm>
   );
@@ -186,20 +306,27 @@ function EquipmentDetail({
   refresh: () => void;
   canManage: boolean;
 }) {
-  const [action, setAction] = useState<keyof typeof actions>();
+  const [action, setAction] = useState<"assign" | "return" | "condition">();
+  const [editing, setEditing] = useState(false);
   return (
     <section className="warehouse-section">
-      <a href="#inventory/equipos" className="warehouse-link">
-        Volver a equipos
-      </a>
+      <WarehouseBack href="#inventory/equipos">Volver a equipos</WarehouseBack>
       <header className="accounting-section-head">
         <div>
           <h2>{row.name}</h2>
           <p className="hint">
-            {row.code} · {conditionLabels[row.condition]}
+            {row.code} ·{" "}
+            {EQUIPMENT_CATEGORIES.find((c) => c.id === row.category)?.name ||
+              "Sin clasificar"}{" "}
+            · {conditionLabels[row.condition]}
           </p>
         </div>
         <div className="accounting-tools">
+          {canManage && (
+            <Button variant="ghost" onClick={() => setEditing(true)}>
+              Editar datos
+            </Button>
+          )}
           {canManage &&
             (row.assignment ? (
               <Button onClick={() => setAction("return")}>
@@ -220,16 +347,22 @@ function EquipmentDetail({
             ))}
         </div>
       </header>
-      <div className="warehouse-preview">
-        <strong>
-          {row.assignment ? row.assignment.workName : row.location}
-        </strong>
-        <p>
-          {row.assignment
-            ? `A cargo de ${row.assignment.responsible}`
-            : "Ubicación registrada"}
-        </p>
-      </div>
+      <dl className="equipment-custody warehouse-preview">
+        <div>
+          <dt>
+            <MapPin size={15} />
+            Ubicación actual
+          </dt>
+          <dd>{row.assignment?.workName || row.location}</dd>
+        </div>
+        <div>
+          <dt>
+            <UserRound size={15} />
+            Responsable
+          </dt>
+          <dd>{row.assignment?.responsible || "Sin asignar"}</dd>
+        </div>
+      </dl>
       {row.assignment?.expectedReturn && (
         <p className="hint">
           Devolución prevista ·{" "}
@@ -266,6 +399,16 @@ function EquipmentDetail({
       ) : (
         <p className="hint">Sin movimientos registrados.</p>
       )}
+      {editing && (
+        <NewEquipment
+          row={row}
+          close={() => setEditing(false)}
+          done={() => {
+            setEditing(false);
+            refresh();
+          }}
+        />
+      )}
       {action && (
         <EquipmentAction
           row={row}
@@ -288,7 +431,7 @@ function EquipmentAction({
   done,
 }: {
   row: Equipment;
-  action: keyof typeof actions;
+  action: "assign" | "return" | "condition";
   close: () => void;
   done: () => void;
 }) {

@@ -42,7 +42,12 @@ import { MediaModule } from "../media/media.module";
 import { parse } from "../common/validation";
 import { CrmService } from "./crm.service";
 import { CrmRepository } from "./crm.repository";
-import { CrmFiles, photoMetadataFromForm } from "./crm.files";
+import {
+  CrmFiles,
+  photoMetadataFromForm,
+  documentMetadataFromForm,
+  attachmentDisposition,
+} from "./crm.files";
 import { InventoryService } from "../inventory/inventory.service";
 @Controller("public/consultations")
 class ConsultationController {
@@ -157,7 +162,12 @@ class CrmController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: Record<string, unknown>,
   ) {
-    return this.files.upload(id, file, photoMetadataFromForm(body));
+    return this.files.upload(
+      id,
+      file,
+      photoMetadataFromForm(body),
+      documentMetadataFromForm(body),
+    );
   }
 
   @Get("files/:id") async read(@Param("id") id: string, @Res() res: Response) {
@@ -166,7 +176,7 @@ class CrmController {
       "Content-Type": doc.mime,
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
-      "Content-Disposition": `${doc.type === "contract" ? "attachment" : "inline"}; filename="${doc.type === "contract" ? "contrato.pdf" : "foto.webp"}"`,
+      "Content-Disposition": attachmentDisposition(doc),
     });
     (file.Body as Readable).pipe(res);
   }

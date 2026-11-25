@@ -1,3 +1,4 @@
+import type { DispatchStatus } from "./dispatch.js";
 import { z } from "zod";
 import { quantitySchema } from "./crm.js";
 export const supplyId = z.string().regex(/^[a-f0-9]{24}$/);
@@ -36,6 +37,7 @@ export type SupplyRequest = z.infer<typeof supplyRequestInput> & {
   sku: string;
   unit: string;
   available?: number;
+  guideRequest?: { id: string; status: DispatchStatus; number: string };
   version: number;
   reserved: number;
   delivered: number;

@@ -19,9 +19,11 @@ const compactAmount = (cents: number) =>
 export function MarginBridge({
   sales,
   costs,
+  projected = false,
 }: {
   sales: number;
   costs: number;
+  projected?: boolean;
 }) {
   const id = useId();
   const chart = marginBridge(sales, costs);
@@ -34,7 +36,7 @@ export function MarginBridge({
     >
       <title
         id={id}
-      >{`Venta neta ${amount(sales)}, menos costos ${amount(costs)}: ${sales < costs ? "pérdida" : "ganancia"} de ${amount(Math.abs(sales - costs))}.`}</title>
+      >{`${projected ? "Venta cotizada" : "Venta neta"} ${amount(sales)}, menos ${projected ? "costos previstos" : "costos"} ${amount(costs)}: ${sales < costs ? "pérdida" : "ganancia"} de ${amount(Math.abs(sales - costs))}.`}</title>
       <line
         x1="12"
         x2="408"
@@ -46,7 +48,18 @@ export function MarginBridge({
         const x = 30 + index * 140;
         const top = Math.min(chart.y(column.from), chart.y(column.to));
         return (
-          <g key={column.label} className={`margin-chart-${column.color}`}>
+          <g
+            key={
+              projected
+                ? [
+                    "Venta cotizada",
+                    "Costo previsto",
+                    sales < costs ? "Pérdida prevista" : "Ganancia prevista",
+                  ][index]
+                : column.label
+            }
+            className={`margin-chart-${column.color}`}
+          >
             {index < 2 && (
               <line
                 x1={x + 80}
@@ -80,7 +93,13 @@ export function MarginBridge({
               textAnchor="middle"
               className="margin-chart-label"
             >
-              {column.label}
+              {projected
+                ? [
+                    "Venta cotizada",
+                    "Costo previsto",
+                    sales < costs ? "Pérdida prevista" : "Ganancia prevista",
+                  ][index]
+                : column.label}
             </text>
           </g>
         );

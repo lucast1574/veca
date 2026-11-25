@@ -1,3 +1,4 @@
+import { latestQuotation } from "../crm/quotation";
 import {
   BadRequestException,
   ConflictException,
@@ -899,7 +900,7 @@ export class AccountingService {
     const work = await this.work(workId);
     if (!work) throw new NotFoundException("Obra no encontrada.");
     await this.inventory.flush();
-    const [sales, valuation, plan, labor] = await Promise.all([
+    const [sales, valuation, plan, labor, quotation] = await Promise.all([
       this.invoices
         .aggregate<{
           sales: number;
@@ -960,6 +961,7 @@ export class AccountingService {
         .next(),
       this.warehouse.plan(workId),
       this.labor.margin(workId),
+      latestQuotation(this.db.db, workId),
     ]);
     const firstValuation = valuation?.since
       ? limaDate(new Date(valuation.since))
@@ -1039,7 +1041,8 @@ export class AccountingService {
       costCount: (costs?.count || 0) + (valuation?.count || 0),
       materialCosts: valuation?.costs || 0,
       costBreakdown,
-      budgetCents: plan.budgetCents,
+      budgetCents: quotation?.costBudgetCents ?? plan.budgetCents,
+      ...(quotation ? { quotation } : {}),
       pendingValuation: (valuation?.unvalued || 0) > 0.0001,
       manualMaterialsToReview: costs?.manual || 0,
     };

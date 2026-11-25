@@ -1,6 +1,6 @@
 import { Select } from "@veca/ui/src/Select";
 import { useRef, useState } from "react";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2, ChevronRight } from "lucide-react";
 import { purchaseRequest, type Purchase, type Material } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
 import { PurchasePreparation } from "./PurchasePreparation";
@@ -14,6 +14,7 @@ import {
 } from "../accounting/accounting-shared";
 import { amount, date, unitName } from "../operations/shared";
 import {
+  WarehouseBack,
   materialOptions,
   postWarehouse,
   purchaseStatus,
@@ -84,11 +85,11 @@ export function Purchases({
         confirma qué materiales llegaron y su cantidad real para actualizar el
         stock.
       </p>
-      <div className="accounting-filters">
+      <div className="warehouse-filters is-two">
         <Field label="Buscar pedidos">
           <input
             type="search"
-            placeholder="Proveedor, obra o material"
+            placeholder="Proveedor, factura, obra o material"
             maxLength={100}
             value={search}
             onChange={(event) => {
@@ -122,26 +123,60 @@ export function Purchases({
         }
       >
         {Boolean(list.data?.items.length) && (
-          <ul className="warehouse-list">
+          <ul className="warehouse-records">
             {list.data?.items.map((row) => (
               <li key={row.id}>
-                <ClipboardList size={19} aria-hidden="true" />
-                <div>
-                  <a href={`#inventory/compras/${row.id}`}>
-                    <strong>{row.supplier || "Pedido por preparar"}</strong>
-                  </a>
-                  <small>
-                    {row.workName || "Almacén general"} · {date(row.createdAt)}
-                  </small>
-                </div>
-                <span
-                  className="ops-stock-status warehouse-order-status"
-                  data-state={row.status}
+                <a
+                  href={`#inventory/compras/${row.id}`}
+                  className="warehouse-record"
                 >
-                  {row.invoiceSource && row.status === "requested"
-                    ? "Por completar en Contabilidad"
-                    : purchaseStatus[row.status]}
-                </span>
+                  <div className="warehouse-record-head">
+                    <ClipboardList size={20} aria-hidden="true" />
+                    <div>
+                      <strong>{row.supplier || "Pedido por preparar"}</strong>
+                      <small>
+                        {row.invoiceSource?.reference
+                          ? `Factura ${row.invoiceSource.reference} · `
+                          : ""}
+                        {row.workName || "Almacén general"}
+                      </small>
+                    </div>
+                    <span
+                      className="ops-stock-status warehouse-order-status"
+                      data-state={row.status}
+                    >
+                      {purchaseStatus[row.status]}
+                    </span>
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </div>
+                  <p>
+                    {row.items.length
+                      ? row.items
+                          .slice(0, 3)
+                          .map(
+                            (item) =>
+                              `${item.name} · ${amount(item.received)} de ${amount(item.ordered || item.requested)} ${unitName(item.unit)} recibidos`,
+                          )
+                          .join(" / ")
+                      : "Contabilidad debe completar los materiales y cantidades."}
+                    {row.items.length > 3
+                      ? ` · +${row.items.length - 3} materiales`
+                      : ""}
+                  </p>
+                  <small>{row.reason}</small>
+                  <footer>
+                    <small>{date(row.createdAt)}</small>
+                    <span>
+                      {row.status === "requested"
+                        ? "Ver qué falta completar"
+                        : row.status === "received"
+                          ? "Ver recepciones"
+                          : row.status === "cancelled"
+                            ? "Ver detalle"
+                            : "Revisar y recibir materiales"}
+                    </span>
+                  </footer>
+                </a>
               </li>
             ))}
           </ul>
@@ -293,9 +328,9 @@ function PurchaseDetail({
   );
   return (
     <section className="warehouse-section">
-      <a href="#inventory/compras" className="warehouse-link">
+      <WarehouseBack href="#inventory/compras">
         Volver a pedidos y recepciones
-      </a>
+      </WarehouseBack>
       <header className="accounting-section-head">
         <div>
           <h2>{row.supplier || "Pedido por preparar"}</h2>

@@ -1,9 +1,14 @@
+import { WarehouseBack } from "../warehouse/shared";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { Modal } from "../../components/Modal";
 import { MaterialForm } from "../warehouse/MaterialForm";
 import { useAccountingQuery } from "../accounting/accounting-shared";
 import { useCallback, useId, useRef, useState, type FormEvent } from "react";
-import { type Material, type Movement } from "@veca/content";
+import {
+  MATERIAL_CATEGORIES,
+  type Material,
+  type Movement,
+} from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
 import { Plus, Package, Search, RefreshCw } from "lucide-react";
 import { post } from "../../lib/api";
@@ -194,6 +199,8 @@ export function Inventory({
   const [count, setCount] = useState<Material>();
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [stock, setStock] = useState("");
   const [create, setCreate] = useState(false);
   const [movement, setMovement] = useState<string | null>(null);
   const catalog = useAccountingQuery<Material[]>("/admin/crm/materials");
@@ -215,19 +222,25 @@ export function Inventory({
   useLiveRefresh(refresh, false);
   const filtered = (
     materialId ? (selected.data ? [selected.data] : []) : items
-  ).filter((m) =>
-    `${m.name} ${m.sku} ${m.category}`
-      .toLowerCase()
-      .includes(search.toLowerCase()),
+  ).filter(
+    (m) =>
+      `${m.name} ${m.sku} ${m.category} ${m.location}`
+        .toLowerCase()
+        .includes(search.toLowerCase()) &&
+      (!category || m.category === category) &&
+      (!stock ||
+        (stock === "empty"
+          ? (m.available ?? m.balance) === 0
+          : (m.available ?? m.balance) <= m.minimum)),
   );
   return (
     <main className="ops-page">
       <div className="ops-heading">
         <div>
           {materialId && (
-            <a className="warehouse-link" href="#inventory/materiales">
+            <WarehouseBack href="#inventory/materiales">
               Volver a materiales
-            </a>
+            </WarehouseBack>
           )}
           <h2>{selected.data?.name || "Materiales"}</h2>
         </div>
@@ -244,7 +257,7 @@ export function Inventory({
             Nuevo material
           </Button>
           <Button
-            disabled={!items.length && !selected.data}
+            disabled={!canReceive || (!items.length && !selected.data)}
             onClick={() => setMovement(materialId || "")}
           >
             <Package size={17} />
@@ -349,16 +362,35 @@ export function Inventory({
         />
       )}
       {!materialId && (
-        <div className="ops-toolbar">
+        <div className="ops-toolbar material-filters">
           <label className="search-input">
             <Search size={17} />
             <input
               aria-label="Buscar materiales"
-              placeholder="Nombre, código o familia…"
+              placeholder="Nombre, código, familia o ubicación…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+          <Select
+            label="Familia de material"
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: "", label: "Todas las familias" },
+              ...MATERIAL_CATEGORIES.map((c) => ({ value: c, label: c })),
+            ]}
+          />
+          <Select
+            label="Existencias"
+            value={stock}
+            onChange={setStock}
+            options={[
+              { value: "", label: "Todas las existencias" },
+              { value: "low", label: "Por reponer" },
+              { value: "empty", label: "Sin existencias" },
+            ]}
+          />
           <button
             className="ops-icon-button"
             aria-label="Actualizar inventario"
@@ -402,11 +434,13 @@ export function Inventory({
                     <strong>{amount(m.available ?? m.balance)}</strong>{" "}
                     {unitName(m.unit)}
                     <small>
-                      En almacén {amount(m.balance)} · Reservado{" "}
-                      {amount(m.reserved || 0)}
+                      En almacén {amount(m.balance)} {unitName(m.unit)} ·
+                      Reservado {amount(m.reserved || 0)} {unitName(m.unit)}
                     </small>
                   </td>
-                  <td>{amount(m.minimum)}</td>
+                  <td>
+                    {amount(m.minimum)} {unitName(m.unit)}
+                  </td>
                   <td>
                     <span
                       className={`ops-stock-status ${(m.available ?? m.balance) <= m.minimum ? "low" : ""}`}

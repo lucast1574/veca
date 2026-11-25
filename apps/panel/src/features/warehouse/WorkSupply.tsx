@@ -196,7 +196,9 @@ function PlanForm({
       save={async (form) => {
         const parsed = workPlanInput.safeParse({
           revision: row.plan.revision,
-          budgetCents: Math.round(Number(form.get("budget")) * 100),
+          budgetCents: row.plan.budgetSource
+            ? row.plan.budgetCents
+            : Math.round(Number(form.get("budget")) * 100),
           materials: materials.map(({ materialId, key }) => ({
             materialId,
             quantity: Number(form.get(key)),
@@ -214,9 +216,17 @@ function PlanForm({
       {(catalog.error || tools.error) && (
         <Notice error>{catalog.error || tools.error}</Notice>
       )}
-      <Field label="Presupuesto de costos sin IGV">
+      <Field
+        label="Presupuesto de costos sin IGV"
+        hint={
+          row.plan.budgetSource
+            ? `Proviene de la cotización ${row.plan.budgetSource.reference}. Se actualiza al adjuntar una nueva cotización en Resumen.`
+            : undefined
+        }
+      >
         <input
           name="budget"
+          readOnly={!!row.plan.budgetSource}
           type="number"
           min="0"
           step="0.01"
