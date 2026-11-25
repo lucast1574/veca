@@ -27,3 +27,15 @@ Después de `npm run build`, ejecutar `node scripts/local-qa.mjs` en un proceso 
 ## Extensiones previstas
 
 Reservas para cotizaciones, presupuestos y costos, proveedores y compras, cortes/mermas de vidrio, roles del equipo y firma electrónica se incorporan como módulos separados. No deben confundirse las reservas con el consumo físico ni publicar contratos o contactos en los proyectos de la web.
+
+## Compras de SUNAT y registro interno
+
+En Contabilidad → Compras y gastos, **Compras por registrar** es una bandeja persistente de facturas de proveedores, no un registro de pagos. El servidor consulta el mes actual y el anterior cada 15 minutos, reanuda trabajos pendientes y reintenta fallos con una espera de 5 minutos. El panel refresca la bandeja visible cada 30 segundos. Actualizar compras permite consultar otro periodo; cerrar el modal conserva el trabajo para que el servidor lo termine. No hay presentación fiscal automática.
+
+Cada factura permite completar un concepto y elegir gasto general, gasto de una obra o factura de una compra de Inventario. Los datos fiscales vienen del TXT original de SUNAT. Solo las facturas en PEN, con fecha y desglose neto/IGV válido y sin otros cargos, pueden incorporarse por este flujo. Otros tipos, monedas, discrepancias y duplicados se conservan para revisión; no se convierten ni se estiman impuestos.
+
+La incorporación crea un comprobante interno **pendiente de revisión**, con identidad estable y protección única por RUC del proveedor, serie y número. Se revisan también los registros anteriores sin clave normalizada. La creación manual sigue disponible y usa la misma protección. No genera pagos, órdenes, recepciones ni movimientos de stock. Al vincular a Inventario se usa la orden existente y el costo de materiales continúa imputándose por consumo; una referencia de recepción coincidente exige ese vínculo.
+
+Impuestos distingue los resultados de ventas de la bandeja de compras. El modal de presentación mensual ofrece la revisión de pendientes y el acceso a SOL. **No acepta propuestas, no registra preliminares ni presenta libros desde VECA**: la generación definitiva del registro se completa en SOL, según la documentación oficial de SUNAT (https://cpe.sunat.gob.pe/node/131). La emisión directa de facturas de venta permanece en Facturas y cobros.
+
+Validación local aislada: `VECA_GUIDE_QA_MOCK=1 VECA_SIRE_QA_MOCK=1 node scripts/local-qa.mjs`, luego `node tests/sire-flow.mjs` y `node tests/sire-purchases-flow.mjs`. No ejecutar estos flujos contra producción. Storybook incluye la bandeja, el modal y el estado de compras guardadas con datos ficticios.

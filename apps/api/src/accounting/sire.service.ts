@@ -4,6 +4,11 @@ import type {
   SireComparison,
   SireReconciliation,
 } from "@veca/content";
+import { purchaseDocumentKey } from "./purchase-document";
+import {
+  SirePurchasesService,
+  type IncomingPurchase,
+} from "./sire-purchases.service";
 import { SireProvider } from "./sire-provider";
 import { fiscalIssuerRuc } from "../common/fiscal-config";
 import { Database } from "../database/database.module";
@@ -75,8 +80,64 @@ function sunatRows(file: Buffer, month: string, book: SireBook) {
       total: Math.round(Number(data[total]) * 100),
       currency: data[currency],
     };
-    return [{ doc, type: data[6] }];
+    return [
+      {
+        doc,
+        type: data[6],
+        purchase:
+          book === "purchases" ? purchaseDetails(data, doc, month) : undefined,
+      },
+    ];
   });
+}
+
+function purchaseDetails(
+  data: string[],
+  doc: Document,
+  period: string,
+): IncomingPurchase {
+  const money = (index: number) =>
+    /^-?\d{1,12}(?:\.\d{1,2})?$/.test(data[index] || "0")
+      ? Math.round(Number(data[index] || 0) * 100)
+      : NaN;
+  const net = [14, 16, 18, 20].reduce((sum, index) => sum + money(index), 0);
+  const tax = [15, 17, 19].reduce((sum, index) => sum + money(index), 0);
+  const dateMatch = /^(\d{2})\/(\d{2})\/(20\d{2})$/.exec(data[4] || "");
+  const date = dateMatch
+    ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`
+    : "";
+  const validDate =
+    date &&
+    !Number.isNaN(Date.parse(date)) &&
+    new Date(date).toISOString().slice(0, 10) === date;
+  const reason =
+    data[6] !== "01"
+      ? "Este tipo de comprobante requiere revisión de Contabilidad."
+      : doc.currency !== "PEN"
+        ? "Este comprobante está en otra moneda. Requiere revisión de Contabilidad."
+        : !purchaseDocumentKey(doc.taxId, doc.reference)
+          ? "Faltan datos del proveedor o número de factura."
+          : !validDate
+            ? "Revisa la fecha del comprobante con Contabilidad."
+            : !Number.isSafeInteger(net) ||
+                !Number.isSafeInteger(tax) ||
+                net <= 0 ||
+                tax < 0 ||
+                net + tax !== doc.total ||
+                [21, 22, 23].some((index) => money(index) !== 0)
+              ? "El comprobante tiene otros cargos o importes que requieren revisión de Contabilidad."
+              : undefined;
+  return {
+    ...doc,
+    period,
+    supplier: (data[13] || "").slice(0, 150),
+    date,
+    type: data[6],
+    net: Number.isFinite(net) ? net : 0,
+    tax: Number.isFinite(tax) ? tax : 0,
+    importable: !reason,
+    ...(reason && { reason }),
+  };
 }
 
 @Injectable()
@@ -84,6 +145,7 @@ export class SireService {
   constructor(
     private readonly db: Database,
     private readonly provider: SireProvider,
+    private readonly purchases: SirePurchasesService,
   ) {}
 
   connection() {
@@ -106,8 +168,11 @@ export class SireService {
       throw new BadRequestException(
         "La propuesta no corresponde a la empresa, libro y periodo seleccionados.",
       );
-    if (proposal.status === "pending")
+    if (proposal.status === "pending") {
+      if (book === "purchases")
+        await this.purchases.pending(month, proposal.job);
       return { job: proposal.job, status: "pending" };
+    }
     if (
       !proposal.files ||
       proposal.files.reduce(
@@ -260,6 +325,11 @@ export class SireService {
       for (const doc of group)
         issues.push({ ...doc, panel: doc.total, status: "onlyPanel" });
     }
-    return { count: incoming.length, matches, issues };
+    if (book === "purchases")
+      await this.purchases.remember(
+        month,
+        incoming.flatMap((row) => (row.purchase ? [row.purchase] : [])),
+      );
+    return { count: incoming.length, matches, issues, book, period: month };
   }
 }

@@ -10,13 +10,17 @@ export function SireFileDialog({
   month,
   close,
   done,
+  initialBook = "purchases",
+  lockBook = false,
 }: {
   month: string;
+  initialBook?: SireBook;
+  lockBook?: boolean;
   close: () => void;
   done: (result: Result) => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
-  const [book, setBook] = useState<SireBook>("purchases");
+  const [book, setBook] = useState<SireBook>(initialBook);
   return (
     <WarehouseForm
       title="Comparar archivo de SUNAT"
@@ -51,15 +55,17 @@ export function SireFileDialog({
         Periodo {month}. Adjunta el TXT original de la propuesta descargada de
         SIRE. Si viene en ZIP, extráelo primero.
       </p>
-      <WarehouseSelect
-        label="Registro"
-        value={book}
-        onChange={(value) => setBook(value as SireBook)}
-        options={[
-          { value: "purchases", label: "Registro de compras (RCE)" },
-          { value: "sales", label: "Registro de ventas (RVIE)" },
-        ]}
-      />
+      {!lockBook && (
+        <WarehouseSelect
+          label="Registro"
+          value={book}
+          onChange={(value) => setBook(value as SireBook)}
+          options={[
+            { value: "purchases", label: "Registro de compras (RCE)" },
+            { value: "sales", label: "Registro de ventas (RVIE)" },
+          ]}
+        />
+      )}
       <FileInput
         label="Archivo de la propuesta (TXT)"
         disabled={!canWrite}
@@ -102,7 +108,8 @@ export function SireFileDialog({
         en SUNAT o solo en VECA. Las facturas en soles se comparan
         automáticamente; otros tipos, monedas o datos incompletos requieren
         revisión manual. Este paso no declara impuestos ni modifica tus
-        registros.
+        registros contables. Las compras nuevas quedan pendientes en la bandeja
+        de VECA.
       </p>
     </WarehouseForm>
   );

@@ -18,11 +18,13 @@ const text = (period, book) => {
     Object.assign(cells, {
       0: ruc,
       2: period.replace("-", ""),
+      4: `05/${period.slice(5,7)}/${period.slice(0,4)}`,
       6: "01",
       7: "FQA",
     });
     cells[book === "sales" ? 8 : 9] = String(number);
     cells[book === "sales" ? 11 : 12] = "20100066603";
+    if (book === "purchases") { cells[13] = "Proveedor QA local"; cells[14] = "100.00"; cells[15] = "18.00"; }
     cells[book === "sales" ? 25 : 24] = "118.00";
     cells[book === "sales" ? 26 : 25] = "PEN";
     return cells.join("|");

@@ -1,0 +1,151 @@
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { http, HttpResponse } from "msw";
+import { within, userEvent } from "storybook/test";
+import { AccountingCosts } from "../../src/features/accounting/AccountingCosts";
+import { AccountingAccess } from "../../src/features/accounting/AccountingAccess";
+import { WorkspaceShell } from "../../src/components/workspace/WorkspaceShell";
+import { user, works } from "./fixtures";
+import type { SirePurchase } from "@veca/content";
+const meta = {
+  title: "VECA/Compras de proveedores",
+  parameters: { layout: "fullscreen" },
+} satisfies Meta;
+export default meta;
+type Story = StoryObj<typeof meta>;
+const sample: SirePurchase[] = [
+  {
+    id: "111111111111111111111111",
+    version: 1,
+    period: "2026-11",
+    reference: "F001-1208",
+    taxId: "20100000001",
+    supplier: "Estación de servicio · Ejemplo",
+    date: "2026-11-20",
+    type: "01",
+    total: 7500,
+    net: 6356,
+    tax: 1144,
+    currency: "PEN",
+    importable: true,
+    status: "pending",
+  },
+  {
+    id: "222222222222222222222222",
+    version: 1,
+    period: "2026-11",
+    reference: "F002-354",
+    taxId: "20100000002",
+    supplier: "Distribuidora de materiales · Ejemplo",
+    date: "2026-11-19",
+    type: "01",
+    total: 4050,
+    net: 3432,
+    tax: 618,
+    currency: "PEN",
+    importable: true,
+    status: "pending",
+  },
+  {
+    id: "333333333333333333333333",
+    version: 1,
+    period: "2026-11",
+    reference: "F001-98",
+    taxId: "20100000003",
+    supplier: "Transporte local · Ejemplo",
+    date: "2026-11-18",
+    type: "01",
+    total: 1000,
+    net: 847,
+    tax: 153,
+    currency: "PEN",
+    importable: true,
+    status: "pending",
+  },
+];
+let rows = sample.map((row) => ({ ...row }));
+const handlers = [
+  http.get("*/admin/accounting/costs", () =>
+    HttpResponse.json({ items: [], hasMore: false }),
+  ),
+  http.get("*/admin/accounting/works", () =>
+    HttpResponse.json(works.map((w) => ({ id: w.id, name: w.workName }))),
+  ),
+  http.get("*/admin/accounting/sire/purchases", ({ request }) => {
+    const all = new URL(request.url).searchParams.get("state") === "all";
+    const pending = rows.filter((row) => row.status === "pending");
+    return HttpResponse.json({
+      items: all ? rows : pending,
+      total: rows.length,
+      pending: pending.length,
+      pendingCents: pending.reduce((sum, r) => sum + r.total, 0),
+      registered: rows.length - pending.length,
+      review: 0,
+      hasMore: false,
+      syncedAt: "2026-11-25T13:40:00Z",
+    });
+  }),
+  http.get("*/admin/accounting/sire/purchases/:id", ({ params }) =>
+    HttpResponse.json({
+      item: rows.find((row) => row.id === params.id),
+      purchases: [
+        {
+          id: "444444444444444444444444",
+          label: "Materiales para ventanas · Compra de ejemplo",
+          referenceMatch: false,
+        },
+      ],
+    }),
+  ),
+  http.post(
+    "*/admin/accounting/sire/purchases/:id/incorporate",
+    ({ params }) => {
+      rows = rows.map((row) =>
+        row.id === params.id ? { ...row, status: "registered" } : row,
+      );
+      return HttpResponse.json({ costId: params.id }, { status: 201 });
+    },
+  ),
+];
+const render = () => (
+  <WorkspaceShell
+    user={user}
+    view="accounting"
+    projectCount={12}
+    onNavigate={() => false}
+  >
+    <div className="storybook-demo">
+      Vista de ejemplo · Proveedores y facturas ficticias
+    </div>
+    <main className="ops-page accounting-workspace">
+      <AccountingAccess.Provider value={["accounting_write"]}>
+        <AccountingCosts inventoryAccess />
+      </AccountingAccess.Provider>
+    </main>
+    <div id="workspace-overlays" />
+  </WorkspaceShell>
+);
+export const ComprasPendientes: Story = {
+  name: "Bandeja de compras por registrar",
+  beforeEach() {
+    rows = sample.map((row) => ({ ...row }));
+  },
+  parameters: { msw: handlers },
+  render,
+};
+export const CompletarCompra: Story = {
+  ...ComprasPendientes,
+  name: "Modal para completar compra",
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      (await canvas.findAllByRole("button", { name: /Completar compra/ }))[0],
+    );
+  },
+};
+export const ComprasGuardadas: Story = {
+  ...ComprasPendientes,
+  name: "Todas las compras guardadas",
+  beforeEach() {
+    rows = sample.map((row) => ({ ...row, status: "registered" }));
+  },
+};

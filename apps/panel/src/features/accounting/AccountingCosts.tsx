@@ -1,3 +1,4 @@
+import { SirePurchaseInbox } from "./SirePurchaseInbox";
 import { useAccountingPermission } from "./AccountingAccess";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useRef, useState, type FormEvent } from "react";
@@ -39,7 +40,7 @@ export function AccountingCosts({
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const [page, setPage] = useState(1);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(today().slice(0, 7));
   const query = useAccountingQuery<CostPage>(
     `${path}?page=${page}${month ? `&month=${month}` : ""}${purchaseId ? `&purchase=${encodeURIComponent(purchaseId)}` : ""}`,
   );
@@ -123,7 +124,18 @@ export function AccountingCosts({
           />
         </Field>
       </div>
-      <QueryState {...query} empty="No hay compras ni gastos en este periodo.">
+      {!purchaseId && month && (
+        <SirePurchaseInbox month={month} key={month} onSaved={query.refresh} />
+      )}
+      <h3 className="sire-saved-title">Compras guardadas</h3>
+      <p className="hint">
+        Aquí están los comprobantes que ya incorporaste o registraste
+        directamente en VECA.
+      </p>
+      <QueryState
+        {...query}
+        empty="Todavía no hay compras ni gastos guardados en este periodo."
+      >
         {rows.length > 0 && (
           <ul className="dispatch-list dispatch-queue">
             {rows.map((row) => (

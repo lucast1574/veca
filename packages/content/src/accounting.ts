@@ -174,6 +174,8 @@ export const accountingTotals = (items: InvoiceInput["items"]) => {
 
 export type SireBook = "purchases" | "sales";
 export type SireReconciliation = {
+  book?: SireBook;
+  period?: string;
   count: number;
   matches: number;
   issues: {
@@ -190,4 +192,64 @@ export type SireComparison = {
   job: string;
   status: "pending" | "ready";
   result?: SireReconciliation;
+};
+
+export const sireIncorporation = z
+  .object({
+    version: z.number().int().positive(),
+    description: z
+      .string()
+      .trim()
+      .min(3, "Escribe brevemente para qué fue la compra.")
+      .max(200),
+    destination: z.enum(["general", "work", "warehouse"], {
+      error: "Selecciona a dónde corresponde esta compra.",
+    }),
+    kind: z.enum(["fuel", "transport", "installation", "other"], {
+      error: "Selecciona el tipo de gasto.",
+    }),
+    workId: accountingId.optional(),
+    purchaseId: accountingId.optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (
+      (data.destination === "work") !== Boolean(data.workId) ||
+      (data.destination === "warehouse") !== Boolean(data.purchaseId)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Selecciona el destino y su obra o compra de almacén.",
+      });
+  });
+export type SireIncorporation = z.infer<typeof sireIncorporation>;
+export type SirePurchase = {
+  id: string;
+  version: number;
+  period: string;
+  reference: string;
+  taxId: string;
+  supplier: string;
+  date: string;
+  type: string;
+  total: number;
+  net: number;
+  tax: number;
+  currency: string;
+  importable: boolean;
+  reason?: string;
+  status: "pending" | "registered" | "different" | "manual";
+  costId?: string;
+};
+export type SirePurchasePage = {
+  items: SirePurchase[];
+  total: number;
+  pending: number;
+  pendingCents: number;
+  registered: number;
+  review: number;
+  hasMore: boolean;
+  syncedAt?: string;
+  syncFailed?: boolean;
+  syncing?: boolean;
 };

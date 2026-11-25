@@ -5,7 +5,11 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { ObjectId } from "mongodb";
+import { ObjectId, MongoServerError } from "mongodb";
+import {
+  matchingPurchaseCosts,
+  purchaseDocumentKey,
+} from "./purchase-document";
 import { createHash, randomUUID } from "node:crypto";
 import {
   accountingTotals,
@@ -41,6 +45,8 @@ type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   proofKey?: string;
   creationHash?: string;
   actor: string;
+  invoiceKey?: string;
+  sireSourceId?: string;
 };
 const issued: InvoiceStatus[] = ["accepted", "observed"];
 const pageSize = 25;
@@ -73,6 +79,8 @@ function costView({
   proofKey,
   creationHash,
   actor,
+  invoiceKey,
+  sireSourceId,
   ...row
 }: CostRecord): AccountingCost {
   return { ...row, id: _id.toHexString(), proof: Boolean(proofKey) };
@@ -454,8 +462,14 @@ export class AccountingService {
     };
   }
 
-  async createCost(data: CostInput, actor: string, id: string) {
+  async createCost(
+    data: CostInput,
+    actor: string,
+    id: string,
+    sireSourceId?: string,
+  ) {
     const fields = await this.costFields(data);
+    await this.checkCostDuplicate(data, id);
     const creationHash = fingerprint(fields);
     const record: CostRecord = {
       ...fields,
@@ -464,12 +478,19 @@ export class AccountingService {
       version: 1,
       reviewed: false,
       actor,
+      ...(data.kind !== "materials" &&
+      purchaseDocumentKey(data.supplierRuc, data.reference)
+        ? { invoiceKey: purchaseDocumentKey(data.supplierRuc, data.reference) }
+        : {}),
+      ...(sireSourceId && { sireSourceId }),
     };
-    const result = await this.costs.findOneAndUpdate(
-      { _id: record._id },
-      { $setOnInsert: record },
-      { upsert: true, returnDocument: "after" },
-    );
+    const result = await this.costs
+      .findOneAndUpdate(
+        { _id: record._id },
+        { $setOnInsert: record },
+        { upsert: true, returnDocument: "after" },
+      )
+      .catch((error: unknown) => this.costWriteError(error));
     if (!result)
       throw new ServiceUnavailableException("No se pudo guardar el gasto.");
     if (result.creationHash !== creationHash)
@@ -480,22 +501,65 @@ export class AccountingService {
   }
 
   async editCost(id: string, version: number, data: CostInput) {
+    const current = await this.costRecord(id);
+    if (current.sireSourceId && data.kind === "materials")
+      throw new BadRequestException(
+        "Una factura de SUNAT no se convierte en un consumo de stock.",
+      );
+    if (
+      current.sireSourceId &&
+      ["reference", "supplierRuc", "date", "netCents", "taxCents"].some(
+        (key) =>
+          current[key as keyof CostInput] !== data[key as keyof CostInput],
+      )
+    )
+      throw new BadRequestException(
+        "Los datos del comprobante de SUNAT se conservan. Puedes editar su clasificación y asignación.",
+      );
+    await this.checkCostDuplicate(data, id);
     const fields = await this.costFields(data);
-    const row = await this.costs.findOneAndUpdate(
-      { _id: new ObjectId(id), version, reviewed: false },
-      {
-        $set: fields,
-        $unset: {
-          ...(data.purchaseId ? {} : { purchaseId: "" }),
-          ...(data.dispatchId ? {} : { dispatchId: "" }),
+    const invoiceKey =
+      data.kind !== "materials"
+        ? purchaseDocumentKey(data.supplierRuc, data.reference)
+        : undefined;
+    const row = await this.costs
+      .findOneAndUpdate(
+        { _id: new ObjectId(id), version, reviewed: false },
+        {
+          $set: { ...fields, ...(invoiceKey && { invoiceKey }) },
+          $unset: {
+            ...(!invoiceKey ? { invoiceKey: "" } : {}),
+            ...(data.purchaseId ? {} : { purchaseId: "" }),
+            ...(data.dispatchId ? {} : { dispatchId: "" }),
+          },
+          $inc: { version: 1 },
         },
-        $inc: { version: 1 },
-      },
-      { returnDocument: "after" },
-    );
+        { returnDocument: "after" },
+      )
+      .catch((error: unknown) => this.costWriteError(error));
     if (!row)
       throw new ConflictException("Este gasto cambió o ya está revisado.");
     return costView(row);
+  }
+
+  private costWriteError(error: unknown): never {
+    if (error instanceof MongoServerError && error.code === 11000)
+      throw new ConflictException(
+        "Este comprobante ya está registrado en Compras y gastos. Recarga la bandeja para abrirlo.",
+      );
+    throw error;
+  }
+  private async checkCostDuplicate(data: CostInput, id: string) {
+    if (data.kind === "materials") return;
+    const rows = await matchingPurchaseCosts(
+      this.db.db,
+      data.supplierRuc,
+      data.reference,
+    );
+    if (rows.some((row) => String(row._id) !== id.toLowerCase()))
+      throw new ConflictException(
+        "Este comprobante ya está registrado. Vincula el registro existente en lugar de crear otro.",
+      );
   }
 
   private async costFields(data: CostInput) {

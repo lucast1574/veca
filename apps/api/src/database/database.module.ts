@@ -68,6 +68,13 @@ export class Database implements OnModuleInit, OnModuleDestroy {
         .collection("accounting_invoices")
         .createIndex({ issueDate: 1, status: 1 }),
       this.db.collection("accounting_costs").createIndex({ date: -1 }),
+      this.db.collection("accounting_costs").createIndex({ supplierRuc: 1 }),
+      this.db
+        .collection("accounting_costs")
+        .createIndex({ invoiceKey: 1 }, { unique: true, sparse: true }),
+      this.db
+        .collection("sire_purchases")
+        .createIndex({ issuerRuc: 1, period: 1, date: -1 }),
       this.db
         .collection("accounting_labor_allocations")
         .createIndex({ issuerRuc: 1, period: 1 }),

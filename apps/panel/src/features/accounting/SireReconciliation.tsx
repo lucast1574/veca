@@ -1,12 +1,13 @@
 import { useAccountingPermission } from "./AccountingAccess";
 import { useState } from "react";
-import { FileCheck2, Info } from "lucide-react";
+import { ArrowRight, FileCheck2, Info } from "lucide-react";
 import type { SireReconciliation as Result } from "@veca/content";
 import { Button } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import { SireAutomaticDialog } from "./SireAutomaticDialog";
 import { SireFileDialog } from "./SireFileDialog";
 import "./sire.css";
+import { SireClosingGuide } from "./SireClosingGuide";
 import { amount, Pagination } from "./accounting-shared";
 
 const labels = {
@@ -59,7 +60,7 @@ export function SireReconciliation({ month }: { month: string }) {
       <div className="accounting-section-head">
         <div>
           <div className="sire-section-title">
-            <h3>Conciliación con SUNAT</h3>
+            <h3>Compras y ventas en SUNAT</h3>
             <button
               type="button"
               className="ops-icon-button"
@@ -71,8 +72,8 @@ export function SireReconciliation({ month }: { month: string }) {
             </button>
           </div>
           <p className="hint">
-            Compara los comprobantes y sus importes con la propuesta del
-            periodo.
+            Las compras llegan a su bandeja. Las ventas se comparan con tus
+            facturas emitidas.
           </p>
         </div>
         <Button
@@ -81,7 +82,7 @@ export function SireReconciliation({ month }: { month: string }) {
           disabled={!month || !canWrite}
           onClick={() => setOpen("automatic")}
         >
-          <FileCheck2 size={17} /> Comparar con SUNAT
+          <FileCheck2 size={17} /> Revisar ventas
         </Button>
       </div>
       {open === "help" && (
@@ -98,8 +99,9 @@ export function SireReconciliation({ month }: { month: string }) {
         >
           <div className="sire-help-copy">
             <p>
-              Compara los comprobantes registrados en VECA con la propuesta de
-              compras o ventas que SUNAT tiene para el periodo seleccionado.
+              Las compras son facturas de tus proveedores. Se descargan
+              automáticamente y quedan por completar en Compras y gastos. Las
+              ventas son las facturas que VECA emite a sus clientes.
             </p>
             <ul>
               <li>Identifica los comprobantes que coinciden.</li>
@@ -107,8 +109,8 @@ export function SireReconciliation({ month }: { month: string }) {
               <li>Destaca importes distintos y datos por revisar.</li>
             </ul>
             <p className="sire-help-note">
-              Es una revisión para Contabilidad. No declara impuestos, no acepta
-              libros ni modifica tus registros.
+              Guardar una compra en VECA y presentar el registro mensual en
+              SUNAT son pasos distintos. La presentación se completa en SOL.
             </p>
           </div>
         </Modal>
@@ -116,6 +118,8 @@ export function SireReconciliation({ month }: { month: string }) {
       {open === "automatic" && (
         <SireAutomaticDialog
           month={month}
+          initialBook="sales"
+          lockBook
           close={() => setOpen(null)}
           manual={() => setOpen("file")}
           done={(result) => {
@@ -136,13 +140,44 @@ export function SireReconciliation({ month }: { month: string }) {
           }}
         />
       )}
-      {result && (
+      <div className="sire-next-step">
+        <div>
+          <strong>¿Buscas las compras de tus proveedores?</strong>
+          <p>
+            Están en Compras por registrar. Allí puedes completarlas y
+            guardarlas sin escribir otra vez la factura.
+          </p>
+        </div>
+        <a className="accounting-inline" href="#accounting/gastos">
+          Ir a las compras <ArrowRight size={15} />
+        </a>
+      </div>
+      <SireClosingGuide month={month} />
+      {result && result.book === "purchases" && (
+        <div className="sire-query-status" role="status">
+          <Info size={20} />
+          <div>
+            <strong>Compras consultadas · {month}</strong>
+            <p>
+              {result.count} comprobantes revisados. Los nuevos quedaron en
+              Compras por registrar.{" "}
+              <a href="#accounting/gastos">Abrir la bandeja de compras</a>
+            </p>
+          </div>
+        </div>
+      )}
+      {result && result.book !== "purchases" && (
         <>
           <div className="warehouse-preview">
             <strong>
-              {result.matches} coinciden · {result.issues.length} por revisar
+              Ventas · {month} · {result.matches} coinciden ·{" "}
+              {result.issues.length} por revisar
             </strong>
-            <p>{result.count} comprobantes en la propuesta.</p>
+            <p>
+              {result.count
+                ? `${result.count} facturas de venta encontradas en SUNAT.`
+                : "SUNAT no encontró ventas en este mes. Si aún no has emitido facturas, no tienes nada que revisar aquí."}
+            </p>
           </div>
           {Boolean(result.issues.length) && (
             <>

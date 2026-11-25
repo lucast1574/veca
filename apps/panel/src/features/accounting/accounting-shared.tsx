@@ -19,6 +19,24 @@ export const amount = (cents: number) =>
         currency: "PEN",
       }).format(cents / 100)
     : "—";
+export const sireDocumentLabel = (type: string) =>
+  ({
+    "01": "Factura",
+    "03": "Boleta",
+    "07": "Nota de crédito",
+    "08": "Nota de débito",
+  })[type] || "Comprobante";
+export function displayDate(value: string) {
+  const date = new Date(value + "T12:00:00Z");
+  return Number.isNaN(date.getTime())
+    ? "Fecha por revisar"
+    : new Intl.DateTimeFormat("es-PE", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(date);
+}
 export const decimal = (value: string, digits = 2) => {
   const normalized = value.trim().replace(",", ".");
   if (!normalized) return 0;

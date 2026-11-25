@@ -16,8 +16,12 @@ export function SireAutomaticDialog({
   close,
   manual,
   done,
+  initialBook = "purchases",
+  lockBook = false,
 }: {
   month: string;
+  initialBook?: SireBook;
+  lockBook?: boolean;
   close: () => void;
   manual: () => void;
   done: (result: SireReconciliation) => void;
@@ -25,7 +29,7 @@ export function SireAutomaticDialog({
   const connection = useAccountingQuery<{ configured: boolean }>(
     accountingPath + "/sire/connection",
   );
-  const [book, setBook] = useState<SireBook>("purchases");
+  const [book, setBook] = useState<SireBook>(initialBook);
   const [job, setJob] = useState<SireComparison>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,8 +94,16 @@ export function SireAutomaticDialog({
   }
   return (
     <Modal
-      title="Comparar con SUNAT"
-      description={`Revisa las compras o ventas de ${month} frente a lo registrado en VECA.`}
+      title={
+        book === "purchases"
+          ? "Actualizar compras de SUNAT"
+          : "Revisar ventas en SUNAT"
+      }
+      description={
+        book === "purchases"
+          ? `Buscaremos las facturas de tus proveedores del mes ${month}.`
+          : `Compararemos las ventas de ${month} con las facturas de VECA.`
+      }
       onClose={close}
       footer={
         <footer className="ve-modal-actions">
@@ -107,7 +119,9 @@ export function SireAutomaticDialog({
               ? "Consultando SUNAT…"
               : error
                 ? "Reintentar consulta"
-                : "Consultar y comparar"}
+                : book === "purchases"
+                  ? "Buscar compras del mes"
+                  : "Revisar ventas"}
           </Button>
         </footer>
       }
@@ -118,29 +132,36 @@ export function SireAutomaticDialog({
             <CloudDownload size={24} />
           </span>
           <div>
-            <h3>La propuesta llega directamente</h3>
+            <h3>
+              {book === "purchases"
+                ? "Tus facturas, sin volver a escribirlas"
+                : "Comprueba tus ventas"}
+            </h3>
             <p>
-              VECA consulta SIRE y compara los comprobantes por ti. Verás cuáles
-              coinciden, cuáles faltan y qué importes necesitan revisión.
+              {book === "purchases"
+                ? "Las compras nuevas quedarán guardadas en tu bandeja. Después solo tendrás que indicar para qué fueron. Las ya registradas no se repiten."
+                : "Verás si las facturas de venta de VECA coinciden con lo que aparece en SUNAT y cuáles necesitan revisión."}
             </p>
           </div>
         </div>
-        <fieldset disabled={processing} className="warehouse-fields">
-          <WarehouseSelect
-            label="Registro"
-            value={book}
-            onChange={(value) => {
-              setBook(value as SireBook);
-              setJob(undefined);
-              setError("");
-              setPaused(false);
-            }}
-            options={[
-              { value: "purchases", label: "Compras (RCE)" },
-              { value: "sales", label: "Ventas (RVIE)" },
-            ]}
-          />
-        </fieldset>
+        {!lockBook && (
+          <fieldset disabled={processing} className="warehouse-fields">
+            <WarehouseSelect
+              label="Registro"
+              value={book}
+              onChange={(value) => {
+                setBook(value as SireBook);
+                setJob(undefined);
+                setError("");
+                setPaused(false);
+              }}
+              options={[
+                { value: "purchases", label: "Compras (RCE)" },
+                { value: "sales", label: "Ventas (RVIE)" },
+              ]}
+            />
+          </fieldset>
+        )}
         {connection.loading && (
           <p className="hint" role="status">
             Comprobando conexión…
@@ -156,9 +177,8 @@ export function SireAutomaticDialog({
         )}
         {connection.data?.configured === false && (
           <Notice>
-            La consulta automática requiere habilitar el acceso a SIRE una sola
-            vez. Pide a Administración revisar la conexión en la consola de API
-            SUNAT.
+            La conexión necesita atención. Pide a Administración que revise el
+            acceso a SUNAT.
           </Notice>
         )}
         {processing && (
@@ -171,8 +191,8 @@ export function SireAutomaticDialog({
                   : "Conectando con SUNAT"}
               </strong>
               <p>
-                La compararemos en cuanto esté disponible. Puedes cerrar esta
-                ventana y volver a consultar después.
+                Los resultados quedarán en tu bandeja cuando termine la consulta
+                automática. Puedes cerrar esta ventana.
               </p>
             </div>
           </div>
@@ -181,15 +201,14 @@ export function SireAutomaticDialog({
         <p className="sire-readonly">
           <ShieldCheck size={16} />
           <span>
-            Consulta de revisión. La presentación de impuestos y la aceptación
-            de libros se hacen por separado.
+            Esta consulta no declara impuestos ni acepta registros de SUNAT.
           </span>
         </p>
         <button type="button" className="sire-manual-option" onClick={manual}>
           <FileUp size={18} />
           <span>
             <strong>Ya tengo un archivo TXT</strong>
-            <small>Comparar una propuesta descargada de SIRE</small>
+            <small>Cargar las compras o ventas desde un archivo de SUNAT</small>
           </span>
         </button>
       </div>

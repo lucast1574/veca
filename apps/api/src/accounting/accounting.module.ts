@@ -24,6 +24,7 @@ import {
   costInput,
   invoiceInput,
   invoicePayment,
+  sireIncorporation,
 } from "@veca/content";
 import { Database } from "../database/database.module";
 import { vecaDemoReport } from "../database/remove-veca-demo";
@@ -36,6 +37,8 @@ import { MediaModule } from "../media/media.module";
 import { AccountingService } from "./accounting.service";
 import { SireService } from "./sire.service";
 import { SireProvider } from "./sire-provider";
+import { SireSyncService } from "./sire-sync.service";
+import { SirePurchasesService } from "./sire-purchases.service";
 import { LaborController } from "./labor.controller";
 import { LaborProvider } from "./labor-provider";
 import { LaborCostsService } from "./labor-costs.service";
@@ -51,6 +54,7 @@ class AccountingController {
   constructor(
     private readonly accounts: AccountingService,
     private readonly sire: SireService,
+    private readonly purchases: SirePurchasesService,
   ) {}
 
   @Get("cost-origins")
@@ -218,6 +222,38 @@ class AccountingController {
     return this.sire.connection();
   }
 
+  @Get("sire/purchases")
+  pendingPurchases(
+    @Query("month") month: string,
+    @Query("page") page = "1",
+    @Query("state") state = "pending",
+  ) {
+    return this.purchases.list(
+      parse(accountingMonth, month),
+      parse(pageIndex, page),
+      parse(z.enum(["pending", "all"]), state),
+    );
+  }
+
+  @Get("sire/purchases/:id")
+  pendingPurchase(@Param("id") id: string) {
+    return this.purchases.detail(parse(accountingId, id));
+  }
+
+  @Post("sire/purchases/:id/incorporate")
+  @RequirePermission("accounting_write", "accounting")
+  incorporatePurchase(
+    @Param("id") id: string,
+    @Body() raw: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.purchases.incorporate(
+      parse(accountingId, id),
+      parse(sireIncorporation, raw),
+      request.session.user.username,
+    );
+  }
+
   @Post("period/:month/reconcile/:book/automatic")
   @RequirePermission("accounting_write", "accounting")
   automatic(@Param("month") month: string, @Param("book") book: string) {
@@ -350,6 +386,8 @@ class FiscalConnectionController {
     AccountingService,
     InvoiceProvider,
     SireService,
+    SirePurchasesService,
+    SireSyncService,
     SireProvider,
     LaborProvider,
     LaborCostsService,
