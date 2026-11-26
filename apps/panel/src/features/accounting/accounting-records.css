@@ -228,7 +228,9 @@
 .accounting-record-status:is(
   [data-state="rejected"],
   [data-state="observed"],
-  [data-state="pending"]
+  [data-state="pending"],
+  [data-state="review"],
+  [data-state="returned"]
 ) {
   background: #fbebdf;
   color: #845130;

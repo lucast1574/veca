@@ -151,6 +151,11 @@ export function DispatchForm({
     validMaterialDimensions(item.dimensions),
   );
 
+  const parsed = dispatchSchema.safeParse({
+    ...draft,
+    items: draft.items.map(({ key, ...item }) => item),
+  });
+
   async function save(submit: boolean) {
     if (busy || !completeDimensions) return;
     setError("");
@@ -160,10 +165,6 @@ export function DispatchForm({
       );
       return;
     }
-    const parsed = dispatchSchema.safeParse({
-      ...draft,
-      items: draft.items.map(({ key, ...item }) => item),
-    });
     if (!parsed.success) {
       setError(
         "Revisa los datos de la guía y las cantidades de los materiales.",
@@ -197,12 +198,19 @@ export function DispatchForm({
       busy={busy}
       onClose={close}
       footer={
-        <footer className="ve-modal-actions">
+        <footer className="ve-modal-actions guide-detail-actions">
+          {guideWorkName && (!completeDimensions || !parsed.success) && (
+            <p className="hint guide-action-hint">
+              {!completeDimensions
+                ? "Completa ambas medidas del material o déjalas vacías."
+                : "Revisa los datos y las cantidades antes de guardar."}
+            </p>
+          )}
           {!guideWorkName && (
             <Button
               variant="ghost"
               type="button"
-              disabled={busy || !completeDimensions}
+              disabled={busy || !completeDimensions || !parsed.success}
               onClick={() => void save(false)}
             >
               Guardar borrador
@@ -214,6 +222,7 @@ export function DispatchForm({
             disabled={
               busy ||
               !completeDimensions ||
+              !parsed.success ||
               (!guideWorkName && !hasDispatchDetails)
             }
           >

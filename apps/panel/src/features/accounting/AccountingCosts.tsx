@@ -12,7 +12,7 @@ import {
   uploadAccountingProof,
 } from "./AccountingProof";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ChevronRight, Download, Plus, Trash2, Upload } from "lucide-react";
 import {
   costInput,
@@ -347,6 +347,14 @@ export function AccountingCosts({
               <PurchaseCostDetail
                 id={active.purchaseId}
                 inventoryAccess={inventoryAccess}
+                onPrepare={
+                  canWrite
+                    ? (id) => {
+                        setActive(undefined);
+                        setPreparing(id);
+                      }
+                    : undefined
+                }
               />
             )}
             {active.dispatchId && (
@@ -367,6 +375,8 @@ export function AccountingCosts({
                 <a
                   className="accounting-inline cost-detail-proof"
                   href={`${API_BASE}${path}/${active.id}/proof`}
+                  target="_blank"
+                  rel="noreferrer"
                 >
                   <Download size={15} aria-hidden="true" /> Descargar sustento
                 </a>
@@ -432,6 +442,7 @@ function CostForm({
   onClose: () => void;
   onSaved: (row: AccountingCost) => void;
 }) {
+  const formId = useId();
   const query = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
   const [kind, setKind] = useState<CostInput["kind"]>(
     current?.kind || (initialPurchase ? "purchase" : "other"),
@@ -596,6 +607,33 @@ function CostForm({
       size="wide"
       busy={busy}
       onClose={close}
+      footer={
+        !match && (
+          <footer className="ve-modal-actions">
+            <Button
+              variant="ghost"
+              type="button"
+              disabled={busy}
+              onClick={close}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form={formId}
+              disabled={busy}
+              validateForm={(fields) => parseCost(fields).success}
+            >
+              <Upload size={16} />{" "}
+              {busy
+                ? current
+                  ? "Guardando…"
+                  : "Comprobando factura…"
+                : "Guardar registro"}
+            </Button>
+          </footer>
+        )
+      }
     >
       {match && (
         <div
@@ -641,6 +679,7 @@ function CostForm({
         </div>
       )}
       <form
+        id={formId}
         hidden={Boolean(match)}
         onSubmit={save}
         onChange={() => setDirty(true)}
@@ -844,23 +883,6 @@ function CostForm({
           </p>
         )}
         {error && <Notice error>{error}</Notice>}
-        <div className="accounting-form-actions">
-          <Button variant="ghost" type="button" disabled={busy} onClick={close}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={busy}
-            validateForm={(fields) => parseCost(fields).success}
-          >
-            <Upload size={16} />{" "}
-            {busy
-              ? current
-                ? "Guardando…"
-                : "Comprobando factura…"
-              : "Guardar registro"}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

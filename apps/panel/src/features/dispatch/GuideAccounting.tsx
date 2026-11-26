@@ -1,18 +1,16 @@
 import { DiscardGuideDialog } from "./DiscardGuideDialog";
 import { useAccountingPermission } from "../accounting/AccountingAccess";
-import { useCallback, useEffect, useState } from "react";
-import { flushSync } from "react-dom";
-import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
+import { useId, useRef, useState } from "react";
+import { ChevronRight, Download, Plus } from "lucide-react";
 import {
   DISPATCH_STATUS,
-  GUIDE_UNITS,
   guideItemDescription,
   type Dispatch,
 } from "@veca/content";
 import { Modal } from "../../components/Modal";
 import { Select } from "@veca/ui/src/Select";
 import { Button, Field, Notice } from "../../components/ui";
-import { API_BASE, api, post } from "../../lib/api";
+import { API_BASE, api } from "../../lib/api";
 import {
   dispatchInput,
   guidePath,
@@ -21,14 +19,24 @@ import {
   transportLabel,
 } from "./shared";
 import {
-  inquiryTimeout,
+  accountingPost,
   Pagination,
   QueryState,
   Refresh,
   useAccountingQuery,
 } from "../accounting/accounting-shared";
 import { GuideDraftForm, NewGuide } from "./GuideDraftForm";
+import "../accounting/accounting-records.css";
 import "./dispatch.css";
+
+const guideUnits: Record<Dispatch["items"][number]["unitCode"], string> = {
+  NIU: "ud.",
+  MTR: "m",
+  MTK: "m²",
+  KGM: "kg",
+  LTR: "L",
+  SET: "juego",
+};
 
 type QueueRow = Pick<
   Dispatch,
@@ -57,20 +65,12 @@ export function GuideAccounting({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [openGuide, setOpenGuide] = useState<string>();
+  const detailId = openGuide || selected;
   const query = useAccountingQuery<QueuePage>(
-    selected
-      ? ""
-      : `${guidePath}?status=${filter}&page=${page}&search=${encodeURIComponent(search.trim())}`,
+    `${guidePath}?status=${filter}&page=${page}&search=${encodeURIComponent(search.trim())}`,
   );
   const rows = query.data;
-  if (selected)
-    return (
-      <GuideReview
-        key={selected}
-        id={selected}
-        inventoryAccess={inventoryAccess}
-      />
-    );
   return (
     <section aria-labelledby="accounting-guides">
       <div className="accounting-section-head">
@@ -125,31 +125,35 @@ export function GuideAccounting({
         }
       >
         {rows && rows.items.length > 0 && (
-          <ul className="dispatch-list dispatch-queue">
+          <ul className="accounting-record-list">
             {rows.items.map((row) => (
               <li key={row.id}>
-                <div>
+                <div className="accounting-record-label">
                   <strong>{row.workName}</strong>
                   <small>
+                    {row.guideNumber ? `${row.guideNumber} · ` : ""}
                     {transportLabel(row.transportMode)}
-                    {row.guideNumber && ` · ${row.guideNumber}`}
                   </small>
+                  {row.issue && row.issue !== DISPATCH_STATUS[row.status] && (
+                    <small>{row.issue}</small>
+                  )}
                 </div>
-                <div>{transferLabel(row.transferAt)}</div>
-                <span className="dispatch-pill" data-state={row.status}>
-                  {row.issue || DISPATCH_STATUS[row.status]}
-                </span>
-                <a
-                  className="dispatch-link"
-                  href={`#accounting/guias/${row.id}`}
+                <div className="accounting-record-meta">
+                  <span>{transferLabel(row.transferAt)}</span>
+                  <span
+                    className="accounting-record-status"
+                    data-state={row.status}
+                  >
+                    {DISPATCH_STATUS[row.status]}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setOpenGuide(row.id)}
                 >
-                  {row.status === "draft"
-                    ? "Ver borrador"
-                    : row.status === "review"
-                      ? "Revisar"
-                      : "Ver guía"}{" "}
-                  <ChevronRight size={15} />
-                </a>
+                  Ver detalle <ChevronRight size={14} aria-hidden="true" />
+                </Button>
               </li>
             ))}
           </ul>
@@ -165,9 +169,21 @@ export function GuideAccounting({
           inventoryAccess={inventoryAccess}
           onClose={() => setCreating(false)}
           onCreate={(id) => {
-            // Unmount the saved form and its navigation guard before changing routes.
-            flushSync(() => setCreating(false));
-            location.hash = `#accounting/guias/${id}`;
+            setCreating(false);
+            setOpenGuide(id);
+            query.refresh();
+          }}
+        />
+      )}
+      {detailId && (
+        <GuideReview
+          key={detailId}
+          id={detailId}
+          inventoryAccess={inventoryAccess}
+          onChanged={query.refresh}
+          onClose={() => {
+            if (openGuide) setOpenGuide(undefined);
+            else location.hash = "accounting/guias";
           }}
         />
       )}
@@ -178,50 +194,58 @@ export function GuideAccounting({
 function GuideReview({
   id,
   inventoryAccess,
+  onChanged,
+  onClose,
 }: {
   id: string;
   inventoryAccess: boolean;
+  onChanged: () => void;
+  onClose: () => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const mayIssue = useAccountingPermission("accounting_issue");
   const path = `${guidePath}/${id}`;
-  const [data, setData] = useState<GuideDetail | null>(null);
+  const query = useAccountingQuery<GuideDetail>(path);
+  const [updated, setUpdated] = useState<GuideDetail>();
+  const data = updated || query.data;
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [discarding, setDiscarding] = useState<{ version: number }>();
+  const [operation, setOperation] = useState<"return" | "issue" | "check">();
+  const inFlight = useRef(false);
+  const busy = Boolean(operation);
+  const [discarding, setDiscarding] = useState(false);
   const [returning, setReturning] = useState(false);
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [editing, setEditing] = useState(false);
   const [observation, setObservation] = useState("");
-  const load = useCallback(async () => {
-    try {
-      setData(await api<GuideDetail>(path, { signal: inquiryTimeout() }));
-      setError("");
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }, [path]);
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const returnFormId = useId();
+
+  function refresh() {
+    setUpdated(undefined);
+    query.refresh();
+    onChanged();
+  }
 
   async function action(command: "return" | "issue" | "check") {
-    if (!data || busy) return;
-    setBusy(true);
+    if (!data || inFlight.current) return;
+    inFlight.current = true;
+    setOperation(command);
     setConfirmIssue(false);
     setError("");
     try {
-      const dispatch = await post<Dispatch>(`${path}/${command}`, {
+      const dispatch = await accountingPost<Dispatch>(`${path}/${command}`, {
         version: data.dispatch.version,
-        ...(command === "return" ? { observation } : {}),
+        ...(command === "return" ? { observation: observation.trim() } : {}),
       });
-      setData({ ...data, dispatch });
+      setUpdated({ ...data, dispatch });
       setReturning(false);
       setObservation("");
+      onChanged();
     } catch (e) {
       setError((e as Error).message);
+      if (command === "issue") refresh();
     } finally {
-      setBusy(false);
+      inFlight.current = false;
+      setOperation(undefined);
     }
   }
 
@@ -242,263 +266,50 @@ function GuideReview({
     !row.demo &&
     !data?.issues.length;
   const external = row?.transportMode === "01";
+  const issued = row && ["accepted", "observed"].includes(row.status);
+  const mayDiscard =
+    canWrite &&
+    row &&
+    ["draft", "review", "returned", "rejected"].includes(row.status);
+  function closeReturn() {
+    setReturning(false);
+    setError("");
+  }
   return (
-    <section className="dispatch-review accounting-guide-review">
-      {discarding && (
-        <DiscardGuideDialog
-          path={`${path}/discard`}
-          version={discarding.version}
-          close={() => setDiscarding(undefined)}
-          done={() => {
-            setDiscarding(undefined);
-            void load();
-          }}
-        />
-      )}
-      <a className="dispatch-link" href="#accounting/guias">
-        <ArrowLeft size={16} /> Volver a guías
-      </a>
-      {error && <Notice error>{error}</Notice>}
-      {!row && !error && <p role="status">Cargando despacho…</p>}
-      {row && (
-        <div className="dispatch-stack">
-          <div className="dispatch-toolbar">
-            <div>
-              <h1>{row.workName}</h1>
-              <p className="hint">{transferLabel(row.transferAt)}</p>
-            </div>
-            <span className="dispatch-pill" data-state={row.status}>
-              {DISPATCH_STATUS[row.status]}
-            </span>
-          </div>
-          {row.demo && (
-            <Notice>
-              Despacho de demostración. La emisión está deshabilitada.
-            </Notice>
-          )}
-          {row.observation && <Notice>{row.observation}</Notice>}
-          {(mayReturn || mayEdit) && data.issues.length > 0 && (
-            <div className="dispatch-card dispatch-issues">
-              <h2>Datos por completar</h2>
-              <ul>
-                {data.issues.map((issue) => (
-                  <li key={issue}>{issue}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <section className="ops-card">
-            <h2>Traslado</h2>
-            <dl className="dispatch-grid">
-              <div>
-                <dt>Origen</dt>
-                <dd>
-                  {row.startAddress || "Sin dirección"}
-                  {row.startUbigeo && ` · ${row.startUbigeo}`}
-                </dd>
-              </div>
-              <div>
-                <dt>Destino</dt>
-                <dd>
-                  {row.arrivalAddress || "Sin dirección"}
-                  {row.arrivalUbigeo && ` · ${row.arrivalUbigeo}`}
-                </dd>
-              </div>
-              <div>
-                <dt>Motivo</dt>
-                <dd>
-                  {row.motiveCode === "13"
-                    ? row.motiveDescription || "Sin detalle"
-                    : motiveLabel(row.motiveCode)}
-                </dd>
-              </div>
-              <div>
-                <dt>Transporte</dt>
-                <dd>
-                  {transportLabel(row.transportMode)} · {row.weightKg} kg
-                </dd>
-              </div>
-            </dl>
-            <details open={Boolean(data.issues.length)}>
-              <summary>Destinatario y transporte</summary>
-              <dl className="dispatch-grid">
-                <div>
-                  <dt>Destinatario</dt>
-                  <dd>{row.recipientName || "Sin nombre"}</dd>
-                </div>
-                <div>
-                  <dt>
-                    {row.recipientType === "6" ? "RUC" : "DNI"} del destinatario
-                  </dt>
-                  <dd>{row.recipientNumber || "Sin documento"}</dd>
-                </div>
-                {external ? (
-                  <>
-                    <div>
-                      <dt>Transportista</dt>
-                      <dd>{row.carrierName || "Sin razón social"}</dd>
-                    </div>
-                    <div>
-                      <dt>RUC del transportista</dt>
-                      <dd>{row.carrierRuc || "Sin RUC"}</dd>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <dt>Placa</dt>
-                      <dd>{row.vehiclePlate || "Sin placa"}</dd>
-                    </div>
-                    <div>
-                      <dt>Conductor</dt>
-                      <dd>
-                        {[row.driverName, row.driverLastName]
-                          .filter(Boolean)
-                          .join(" ") || "Sin nombre"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>DNI del conductor</dt>
-                      <dd>{row.driverDocument || "Sin DNI"}</dd>
-                    </div>
-                    <div>
-                      <dt>Licencia</dt>
-                      <dd>{row.driverLicense || "Sin licencia"}</dd>
-                    </div>
-                  </>
-                )}
-              </dl>
-            </details>
-          </section>
-          {editing && mayEdit && (
-            <GuideDraftForm
-              workName={row.workName}
-              inventoryAccess={inventoryAccess}
-              initial={dispatchInput(row)}
-              onClose={() => {
-                setEditing(false);
-                void load();
-              }}
-              onSave={async (values) => {
-                const updated = await api<GuideDetail>(path, {
-                  method: "PUT",
-                  body: JSON.stringify({ data: values, version: row.version }),
-                });
-                setData(updated);
-                setError("");
-                setEditing(false);
-              }}
-            />
-          )}
-          <section className="ops-card">
-            <h2>Materiales</h2>
-            <ul className="dispatch-list">
-              {row.items.map((item, index) => (
-                <li key={index}>
-                  <span>
-                    {item.code && `${item.code} · `}
-                    {guideItemDescription(item)}
-                  </span>
-                  <strong>
-                    {item.quantity} ·{" "}
-                    {
-                      GUIDE_UNITS.find((unit) => unit.id === item.unitCode)
-                        ?.name
-                    }
-                  </strong>
-                </li>
-              ))}
-            </ul>
-          </section>
-          {confirmIssue && (
-            <Modal
-              title="Confirmar emisión"
-              onClose={() => setConfirmIssue(false)}
-              footer={
-                <footer className="ve-modal-actions">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setConfirmIssue(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={!canIssue}
-                    onClick={() => void action("issue")}
-                  >
-                    Confirmar y emitir
-                  </Button>
-                </footer>
-              }
-            >
-              <p>
-                Se enviará la guía de <strong>{row.workName}</strong> para el
-                traslado del {transferLabel(row.transferAt)}.
-              </p>
-            </Modal>
-          )}
-          {row.status === "sending" && (
-            <Notice>
-              El envío está en curso. Actualiza para comprobar el resultado.
-            </Notice>
-          )}
-          {returning && (
-            <form
-              className="dispatch-stack"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void action("return");
-              }}
-            >
-              <Field label="Qué necesita corregir Operaciones">
-                <textarea
-                  rows={3}
-                  minLength={3}
-                  maxLength={500}
-                  required
-                  value={observation}
-                  onChange={(event) => setObservation(event.target.value)}
-                  autoFocus
-                />
-              </Field>
-              <div className="dispatch-actions">
+    <>
+      <Modal
+        title={row?.workName || "Detalle de la guía"}
+        description={
+          row
+            ? [row.guideNumber, transferLabel(row.transferAt)]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+        }
+        busy={busy}
+        onClose={onClose}
+        footer={
+          row && (
+            <footer className="ve-modal-actions guide-detail-actions">
+              {mayReturn && (
                 <Button
                   type="button"
                   variant="ghost"
                   disabled={busy}
-                  onClick={() => setReturning(false)}
+                  onClick={() => {
+                    setError("");
+                    setObservation("");
+                    setReturning(true);
+                  }}
                 >
-                  Cancelar
+                  Devolver a Operaciones
                 </Button>
-                <Button type="submit" disabled={busy}>
-                  Enviar observación
-                </Button>
-              </div>
-            </form>
-          )}
-          {!returning && (
-            <div className="dispatch-actions">
-              {canWrite &&
-                ["draft", "review", "returned", "rejected"].includes(
-                  row.status,
-                ) && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => setDiscarding({ version: row.version })}
-                  >
-                    Descartar preparación
-                  </Button>
-                )}
-
+              )}
               {mayEdit && (
                 <Button
                   type="button"
                   variant={canIssue ? "ghost" : "primary"}
-                  disabled={busy || !canWrite}
+                  disabled={busy}
                   onClick={() => setEditing(true)}
                 >
                   {row.status === "rejected"
@@ -506,52 +317,333 @@ function GuideReview({
                     : "Editar borrador"}
                 </Button>
               )}
-              {mayReturn && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() => setReturning(true)}
-                >
-                  Devolver a Operaciones
-                </Button>
-              )}
               {canIssue && (
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || query.loading || Boolean(query.error)}
                   onClick={() => setConfirmIssue(true)}
                 >
-                  {busy ? "Enviando…" : "Emitir guía"}
+                  {operation === "issue" ? "Enviando…" : "Emitir guía"}
                 </Button>
               )}
               {mayIssue && row.canCheckStatus && (
                 <Button
                   type="button"
-                  disabled={busy || !mayIssue}
+                  disabled={busy}
                   onClick={() => void action("check")}
                 >
-                  Actualizar estado
+                  Consultar estado en SUNAT
                 </Button>
               )}
               {row.status === "sending" && (
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => void load()}
+                  disabled={query.loading}
+                  onClick={refresh}
                 >
                   Actualizar estado
                 </Button>
               )}
-              {["accepted", "observed"].includes(row.status) && (
-                <a className="dispatch-link" href={`${API_BASE}${path}/pdf`}>
-                  Descargar guía {row.guideNumber}
+              {issued && (
+                <a
+                  className="btn btn-ghost"
+                  href={`${API_BASE}${path}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Download size={16} aria-hidden="true" /> Descargar guía (PDF)
                 </a>
+              )}
+              {!(
+                mayReturn ||
+                mayEdit ||
+                canIssue ||
+                (mayIssue && row.canCheckStatus) ||
+                row.status === "sending" ||
+                issued
+              ) && (
+                <Button type="button" variant="ghost" onClick={onClose}>
+                  Cerrar
+                </Button>
+              )}
+            </footer>
+          )
+        }
+      >
+        <QueryState {...query}>
+          {row && (
+            <div className="dispatch-stack guide-detail-content">
+              <div>
+                <span
+                  className="accounting-record-status"
+                  data-state={row.status}
+                >
+                  {DISPATCH_STATUS[row.status]}
+                </span>
+              </div>
+              {error && !returning && <Notice error>{error}</Notice>}
+              {row.demo && (
+                <Notice>
+                  Despacho de demostración. La emisión está deshabilitada.
+                </Notice>
+              )}
+              {row.observation && (
+                <Notice
+                  error={row.status === "rejected" || row.status === "returned"}
+                >
+                  {row.observation}
+                </Notice>
+              )}
+              {row.status === "pending" && !row.observation && (
+                <p className="hint">
+                  {mayIssue && row.canCheckStatus
+                    ? "SUNAT aún no confirma la guía. Usa Consultar estado en SUNAT."
+                    : "El envío sigue sin confirmarse. Verifica si la guía figura en SUNAT antes de preparar otra."}
+                </p>
+              )}
+              {(mayReturn || mayEdit) && data.issues.length > 0 && (
+                <div className="dispatch-card dispatch-issues">
+                  <h3>Datos por completar</h3>
+                  <p className="hint">
+                    {mayEdit
+                      ? "Abre el borrador para corregirlos."
+                      : "Devuelve la guía a Operaciones con lo que falta."}
+                  </p>
+                  <ul>
+                    {data.issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <section className="guide-detail-section">
+                <h3>Traslado</h3>
+                <dl className="accounting-record-facts">
+                  <div>
+                    <dt>Origen</dt>
+                    <dd>
+                      {row.startAddress || "Sin dirección"}
+                      {row.startUbigeo && ` · ${row.startUbigeo}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Destino</dt>
+                    <dd>
+                      {row.arrivalAddress || "Sin dirección"}
+                      {row.arrivalUbigeo && ` · ${row.arrivalUbigeo}`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Motivo</dt>
+                    <dd>
+                      {row.motiveCode === "13"
+                        ? row.motiveDescription || "Sin detalle"
+                        : motiveLabel(row.motiveCode)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Transporte</dt>
+                    <dd>
+                      {transportLabel(row.transportMode)} · {row.weightKg} kg
+                    </dd>
+                  </div>
+                </dl>
+                <details open={Boolean(data.issues.length)}>
+                  <summary>Destinatario y transporte</summary>
+                  <dl className="accounting-record-facts">
+                    <div>
+                      <dt>Destinatario</dt>
+                      <dd>{row.recipientName || "Sin nombre"}</dd>
+                    </div>
+                    <div>
+                      <dt>
+                        {row.recipientType === "6" ? "RUC" : "DNI"} del
+                        destinatario
+                      </dt>
+                      <dd>{row.recipientNumber || "Sin documento"}</dd>
+                    </div>
+                    {external ? (
+                      <>
+                        <div>
+                          <dt>Transportista</dt>
+                          <dd>{row.carrierName || "Sin razón social"}</dd>
+                        </div>
+                        <div>
+                          <dt>RUC del transportista</dt>
+                          <dd>{row.carrierRuc || "Sin RUC"}</dd>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <dt>Placa</dt>
+                          <dd>{row.vehiclePlate || "Sin placa"}</dd>
+                        </div>
+                        <div>
+                          <dt>Conductor</dt>
+                          <dd>
+                            {[row.driverName, row.driverLastName]
+                              .filter(Boolean)
+                              .join(" ") || "Sin nombre"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>DNI del conductor</dt>
+                          <dd>{row.driverDocument || "Sin DNI"}</dd>
+                        </div>
+                        <div>
+                          <dt>Licencia</dt>
+                          <dd>{row.driverLicense || "Sin licencia"}</dd>
+                        </div>
+                      </>
+                    )}
+                  </dl>
+                </details>
+              </section>
+              <section className="guide-detail-section">
+                <h3>Materiales</h3>
+                {row.items.length === 0 && (
+                  <p className="hint">Aún no hay materiales en la guía.</p>
+                )}
+                <ul className="dispatch-list">
+                  {row.items.map((item, index) => (
+                    <li key={index}>
+                      <span>
+                        {item.code && `${item.code} · `}
+                        {guideItemDescription(item)}
+                      </span>
+                      <strong>
+                        {item.quantity} {guideUnits[item.unitCode]}
+                      </strong>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              {row.status === "sending" && (
+                <Notice>
+                  La guía se está enviando. Pulsa Actualizar estado para ver el
+                  resultado.
+                </Notice>
+              )}
+              {mayDiscard && (
+                <button
+                  type="button"
+                  className="dispatch-link guide-discard-link"
+                  disabled={busy}
+                  onClick={() => setDiscarding(true)}
+                >
+                  Descartar preparación
+                </button>
               )}
             </div>
           )}
-        </div>
+        </QueryState>
+      </Modal>
+      {row && editing && mayEdit && (
+        <GuideDraftForm
+          workName={row.workName}
+          inventoryAccess={inventoryAccess}
+          initial={dispatchInput(row)}
+          onClose={() => setEditing(false)}
+          onSave={async (values) => {
+            setUpdated(
+              await api<GuideDetail>(path, {
+                method: "PUT",
+                body: JSON.stringify({ data: values, version: row.version }),
+              }),
+            );
+            setError("");
+            setEditing(false);
+            onChanged();
+          }}
+        />
       )}
-    </section>
+      {row && confirmIssue && (
+        <Modal
+          title="Confirmar emisión"
+          description={`${row.workName} · ${transferLabel(row.transferAt)}`}
+          onClose={() => setConfirmIssue(false)}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setConfirmIssue(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={!canIssue}
+                onClick={() => void action("issue")}
+              >
+                Confirmar y emitir
+              </Button>
+            </footer>
+          }
+        >
+          <p>Se enviará esta guía a SUNAT.</p>
+        </Modal>
+      )}
+      {returning && (
+        <Modal
+          title="Devolver a Operaciones"
+          description="Indica qué debe corregir el equipo antes de volver a enviarla."
+          busy={busy}
+          onClose={closeReturn}
+          footer={
+            <footer className="ve-modal-actions">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy}
+                onClick={closeReturn}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                form={returnFormId}
+                disabled={busy || observation.trim().length < 3}
+              >
+                {busy ? "Enviando…" : "Enviar observación"}
+              </Button>
+            </footer>
+          }
+        >
+          <form
+            id={returnFormId}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (observation.trim().length >= 3) void action("return");
+            }}
+          >
+            <Field label="Qué necesita corregir Operaciones">
+              <textarea
+                rows={3}
+                minLength={3}
+                maxLength={500}
+                required
+                value={observation}
+                onChange={(event) => setObservation(event.target.value)}
+              />
+            </Field>
+            {error && <Notice error>{error}</Notice>}
+          </form>
+        </Modal>
+      )}
+      {row && discarding && (
+        <DiscardGuideDialog
+          path={`${path}/discard`}
+          version={row.version}
+          close={() => setDiscarding(false)}
+          done={() => {
+            setDiscarding(false);
+            refresh();
+          }}
+        />
+      )}
+    </>
   );
 }

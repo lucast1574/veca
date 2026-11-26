@@ -265,34 +265,45 @@ function PurchaseSummary({ order }: { order: Purchase }) {
         </div>
         <span className="ops-stock-status">{purchaseStatus[order.status]}</span>
       </div>
-      <ul className="warehouse-list">
-        {order.items.map((item) => (
-          <li key={item.materialId}>
-            <div>
-              <strong>
-                {item.sku} · {item.name}
-              </strong>
-              <small>
-                {quantity(item.ordered)} {unitName(item.unit)} comprados ·{" "}
-                {amount(item.unitCents)} por unidad de medida, sin IGV
-              </small>
-              <small>
-                {quantity(item.received)} {unitName(item.unit)} recibidos en
-                Almacén
-              </small>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {order.items.length > 0 ? (
+        <ul className="warehouse-list">
+          {order.items.map((item) => (
+            <li key={item.materialId}>
+              <div>
+                <strong>
+                  {item.sku} · {item.name}
+                </strong>
+                <small>
+                  {quantity(item.ordered)} {unitName(item.unit)} comprados ·{" "}
+                  {amount(item.unitCents)} sin IGV por{" "}
+                  {unitName(item.unit).toLowerCase()}
+                </small>
+                <small>
+                  {quantity(item.received)} {unitName(item.unit)} recibidos en
+                  Almacén
+                </small>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="hint">
+          {order.status === "requested"
+            ? "Falta registrar los materiales, las cantidades y los precios."
+            : "Este pedido no tiene materiales registrados."}
+        </p>
+      )}
     </section>
   );
 }
 export function PurchaseCostDetail({
   id,
   inventoryAccess,
+  onPrepare,
 }: {
   id: string;
   inventoryAccess: boolean;
+  onPrepare?: (id: string) => void;
 }) {
   const query = useAccountingQuery<Purchase>(`${purchaseOrdersPath}/${id}`);
   const order = query.data;
@@ -303,18 +314,18 @@ export function PurchaseCostDetail({
       </QueryState>
       {(order || inventoryAccess) && (
         <div className="cost-detail-links">
-          {order && (
-            <a
-              className="accounting-inline"
-              href={`#accounting/gastos/${id}${order.status === "requested" ? "/preparar" : ""}`}
-            >
-              {order.status === "requested"
-                ? "Completar materiales y precios"
-                : "Ver compra"}
+          {order?.status === "requested" && onPrepare && (
+            <Button type="button" onClick={() => onPrepare(id)}>
+              Completar materiales y precios
+            </Button>
+          )}
+          {order && order.status !== "requested" && (
+            <a className="btn btn-ghost" href={`#accounting/gastos/${id}`}>
+              Ver pedido
             </a>
           )}
           {inventoryAccess && (
-            <a className="accounting-inline" href={`#inventory/compras/${id}`}>
+            <a className="btn btn-ghost" href={`#inventory/compras/${id}`}>
               Ver recepción en Inventario
             </a>
           )}

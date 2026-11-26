@@ -769,6 +769,9 @@ function ReceiveForm({
 }) {
   const operation = useRef(pending?.operationId || crypto.randomUUID());
   const remaining = remainingQuantity(item);
+  const [received, setReceived] = useState(
+    pending?.quantity !== undefined ? String(pending.quantity) : "",
+  );
   return (
     <WarehouseForm
       title={
@@ -795,14 +798,32 @@ function ReceiveForm({
         </p>
       </div>
       <p className="hint">El stock aumenta con la cantidad que confirmes.</p>
-      <Field label="Cantidad recibida">
+      {!pending && (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={remaining <= 0 || Number(received) === remaining}
+          onClick={() => setReceived(String(remaining))}
+        >
+          Recibí todo
+        </Button>
+      )}
+      <Field
+        label="Cantidad recibida"
+        hint={
+          Number(received) > remaining && !pending
+            ? "La cantidad recibida supera lo que falta por recibir."
+            : undefined
+        }
+      >
         <input
           name="quantity"
           type="number"
           step="0.001"
           min="0.001"
           max={remaining}
-          defaultValue={pending?.quantity ?? remaining}
+          value={received}
+          onChange={(event) => setReceived(event.target.value)}
           required
           readOnly={Boolean(pending)}
         />
