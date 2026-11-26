@@ -329,7 +329,7 @@ export const IrACompras: Story = {
       ),
     ).toBeVisible();
     await expect(
-      page.getByText(/2 compras guardadas aún requieren revisión/),
+      page.getByText(/2 compras guardadas sin sustento/),
     ).toBeVisible();
   },
 };

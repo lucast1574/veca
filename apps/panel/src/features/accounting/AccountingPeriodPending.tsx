@@ -29,7 +29,7 @@ export function PurchasesPending({ report }: { report: AccountingPeriod }) {
   return (
     <div className="accounting-period-pending">
       <p>
-        <strong>{report.pendingCosts}</strong> guardadas por revisar
+        <strong>{report.pendingCosts}</strong> guardadas sin sustento
       </p>
       {sire?.syncedAt ? (
         <>

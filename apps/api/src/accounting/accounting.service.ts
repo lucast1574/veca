@@ -826,7 +826,11 @@ export class AccountingService {
               net: { $sum: "$netCents" },
               tax: { $sum: "$taxCents" },
               count: { $sum: 1 },
-              pending: { $sum: { $cond: ["$reviewed", 0, 1] } },
+              pending: {
+                $sum: {
+                  $cond: [{ $eq: [{ $ifNull: ["$proofKey", ""] }, ""] }, 1, 0],
+                },
+              },
             },
           },
         ])
@@ -912,7 +916,7 @@ export class AccountingService {
         "Comprobante",
         "Neto",
         "IGV",
-        "Revisión",
+        "Sustento",
       ],
       ...rows.map((row) => [
         row.date,
@@ -923,7 +927,7 @@ export class AccountingService {
         row.reference,
         soles(row.netCents),
         soles(row.taxCents),
-        row.reviewed ? "Revisado" : "Pendiente",
+        row.proofKey ? "Con sustento" : "Falta sustento",
       ]),
     ]);
   }

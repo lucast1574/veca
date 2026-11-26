@@ -28,7 +28,6 @@ import { API_BASE, api } from "../../lib/api";
 import { Button, Field, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import {
-  accountingPost,
   accountingPath,
   amount,
   decimal,
@@ -46,17 +45,13 @@ import "./accounting-costs.css";
 const path = accountingPath + "/costs";
 type CostPage = { items: AccountingCost[]; hasMore: boolean };
 
-function CostReviewStatus({ row }: { row: AccountingCost }) {
+function CostProofStatus({ row }: { row: AccountingCost }) {
   return (
     <span
-      className="cost-review-status"
-      data-state={row.reviewed ? "reviewed" : row.proof ? "ready" : "missing"}
+      className="cost-proof-status"
+      data-state={row.proof ? "attached" : "missing"}
     >
-      {row.reviewed
-        ? "Revisado"
-        : row.proof
-          ? "Por revisar"
-          : "Sustento pendiente"}
+      {row.proof ? "Con sustento" : "Falta sustento"}
     </span>
   );
 }
@@ -93,21 +88,15 @@ export function AccountingCosts({
   const [busy, setBusy] = useState(false);
   const rows = query.data?.items || [];
 
-  async function apply(operation: "review" | "proof", file?: File) {
+  async function attachProof(file: File) {
     if (!active || busy) return;
     setError("");
     setBusy(true);
     try {
-      const result =
-        operation === "proof" && file
-          ? await uploadAccountingProof<AccountingCost>(
-              `${path}/${active.id}`,
-              file,
-            )
-          : await accountingPost<AccountingCost>(
-              `${path}/${active.id}/review`,
-              { version: active.version },
-            );
+      const result = await uploadAccountingProof<AccountingCost>(
+        `${path}/${active.id}`,
+        file,
+      );
       setActive(result);
       query.refresh();
     } catch (e) {
@@ -211,7 +200,7 @@ export function AccountingCosts({
                     <strong className="saved-cost-total">
                       {amount(row.netCents + row.taxCents)}
                     </strong>
-                    <CostReviewStatus row={row} />
+                    <CostProofStatus row={row} />
                   </div>
                   <Button
                     variant="ghost"
@@ -315,11 +304,6 @@ export function AccountingCosts({
                 >
                   Editar registro
                 </Button>
-                {active.proof && (
-                  <Button disabled={busy} onClick={() => void apply("review")}>
-                    {busy ? "Guardando…" : "Marcar como revisado"}
-                  </Button>
-                )}
               </footer>
             )
           }
@@ -372,18 +356,13 @@ export function AccountingCosts({
                 name="dispatches"
               />
             )}
-            <section className="cost-detail-review">
+            <section className="cost-detail-support">
               <header>
-                <h3>Revisión interna</h3>
+                <h3>Sustento</h3>
                 <span role="status">
-                  <CostReviewStatus row={active} />
+                  <CostProofStatus row={active} />
                 </span>
               </header>
-              {!active.reviewed && active.proof && canWrite && (
-                <p className="hint">
-                  Verifica que el sustento coincida con el comprobante.
-                </p>
-              )}
               {active.proof ? (
                 <a
                   className="accounting-inline cost-detail-proof"
@@ -396,13 +375,9 @@ export function AccountingCosts({
                   <AccountingProofField
                     file={null}
                     optionalAtSave={false}
-                    hint={
-                      active.reviewed
-                        ? "Foto o PDF de hasta 8 MB."
-                        : "Adjunta una foto o PDF de hasta 8 MB para completar la revisión interna."
-                    }
+                    hint="Foto o PDF de hasta 8 MB."
                     disabled={busy}
-                    onSelect={(file) => void apply("proof", file)}
+                    onSelect={(file) => void attachProof(file)}
                   />
                 )
               )}
@@ -748,7 +723,6 @@ function CostForm({
             <AccountingProofField
               file={proofFile}
               onClear={() => setProofFile(null)}
-              hint="Foto o PDF de hasta 8 MB. Se requiere al marcar como revisado."
               onSelect={(file) => {
                 setProofFile(file);
                 setDirty(true);

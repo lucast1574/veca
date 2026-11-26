@@ -117,7 +117,7 @@ function ClosingDialog({
             {report.data &&
               !report.error &&
               (isPurchase
-                ? `${report.data.pendingCosts} compras guardadas aún requieren revisión. `
+                ? `${report.data.pendingCosts} compras guardadas sin sustento. `
                 : `${report.data.salesCount} facturas aceptadas en este periodo. `)}
             Confirma los importes y qué {name} corresponden al registro del mes.
           </p>

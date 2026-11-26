@@ -54,7 +54,7 @@
   white-space: nowrap;
 }
 
-.cost-review-status {
+.cost-proof-status {
   display: inline-block;
   padding: 4px 8px;
   border-radius: 5px;
@@ -64,12 +64,12 @@
   font-weight: 700;
 }
 
-.cost-review-status[data-state="reviewed"] {
+.cost-proof-status[data-state="attached"] {
   background: #e4eee4;
   color: #426347;
 }
 
-.cost-review-status[data-state="missing"] {
+.cost-proof-status[data-state="missing"] {
   background: #fbebdf;
   color: #845130;
 }
@@ -100,7 +100,7 @@
 }
 
 .cost-detail-purchase,
-.cost-detail-review {
+.cost-detail-support {
   display: grid;
   gap: 10px;
   padding-top: 16px;
@@ -121,7 +121,7 @@
   gap: 8px 18px;
 }
 
-.cost-detail-review > header {
+.cost-detail-support > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -129,10 +129,10 @@
   gap: 8px;
 }
 
-.cost-detail-review h3,
-.cost-detail-review > .hint,
-.cost-detail-review > .field,
-.cost-detail-review > .notice {
+.cost-detail-support h3,
+.cost-detail-support > .hint,
+.cost-detail-support > .field,
+.cost-detail-support > .notice {
   margin: 0;
 }
 

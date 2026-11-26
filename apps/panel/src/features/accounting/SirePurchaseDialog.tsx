@@ -445,7 +445,6 @@ function PurchaseForm({
             <AccountingProofField
               file={proofFile}
               onClear={() => setProofFile(null)}
-              hint="Foto o PDF de hasta 8 MB. Se requiere al marcar como revisado."
               onSelect={(file) => {
                 setProofFile(file);
                 setDirty(true);

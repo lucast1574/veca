@@ -142,7 +142,6 @@ export function WorkFinancials({
                   <div>
                     <strong>{row.supplier}</strong>
                     <small>
-                      {row.reviewed ? "Revisado" : "Por revisar"} ·{" "}
                       {row.proof ? "Con sustento" : "Falta sustento"}
                     </small>
                     {row.proof && (

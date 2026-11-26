@@ -211,6 +211,12 @@ try {
     assert.equal(withCost.costsTax, beforeDraft.costsTax + 450);
     assert.equal(withCost.costsCount, beforeDraft.costsCount + 1);
     assert.equal(withCost.pendingCosts, beforeDraft.pendingCosts + 1);
+    const costInbox = async () =>
+      (await request("/admin/dashboard/inbox")).find(
+        (section) => section.key === "proofs",
+      );
+    const pendingInbox = await costInbox();
+    assert.ok(pendingInbox.items.some((item) => item.id === cost.id));
     await request(root + "/costs", 409, "POST", {
       ...gasoline,
       data: { ...gasoline.data, taxCents: 465 },
@@ -232,12 +238,25 @@ try {
       "qa.pdf",
     );
     const attached = await request(proof, 201, "POST", form);
+    assert.equal(attached.proof, true);
+    assert.equal(attached.reviewed, false);
     assert.match(await request(proof), /^%PDF/);
+    const afterProof = await request(periodPath);
+    assert.equal(afterProof.pendingCosts, beforeDraft.pendingCosts);
+    assert.equal(afterProof.costsNet, withCost.costsNet);
+    const attachedInbox = await costInbox();
+    assert.equal(attachedInbox.count, pendingInbox.count - 1);
+    assert.ok(!attachedInbox.items.some((item) => item.id === cost.id));
+    const updated = await request(costPath, 200, "PUT", {
+      version: attached.version,
+      data: { ...gasoline.data, reference: "F001-201" },
+    });
+    assert.equal(updated.proof, true);
     const reviewed = await request(
       `${root}/costs/${cost.id}/review`,
       201,
       "POST",
-      { version: attached.version },
+      { version: updated.version },
     );
     assert.equal(reviewed.reviewed, true);
     const afterReview = await request(periodPath);
@@ -260,6 +279,7 @@ try {
       root + "/period/" + date.slice(0, 7) + "/costs.csv",
     );
     assert.ok(csv.includes('"\'=SUM(1,2)"'));
+    assert.ok(csv.includes("Con sustento"));
   } finally {
     await users.updateOne({ _id: admin._id }, { $set: { role: admin.role } });
   }

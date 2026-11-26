@@ -58,17 +58,18 @@ try {
       invoice("draft", "", "2031-06-01T05:00:00.000Z"),
       invoice("accepted", "2031-04-30", "2031-05-01T12:00:00.000Z"),
     ]);
-  for (const [kind, reviewed, netCents, taxCents] of [
-    ["fuel", false, 1000, 180],
-    ["purchase", true, 2000, 360],
-    ["materials", false, 9000, 0],
+  for (const [kind, proofKey, netCents, taxCents] of [
+    ["fuel", undefined, 1000, 180],
+    ["purchase", "qa/sustento.pdf", 2000, 360],
+    ["materials", undefined, 9000, 0],
   ]) {
     const _id = new ObjectId();
     costIds.push(_id);
     await db.collection("accounting_costs").insertOne({
       _id,
       kind,
-      reviewed,
+      reviewed: false,
+      ...(proofKey && { proofKey }),
       date: "2031-05-15",
       netCents,
       taxCents,

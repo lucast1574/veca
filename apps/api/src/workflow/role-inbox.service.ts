@@ -442,15 +442,12 @@ export class RoleInbox {
       sections.push(
         this.queue(
           "proofs",
-          "Gastos por sustentar o revisar",
+          "Gastos sin sustento",
           "accounting_costs",
           [
             {
               $match: {
-                $or: [
-                  { reviewed: { $ne: true } },
-                  { proofKey: { $exists: false } },
-                ],
+                proofKey: { $in: [null, ""] },
               },
             },
           ],
@@ -458,7 +455,7 @@ export class RoleInbox {
           (row) => ({
             id: String(row._id),
             title: row.supplier || row.description || "Gasto de obra",
-            detail: row.supplier || "Revisar documento de gasto",
+            detail: row.supplier || "Adjuntar sustento del gasto",
             href: "#accounting/gastos",
           }),
         ),
