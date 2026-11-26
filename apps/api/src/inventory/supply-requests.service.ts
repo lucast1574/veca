@@ -19,6 +19,7 @@ import {
 } from "@veca/content";
 import { Database } from "../database/database.module";
 import { WorkAccess } from "../crm/work-access.service";
+import type { LeadDocument } from "../crm/crm.repository";
 import { CrmEvents } from "../crm/crm.events";
 import { parse } from "../common/validation";
 import { InventoryService } from "./inventory.service";
@@ -276,35 +277,37 @@ export class SupplyRequests {
       ];
     });
   }
-  async create(workId: string, input: unknown, user: SessionUser) {
-    if (
-      !user.permissions.some(
-        (p) => p === "works_manage" || p === "inventory_request",
-      )
-    )
-      throw new ForbiddenException();
-    await this.access.get(workId, user);
-    const data = parse(supplyRequestInput, input);
-    return this.gate.run(workId, `request:${data.id}`, () =>
-      this.createRequest(workId, data, user),
-    );
-  }
-  private async createRequest(
+  async create(
     workId: string,
     input: unknown,
     user: SessionUser,
+    origin: "works" | "inventory" = "works",
   ) {
+    const canRequest = user.permissions.includes("inventory_request");
     if (
-      !user.permissions.some(
-        (p) => p === "works_manage" || p === "inventory_request",
-      )
+      origin === "inventory"
+        ? !canRequest || !user.permissions.includes("inventory")
+        : !canRequest && !user.permissions.includes("works_manage")
     )
       throw new ForbiddenException();
-    const work = await this.access.get(workId, user);
-    workId = String(work._id);
+    const getWork = () =>
+      origin === "inventory"
+        ? this.warehouse.work(workId)
+        : this.access.get(workId, user);
+    await getWork();
+    const data = parse(supplyRequestInput, input);
+    return this.gate.run(workId, `request:${data.id}`, async () =>
+      this.createRequest(await getWork(), data, user),
+    );
+  }
+  private async createRequest(
+    work: LeadDocument,
+    data: ReturnType<typeof supplyRequestInput.parse>,
+    user: SessionUser,
+  ) {
+    const workId = String(work._id);
     if (work.stage === "completed")
       throw new ConflictException("La obra ya está realizada.");
-    const data = parse(supplyRequestInput, input);
     const material = await this.inventory.materials.findOne({
       _id: new ObjectId(data.materialId),
     });

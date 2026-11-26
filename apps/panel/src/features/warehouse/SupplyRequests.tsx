@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Plus, Package, Truck, ChevronDown, ShoppingCart } from "lucide-react";
+import { SearchableSelect } from "@veca/ui/src/SearchableSelect";
 import { Select } from "@veca/ui/src/Select";
 import {
   DISPATCH_STATUS,
   supplyActionLabels,
+  supplyRequestInput,
   type SessionUser,
   type SupplyRequest,
   type SupplyAction,
@@ -16,7 +18,14 @@ import {
   useAccountingQuery,
 } from "../accounting/accounting-shared";
 import { amount, unitName, useLiveRefresh } from "../operations/shared";
-import { WarehouseForm, WarehouseBack, stringField } from "./shared";
+import {
+  materialsPath,
+  stringField,
+  WarehouseBack,
+  WarehouseForm,
+  warehousePath,
+  type WorkOption,
+} from "./shared";
 import "./warehouse.css";
 type MaterialOption = { id: string; name: string; sku: string; unit: string };
 const actionPermissions = {
@@ -148,18 +157,21 @@ export function SupplyRequests({
   const report =
     workId &&
     user.permissions.some((p) => p === "works_report" || p === "works_manage");
-  const canRequest =
-    workId &&
-    user.permissions.some(
-      (p) => p === "inventory_request" || p === "works_manage",
-    );
+  const canRequest = workId
+    ? user.permissions.some(
+        (p) => p === "inventory_request" || p === "works_manage",
+      )
+    : !selectedId &&
+      user.permissions.includes("inventory") &&
+      user.permissions.includes("inventory_request");
   return (
     <section className="ops-card supply-requests">
       <header className="lead-detail-section-head">
         <h2>Solicitudes a Almacén</h2>
         {canRequest && (
           <Button onClick={() => setCreate(true)}>
-            <Plus size={16} /> Solicitar material
+            <Plus size={16} aria-hidden="true" />
+            {workId ? "Solicitar material" : "Nueva solicitud"}
           </Button>
         )}
       </header>
@@ -524,12 +536,14 @@ export function SupplyRequests({
           </Button>
         </div>
       )}
-      {create && workId && (
+      {create && (
         <CreateRequest
-          path={path}
+          workId={workId}
           close={() => setCreate(false)}
           done={() => {
             setCreate(false);
+            setMessage("Solicitud de material enviada a Almacén.");
+            setPage(1);
             query.refresh();
           }}
         />
@@ -553,37 +567,82 @@ export function SupplyRequests({
   );
 }
 function CreateRequest({
-  path,
+  workId,
   close,
   done,
 }: {
-  path: string;
+  workId?: string;
   close: () => void;
   done: () => void;
 }) {
-  const materials = useAccountingQuery<MaterialOption[]>(path + "/materials");
+  const works = useAccountingQuery<WorkOption[]>(
+    workId ? "" : warehousePath + "/works",
+  );
+  const activeWorks = (works.data || []).filter(
+    (row) => row.stage === "coordination" || row.stage === "execution",
+  );
+  const [destination, setDestination] = useState("");
+  const selectorId = useId();
+  const materials = useAccountingQuery<MaterialOption[]>(
+    workId ? `/admin/works/${workId}/supplies/materials` : materialsPath,
+  );
   const id = useRef(recordId());
   const [materialId, setMaterial] = useState("");
+  const validWork = workId || activeWorks.some((row) => row.id === destination);
+
+  const fields = (form: FormData) => ({
+    id: id.current,
+    materialId,
+    quantity: Number(form.get("quantity")),
+    neededBy: stringField(form, "neededBy"),
+    reason: stringField(form, "reason"),
+  });
   return (
     <WarehouseForm
       title="Solicitar material"
       action="Enviar a Almacén"
       onClose={close}
-      canSubmit={!!materialId}
+      canSubmit={Boolean(
+        validWork &&
+        materialId &&
+        !works.loading &&
+        !works.error &&
+        !materials.loading &&
+        !materials.error,
+      )}
+      validateForm={(form) =>
+        supplyRequestInput.safeParse(fields(form)).success
+      }
       save={async (form) => {
-        await api(path, {
-          method: "POST",
-          body: JSON.stringify({
-            id: id.current,
-            materialId,
-            quantity: Number(form.get("quantity")),
-            neededBy: stringField(form, "neededBy"),
-            reason: stringField(form, "reason"),
-          }),
-        });
+        const path = workId
+          ? `/admin/works/${workId}/supplies`
+          : `/admin/supply-requests/works/${destination}`;
+        await api(path, { method: "POST", body: JSON.stringify(fields(form)) });
         done();
       }}
     >
+      {!workId && (
+        <QueryState
+          {...works}
+          empty="No hay obras en coordinación o ejecución."
+        >
+          {works.data && activeWorks.length > 0 && (
+            <Field label="Obra" htmlFor={selectorId}>
+              <SearchableSelect
+                id={selectorId}
+                label="Obra"
+                value={destination}
+                placeholder="Busca por nombre de obra"
+                options={activeWorks.map((row) => ({
+                  value: row.id,
+                  label: row.name,
+                }))}
+                onChange={setDestination}
+              />
+            </Field>
+          )}
+        </QueryState>
+      )}
       <QueryState {...materials}>
         <Field label="Material">
           <Select
@@ -604,6 +663,7 @@ function CreateRequest({
           type="number"
           required
           min="0.001"
+          max="1000000"
           step="0.001"
         />
       </Field>

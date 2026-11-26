@@ -88,6 +88,15 @@ export class SupplyRequestsController {
       parse(z.enum(["open", "all"]), filter),
     );
   }
+  @Post("works/:workId")
+  @RequirePermission("inventory_request", "inventory")
+  create(
+    @Param("workId") workId: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.requests.create(workId, body, req.session.user, "inventory");
+  }
   @Get(":id")
   detail(@Param("id") id: string) {
     return this.requests.detail(id);

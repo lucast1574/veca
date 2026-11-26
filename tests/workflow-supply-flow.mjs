@@ -519,8 +519,45 @@ try {
     page.items.find((row) => row.id === request.id)?.requestedByName,
     "operations",
   );
+  const inventoryRequestPath = `/admin/supply-requests/works/${otherId}`;
+  const inventoryInput = {
+    ...input,
+    id: String(new ObjectId()),
+    reason: "Material solicitado desde el almacén para otra obra.",
+  };
+  requests.push(inventoryInput.id);
+  await post(inventoryRequestPath, sessions.action_only, inventoryInput, 403);
+  const warehouseRequest = await post(
+    inventoryRequestPath,
+    sessions.warehouse,
+    inventoryInput,
+  );
+  assert.equal(warehouseRequest.workId, otherId);
+  assert.equal(warehouseRequest.requestedByName, "warehouse");
+  assert.equal(warehouseRequest.reserved, 0);
+  assert.equal(
+    (await post(inventoryRequestPath, sessions.warehouse, inventoryInput)).id,
+    warehouseRequest.id,
+  );
+  const workRequests = await get(
+    `/admin/works/${otherId}/supplies`,
+    sessions.other,
+  );
+  assert(workRequests.items.some((row) => row.id === warehouseRequest.id));
+  await db
+    .collection("crm_leads")
+    .updateOne(
+      { _id: new ObjectId(otherId) },
+      { $set: { stage: "completed" } },
+    );
+  await post(
+    inventoryRequestPath,
+    sessions.warehouse,
+    { ...inventoryInput, id: String(new ObjectId()) },
+    409,
+  );
   console.log(
-    "PASS tasks, worker scope, action permissions, reservations, shortage purchase, accepted-guide delivery, receipt and idempotent return",
+    "PASS tasks, worker scope, warehouse-created requests, action permissions, reservations, shortage purchase, accepted-guide delivery, receipt and idempotent return",
   );
 } finally {
   await db
