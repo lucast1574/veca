@@ -5,14 +5,14 @@
   gap: 12px;
   min-height: 64px;
   padding: 12px 16px;
-  border: 1px solid var(--line, #deddd7);
+  border: 1px solid var(--panel-edge);
   border-radius: 12px;
-  background: var(--surface, #fff);
-  color: var(--ink, #242641);
+  background: var(--panel-surface);
+  color: var(--panel-ink);
 }
 .ve-file-input > svg {
   flex-shrink: 0;
-  color: var(--accent, #b93018);
+  color: var(--panel-accent);
 }
 .ve-file-input > span {
   display: grid;
@@ -24,12 +24,13 @@
 }
 .ve-file-input small {
   font-size: 11px;
-  color: var(--muted, #777783);
+  color: var(--panel-secondary);
   overflow-wrap: anywhere;
 }
 .ve-file-input > input {
   position: absolute;
   inset: 0;
+  width: 100%;
   height: 100%;
   padding: 0;
   opacity: 0;
@@ -37,7 +38,7 @@
 }
 .ve-file-input:hover,
 .ve-file-input:focus-within {
-  background: var(--paper, #f6f5f0);
+  background: var(--panel-raised);
 }
 .ve-file-input:has(input:disabled) {
   opacity: 0.5;

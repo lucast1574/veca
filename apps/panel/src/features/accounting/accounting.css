@@ -187,9 +187,6 @@
   flex-wrap: wrap;
   align-items: center;
 }
-.accounting-file {
-  max-width: 100%;
-}
 .accounting-guide-review {
   margin-top: 12px;
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { MongoClient, ObjectId } from "mongodb";
+import sharp from "sharp";
 import { crmLeadDefaults } from "../packages/content/dist/index.js";
 
 const root = "/admin/accounting";
@@ -133,6 +134,27 @@ try {
       invoice.id,
     );
     const path = `${root}/invoices/${invoice.id}`;
+    const photo = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "#e74927" },
+    })
+      .png()
+      .toBuffer();
+    const invoiceProof = new FormData();
+    invoiceProof.append(
+      "file",
+      new Blob([photo], { type: "image/png" }),
+      "sustento.png",
+    );
+    const supported = await request(path + "/proof", 201, "POST", invoiceProof);
+    assert.equal(supported.proof, true);
+    assert.equal(supported.version, invoice.version);
+    assert.ok(!("proofKey" in supported));
+    assert.match(await request(path + "/proof"), /^RIFF....WEBP/s);
+    await request(path + "/proof", 409, "POST", invoiceProof);
+    const privateResponse = await fetch(
+      "http://localhost:4400" + path + "/proof",
+    );
+    assert.equal(privateResponse.status, 401);
     await request(path + "/payment", 409, "POST", {
       version: 1,
       date,

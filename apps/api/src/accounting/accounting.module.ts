@@ -18,6 +18,7 @@ import type { Response } from "express";
 import { z } from "zod";
 import {
   accountingId,
+  ACCOUNTING_PROOF_MAX_BYTES,
   canViewAdministration,
   type FiscalOverview,
   accountingMonth,
@@ -51,6 +52,22 @@ import { InvoiceProvider } from "./invoice-provider";
 const revision = z.object({ version: z.number().int().positive() }).strict();
 const pageIndex = z.coerce.number().int().min(1).max(10_000);
 const entry = z.object({ id: accountingId, data: z.unknown() }).strict();
+const ProofFile = FileInterceptor("file", {
+  limits: { fileSize: ACCOUNTING_PROOF_MAX_BYTES, files: 1 },
+});
+
+async function sendProof(
+  res: Response,
+  { file, pdf }: Awaited<ReturnType<AccountingService["proof"]>>,
+) {
+  res.set({
+    "Content-Type": pdf ? "application/pdf" : "image/webp",
+    "Content-Disposition": `attachment; filename="sustento.${pdf ? "pdf" : "webp"}"`,
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+  });
+  res.send(Buffer.from(await file.Body!.transformToByteArray()));
+}
 
 @Controller("admin/accounting")
 @RequirePermission("accounting")
@@ -164,6 +181,24 @@ class AccountingController {
       .send(await this.accounts.invoiceFile(parse(accountingId, id), type));
   }
 
+  @Post("invoices/:id/proof")
+  @RequirePermission("accounting_write", "accounting")
+  @UseInterceptors(ProofFile)
+  attachInvoiceProof(
+    @Param("id") id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.accounts.attachInvoiceProof(parse(accountingId, id), file);
+  }
+
+  @Get("invoices/:id/proof")
+  async invoiceProof(@Param("id") id: string, @Res() res: Response) {
+    await sendProof(
+      res,
+      await this.accounts.invoiceProof(parse(accountingId, id)),
+    );
+  }
+
   @Get("costs")
   costs(
     @Query("page") page = "1",
@@ -205,9 +240,7 @@ class AccountingController {
 
   @Post("costs/:id/proof")
   @RequirePermission("accounting_write", "accounting")
-  @UseInterceptors(
-    FileInterceptor("file", { limits: { fileSize: 8_000_000, files: 1 } }),
-  )
+  @UseInterceptors(ProofFile)
   attach(
     @Param("id") id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
@@ -217,14 +250,7 @@ class AccountingController {
 
   @Get("costs/:id/proof")
   async proof(@Param("id") id: string, @Res() res: Response) {
-    const file = await this.accounts.proof(parse(accountingId, id));
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": 'attachment; filename="sustento.pdf"',
-      "X-Content-Type-Options": "nosniff",
-      "Cache-Control": "private, no-store",
-    });
-    res.send(Buffer.from(await file.Body!.transformToByteArray()));
+    await sendProof(res, await this.accounts.proof(parse(accountingId, id)));
   }
 
   @Post("costs/:id/review")

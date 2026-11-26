@@ -2,6 +2,11 @@ import { useId, useState, type FormEvent } from "react";
 import { Check, Package, ReceiptText } from "lucide-react";
 import { Select } from "@veca/ui/src/Select";
 import {
+  AccountingProofField,
+  AccountingProofRetry,
+  uploadAccountingProof,
+} from "./AccountingProof";
+import {
   sireIncorporation,
   type AccountingWork,
   COST_KIND_LABELS,
@@ -32,8 +37,10 @@ export function SirePurchaseDialog({
   saved,
   canWrite,
   initial,
+  initialProof,
 }: {
   initial?: CostInput;
+  initialProof?: File;
   id: string;
   close: () => void;
   saved: (purchaseId?: string) => void;
@@ -56,6 +63,7 @@ export function SirePurchaseDialog({
       saved={saved}
       canWrite={canWrite}
       initial={initial}
+      initialProof={initialProof}
     />
   );
 }
@@ -65,8 +73,10 @@ function PurchaseForm({
   saved,
   canWrite,
   initial,
+  initialProof,
 }: {
   initial?: CostInput;
+  initialProof?: File;
   detail: Detail;
   close: () => void;
   saved: (purchaseId?: string) => void;
@@ -109,6 +119,13 @@ function PurchaseForm({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(initialProof ?? null);
+  const [pendingProof, setPendingProof] = useState<{
+    costId: string;
+    purchaseId?: string;
+    file: File;
+    error: string;
+  }>();
   useUnsavedChanges(dirty, busy);
   const onClose = () => {
     if (confirmDiscard(dirty, busy)) close();
@@ -144,11 +161,29 @@ function PurchaseForm({
     setBusy(true);
     setError("");
     try {
-      const incorporated = await accountingPost<{ purchaseId?: string }>(
+      const incorporated = await accountingPost<{
+        costId: string;
+        purchaseId?: string;
+      }>(
         `${accountingPath}/sire/purchases/${item.id}/incorporate`,
         result.data,
       );
       setDirty(false);
+      if (proofFile) {
+        try {
+          await uploadAccountingProof(
+            `${accountingPath}/costs/${incorporated.costId}`,
+            proofFile,
+          );
+        } catch (error) {
+          setPendingProof({
+            ...incorporated,
+            file: proofFile,
+            error: (error as Error).message,
+          });
+          return;
+        }
+      }
       saved(incorporated.purchaseId);
     } catch (e) {
       setError((e as Error).message);
@@ -156,6 +191,21 @@ function PurchaseForm({
       setBusy(false);
     }
   }
+  if (pendingProof)
+    return (
+      <AccountingProofRetry
+        initialFile={pendingProof.file}
+        initialError={pendingProof.error}
+        onUpload={async (file) => {
+          await uploadAccountingProof(
+            `${accountingPath}/costs/${pendingProof.costId}`,
+            file,
+          );
+          saved(pendingProof.purchaseId);
+        }}
+        onSkip={() => saved(pendingProof.purchaseId)}
+      />
+    );
   return (
     <Modal
       title="Completar esta compra"
@@ -392,6 +442,15 @@ function PurchaseForm({
                 </div>
               </div>
             )}
+            <AccountingProofField
+              file={proofFile}
+              onClear={() => setProofFile(null)}
+              hint="Puedes adjuntar una foto o PDF ahora o después. El sustento es necesario para marcar el registro como revisado. Hasta 8 MB."
+              onSelect={(file) => {
+                setProofFile(file);
+                setDirty(true);
+              }}
+            />
           </fieldset>
           <details className="sire-fiscal-details">
             <summary>Ver importes de la factura</summary>

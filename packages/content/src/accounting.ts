@@ -52,12 +52,14 @@ export type AccountingInvoice = InvoiceInput & {
   number: string;
   observation: string;
   canCheck: boolean;
+  proof?: boolean;
   netCents: number;
   taxCents: number;
   totalCents: number;
   paidCents: number;
   payments: { date: string; cents: number; reference: string }[];
 };
+export const ACCOUNTING_PROOF_MAX_BYTES = 8_000_000;
 export const invoicePayment = z
   .object({
     version: z.number().int().positive(),

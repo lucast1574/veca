@@ -6,6 +6,11 @@ import { SirePurchaseDialog } from "./SirePurchaseDialog";
 import { SirePurchaseInbox } from "./SirePurchaseInbox";
 import { SireClosingGuide } from "./SireClosingGuide";
 import { useAccountingPermission } from "./AccountingAccess";
+import {
+  AccountingProofField,
+  AccountingProofRetry,
+  uploadAccountingProof,
+} from "./AccountingProof";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
@@ -61,7 +66,11 @@ export function AccountingCosts({
   const [preparing, setPreparing] = useState<string | undefined>(
     preparePurchase ? purchaseId : undefined,
   );
-  const [source, setSource] = useState<{ id: string; initial: CostInput }>();
+  const [source, setSource] = useState<{
+    id: string;
+    initial: CostInput;
+    proof?: File;
+  }>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const rows = query.data?.items || [];
@@ -71,20 +80,16 @@ export function AccountingCosts({
     setError("");
     setBusy(true);
     try {
-      let result: AccountingCost;
-      if (operation === "proof" && file) {
-        const form = new FormData();
-        form.append("file", file);
-        result = await api<AccountingCost>(`${path}/${active.id}/proof`, {
-          method: "POST",
-          body: form,
-        });
-      } else {
-        result = await accountingPost<AccountingCost>(
-          `${path}/${active.id}/review`,
-          { version: active.version },
-        );
-      }
+      const result =
+        operation === "proof" && file
+          ? await uploadAccountingProof<AccountingCost>(
+              `${path}/${active.id}`,
+              file,
+            )
+          : await accountingPost<AccountingCost>(
+              `${path}/${active.id}/review`,
+              { version: active.version },
+            );
       setActive(result);
       query.refresh();
     } catch (e) {
@@ -224,16 +229,25 @@ export function AccountingCosts({
           current={entry === "new" ? undefined : entry}
           initialPurchase={purchaseId}
           onClose={() => setEntry(undefined)}
-          onFound={async (match, initial) => {
+          onFound={async (match, initial, proof) => {
             setEntry(undefined);
             if (match.status === "found") {
               setMonth(match.period);
-              setSource({ id: match.purchaseId, initial });
+              setSource({ id: match.purchaseId, initial, proof });
             } else {
               try {
-                const row = await api<AccountingCost>(
-                  `${path}/${match.costId}`,
-                );
+                let row = await api<AccountingCost>(`${path}/${match.costId}`);
+                setError("");
+                if (proof && !row.proof) {
+                  try {
+                    row = await uploadAccountingProof<AccountingCost>(
+                      `${path}/${row.id}`,
+                      proof,
+                    );
+                  } catch (error) {
+                    setError((error as Error).message);
+                  }
+                }
                 setMonth(row.date.slice(0, 7));
                 setActive(row);
               } catch (e) {
@@ -257,6 +271,7 @@ export function AccountingCosts({
         <SirePurchaseDialog
           id={source.id}
           initial={source.initial}
+          initialProof={source.proof}
           canWrite={canWrite}
           close={() => setSource(undefined)}
           saved={(orderId) => {
@@ -321,18 +336,12 @@ export function AccountingCosts({
               Descargar sustento
             </a>
           ) : (
-            <Field label="Adjuntar sustento PDF">
-              <input
-                className="accounting-file"
-                type="file"
-                disabled={!canWrite || busy}
-                accept="application/pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void apply("proof", file);
-                }}
-              />
-            </Field>
+            <AccountingProofField
+              file={null}
+              hint="Adjunta una foto o PDF de hasta 8 MB para marcar este registro como revisado."
+              disabled={!canWrite || busy}
+              onSelect={(file) => void apply("proof", file)}
+            />
           )}
           {error && <Notice error>{error}</Notice>}
           {active.reviewed ? (
@@ -398,6 +407,7 @@ function CostForm({
   onFound: (
     match: Extract<ManualCostCheck, { status: "found" | "registered" }>,
     initial: CostInput,
+    proof?: File,
   ) => void;
   current?: AccountingCost;
   initialPurchase?: string;
@@ -430,6 +440,12 @@ function CostForm({
     if (confirmDiscard(dirty, busy)) onClose();
   };
   const [error, setError] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [pendingProof, setPendingProof] = useState<{
+    record: AccountingCost;
+    file: File;
+    error: string;
+  }>();
   const id = useRef(recordId());
   const [match, setMatch] =
     useState<Extract<ManualCostCheck, { status: "found" | "registered" }>>();
@@ -512,6 +528,22 @@ function CostForm({
             "SUNAT está tardando en responder. Conservamos tus datos; vuelve a pulsar Guardar registro para continuar la comprobación.",
           );
       }
+      if (proofFile && !saved.proof) {
+        try {
+          saved = await uploadAccountingProof<AccountingCost>(
+            `${path}/${saved.id}`,
+            proofFile,
+          );
+        } catch (error) {
+          setDirty(false);
+          setPendingProof({
+            record: saved,
+            file: proofFile,
+            error: (error as Error).message,
+          });
+          return;
+        }
+      }
       onSaved(saved);
     } catch (e) {
       setError(
@@ -524,6 +556,22 @@ function CostForm({
     }
   }
 
+  if (pendingProof)
+    return (
+      <AccountingProofRetry
+        initialFile={pendingProof.file}
+        initialError={pendingProof.error}
+        onUpload={async (file) => {
+          onSaved(
+            await uploadAccountingProof<AccountingCost>(
+              `${path}/${pendingProof.record.id}`,
+              file,
+            ),
+          );
+        }}
+        onSkip={() => onSaved(pendingProof.record)}
+      />
+    );
   return (
     <Modal
       title={current ? "Editar gasto o compra" : "Registrar gasto o compra"}
@@ -561,13 +609,15 @@ function CostForm({
               onClick={() => {
                 if (draft.current) {
                   setDirty(false);
-                  onFound(match, draft.current);
+                  onFound(match, draft.current, proofFile ?? undefined);
                 }
               }}
             >
               {match.status === "found"
                 ? "Continuar con esta factura"
-                : "Abrir compra guardada"}
+                : proofFile
+                  ? "Abrir y adjuntar sustento"
+                  : "Abrir compra guardada"}
             </Button>
           </div>
         </div>
@@ -651,6 +701,17 @@ function CostForm({
               </Field>
             )}
           </div>
+          {!current?.proof && (
+            <AccountingProofField
+              file={proofFile}
+              onClear={() => setProofFile(null)}
+              hint="Puedes adjuntar una foto o PDF ahora o después. El sustento es necesario para marcar el registro como revisado. Hasta 8 MB."
+              onSelect={(file) => {
+                setProofFile(file);
+                setDirty(true);
+              }}
+            />
+          )}
           <details
             className="accounting-group"
             open={purchaseId || dispatchId ? true : undefined}

@@ -1,4 +1,9 @@
 import { useAccountingPermission } from "./AccountingAccess";
+import {
+  AccountingProofField,
+  AccountingProofRetry,
+  uploadAccountingProof,
+} from "./AccountingProof";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
@@ -245,6 +250,18 @@ function InvoiceForm({
   const [dirty, setDirty] = useState(false);
   const clearGuard = useUnsavedChanges(dirty, busy);
   const [error, setError] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [pendingProof, setPendingProof] = useState<{
+    record: AccountingInvoice;
+    file: File;
+    error: string;
+  }>();
+  function finish(saved: AccountingInvoice) {
+    clearGuard();
+    setDirty(false);
+    if (onSaved) onSaved(saved);
+    else location.hash = `${baseHash}/${saved.id}`;
+  }
   function close() {
     if (confirmDiscard(dirty, busy)) {
       clearGuard();
@@ -288,7 +305,7 @@ function InvoiceForm({
     }
     setBusy(true);
     try {
-      const saved = current
+      let saved = current
         ? await api<AccountingInvoice>(`${root}/${current.id}`, {
             method: "PUT",
             body: JSON.stringify({
@@ -300,10 +317,24 @@ function InvoiceForm({
             id: id.current,
             data: parsed.data,
           });
-      clearGuard();
-      setDirty(false);
-      if (onSaved) onSaved(saved);
-      else location.hash = `${baseHash}/${saved.id}`;
+      if (proofFile && !saved.proof) {
+        try {
+          saved = await uploadAccountingProof<AccountingInvoice>(
+            `${root}/${saved.id}`,
+            proofFile,
+          );
+        } catch (error) {
+          clearGuard();
+          setDirty(false);
+          setPendingProof({
+            record: saved,
+            file: proofFile,
+            error: (error as Error).message,
+          });
+          return;
+        }
+      }
+      finish(saved);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -311,6 +342,22 @@ function InvoiceForm({
     }
   }
 
+  if (pendingProof)
+    return (
+      <AccountingProofRetry
+        initialFile={pendingProof.file}
+        initialError={pendingProof.error}
+        onUpload={async (file) => {
+          finish(
+            await uploadAccountingProof<AccountingInvoice>(
+              `${root}/${pendingProof.record.id}`,
+              file,
+            ),
+          );
+        }}
+        onSkip={() => finish(pendingProof.record)}
+      />
+    );
   return (
     <Modal
       title={current ? "Editar borrador" : "Nueva factura"}
@@ -397,6 +444,17 @@ function InvoiceForm({
               </Field>
             )}
           </div>
+          {!current?.proof && (
+            <AccountingProofField
+              file={proofFile}
+              onClear={() => setProofFile(null)}
+              hint="Adjunta una foto o PDF de hasta 8 MB si tienes un sustento interno para esta factura."
+              onSelect={(file) => {
+                setProofFile(file);
+                setDirty(true);
+              }}
+            />
+          )}
           {works.error && (
             <Notice error>
               Las obras no están disponibles. {works.error}{" "}
@@ -518,6 +576,20 @@ function InvoiceDetail({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const deadline = useRef(false);
+  async function attachProof(file: File) {
+    if (deadline.current) return;
+    deadline.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      setOverride(await uploadAccountingProof<AccountingInvoice>(path, file));
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      deadline.current = false;
+      setBusy(false);
+    }
+  }
 
   async function run(command: "issue" | "payment" | "check") {
     if (!row || deadline.current) return;
@@ -622,6 +694,22 @@ function InvoiceDetail({
                 </ul>
               </div>
             )}
+            {row.proof ? (
+              <a
+                className="accounting-inline"
+                href={`${API_BASE}${path}/proof`}
+              >
+                Descargar sustento
+              </a>
+            ) : (
+              canWrite && (
+                <AccountingProofField
+                  file={null}
+                  disabled={busy}
+                  onSelect={(file) => void attachProof(file)}
+                />
+              )
+            )}
             {error && !action && <Notice error>{error}</Notice>}
             {row.status === "draft" && !query.data?.enabled && (
               <Notice>Emisión electrónica pendiente de configuración.</Notice>
@@ -629,12 +717,17 @@ function InvoiceDetail({
             <div className="accounting-form-actions">
               {canWrite &&
                 ["requested", "draft", "rejected"].includes(row.status) && (
-                  <Button variant="ghost" onClick={() => setEdit(true)}>
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => setEdit(true)}
+                  >
                     Editar
                   </Button>
                 )}
               {canIssue && row.status === "draft" && query.data?.enabled && (
                 <Button
+                  disabled={busy}
                   onClick={() => {
                     setError("");
                     setAction("issue");
@@ -665,6 +758,7 @@ function InvoiceDetail({
                   ))}
                   {canWrite && row.paidCents < row.totalCents && (
                     <Button
+                      disabled={busy}
                       onClick={() => {
                         setError("");
                         setAction("payment");

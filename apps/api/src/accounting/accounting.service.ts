@@ -1,3 +1,4 @@
+import { readAccountingProof, storeAccountingProof } from "./accounting-proof";
 import { latestQuotation } from "../crm/quotation";
 import {
   BadRequestException,
@@ -35,13 +36,14 @@ import { limaDate } from "../dispatch/guide-provider";
 import { LaborCostsService } from "./labor-costs.service";
 import { InvoiceProvider, type FiscalInvoice } from "./invoice-provider";
 
-type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck"> & {
+type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck" | "proof"> & {
   _id: ObjectId;
   externalId?: string;
   attempt?: string;
   creationHash?: string;
   updatedAt: string;
   actor: string;
+  proofKey?: string;
 };
 type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   _id: ObjectId;
@@ -64,6 +66,7 @@ function invoiceView({
   creationHash,
   actor,
   updatedAt,
+  proofKey,
   ...row
 }: InvoiceRecord): AccountingInvoice {
   const stalled =
@@ -76,6 +79,7 @@ function invoiceView({
       ? "Envío sin confirmar. Requiere verificación antes de repetirlo."
       : row.observation,
     canCheck: row.status === "pending" && Boolean(externalId),
+    proof: Boolean(proofKey),
   };
 }
 function costView({
@@ -690,15 +694,14 @@ export class AccountingService {
   }
 
   async attach(id: string, file: Express.Multer.File | undefined) {
-    if (!file || file.buffer.subarray(0, 5).toString() !== "%PDF-")
-      throw new BadRequestException(
-        "Adjunta un comprobante PDF de hasta 8 MB.",
-      );
     const row = await this.costRecord(id);
     if (row.proofKey)
       throw new ConflictException("Este registro ya tiene sustento.");
-    const proofKey = `veca/accounting/${row._id}/${randomUUID()}.pdf`;
-    await this.storage.put(proofKey, file.buffer, "application/pdf");
+    const proofKey = await storeAccountingProof(
+      this.storage,
+      `veca/accounting/${row._id}`,
+      file,
+    );
     const result = await this.costs.findOneAndUpdate(
       { _id: row._id, version: row.version, proofKey: { $exists: false } },
       { $set: { proofKey }, $inc: { version: 1 } },
@@ -715,9 +718,38 @@ export class AccountingService {
 
   async proof(id: string) {
     const row = await this.costRecord(id);
-    if (!row.proofKey)
-      throw new NotFoundException("El gasto aún no tiene sustento.");
-    return this.storage.get(row.proofKey);
+    return readAccountingProof(this.storage, row.proofKey);
+  }
+
+  async attachInvoiceProof(id: string, file: Express.Multer.File | undefined) {
+    const row = await this.invoiceRecord(id);
+    if (row.proofKey)
+      throw new ConflictException("Esta factura ya tiene sustento.");
+    const proofKey = await storeAccountingProof(
+      this.storage,
+      `veca/accounting/invoices/${row._id}`,
+      file,
+    );
+    // The internal attachment does not change the fiscal version of the invoice.
+    const result = await this.invoices.findOneAndUpdate(
+      { _id: row._id, proofKey: { $exists: false } },
+      { $set: { proofKey } },
+      { returnDocument: "after" },
+    );
+    if (!result) {
+      await this.storage.remove(proofKey).catch(() => {});
+      throw new ConflictException(
+        "La factura cambió. Revisa el sustento registrado.",
+      );
+    }
+    return invoiceView(result);
+  }
+
+  async invoiceProof(id: string) {
+    return readAccountingProof(
+      this.storage,
+      (await this.invoiceRecord(id)).proofKey,
+    );
   }
 
   async reviewCost(id: string, version: number) {
