@@ -342,6 +342,24 @@
   color: var(--panel-secondary);
   font-size: 12px;
 }
+.purchase-destination {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: color-mix(
+    in srgb,
+    var(--panel-chart-blue) 18%,
+    var(--panel-surface)
+  );
+  color: color-mix(in srgb, var(--panel-ink) 78%, var(--panel-chart-blue));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 .purchase-source {
   display: grid;
   gap: 4px;

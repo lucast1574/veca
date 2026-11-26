@@ -151,24 +151,24 @@ export function PurchaseOrderDialog({
           );
         }}
       >
-        {requested?.invoiceSource && (
+        {requested && (
           <div className="purchase-source">
-            {fixedSupplier && <strong>{requested.supplier}</strong>}
-            <p className="hint">
-              Factura {requested.invoiceSource.reference || "sin número"} ·{" "}
-              {money(requested.invoiceSource.netCents)} sin IGV
-              {requested.supplierRuc && (
-                <span>RUC {requested.supplierRuc}</span>
-              )}
-            </p>
+            <span className="purchase-destination">
+              Destino · {requested.workName || "Almacén general"}
+            </span>
+            {fixedSupplier && <p>{requested.supplier}</p>}
+            {requested.invoiceSource && (
+              <p className="hint">
+                Factura {requested.invoiceSource.reference || "sin número"} ·{" "}
+                {money(requested.invoiceSource.netCents)} sin IGV
+                {requested.supplierRuc && (
+                  <span>RUC {requested.supplierRuc}</span>
+                )}
+              </p>
+            )}
           </div>
         )}
-        {!requested?.invoiceSource && (
-          <p className="hint">
-            Registra los materiales comprados. Almacén confirmará las cantidades
-            recibidas.
-          </p>
-        )}
+
         {loadError && <Notice error>{loadError}</Notice>}
         {(!fixedSupplier || !requested?.invoiceSource) && (
           <div className="warehouse-grid">

@@ -113,14 +113,15 @@ export function AccountingPurchaseOrders({
               <li key={row.id}>
                 <Package size={18} aria-hidden="true" />
                 <div>
-                  <strong>
-                    {row.supplier || row.workName || "Pedido de materiales"}
-                  </strong>
-                  <small>
-                    {row.invoiceSource
-                      ? `Factura ${row.invoiceSource.reference} ya guardada`
-                      : "Solicitud de materiales desde la obra"}
-                  </small>
+                  <strong>{row.supplier || "Solicitud de compra"}</strong>
+                  <span className="purchase-destination">
+                    Destino · {row.workName || "Almacén general"}
+                  </span>
+                  {row.invoiceSource && (
+                    <small>
+                      Factura {row.invoiceSource.reference} ya guardada
+                    </small>
+                  )}
                   <small>{row.reason}</small>
                 </div>
                 {canWrite && (
@@ -243,7 +244,12 @@ function PurchaseSummary({ order }: { order: Purchase }) {
   return (
     <section className="warehouse-panel">
       <div className="accounting-section-head">
-        <h3>Materiales de la compra</h3>
+        <div>
+          <h3>Materiales de la compra</h3>
+          <span className="purchase-destination">
+            Destino · {order.workName || "Almacén general"}
+          </span>
+        </div>
         <span className="ops-stock-status">{purchaseStatus[order.status]}</span>
       </div>
       <ul className="warehouse-list">
