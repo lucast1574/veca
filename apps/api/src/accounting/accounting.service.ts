@@ -17,6 +17,8 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   accountingTotals,
   COST_KIND_LABELS,
+  invoiceFields,
+  invoiceInput,
   isDemoLead,
   type AccountingCost,
   type AccountingInvoice,
@@ -55,6 +57,25 @@ type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   warehouseRoutingPending?: boolean;
 };
 const issued: InvoiceStatus[] = ["accepted", "observed"];
+const observed = (status: string) =>
+  ["accepted_with_observations", "observed"].includes(status);
+
+function fiscalObservation(result: FiscalInvoice) {
+  const response = result.sunat;
+  if (observed(result.status))
+    return response?.description?.trim().slice(0, 1400) || "";
+  if (result.status !== "rejected") return "";
+  return [
+    ...new Set(
+      [
+        (response?.errorMessage || response?.description)?.trim(),
+        response?.fix?.message.trim(),
+      ].filter(Boolean),
+    ),
+  ]
+    .join("\n")
+    .slice(0, 1400);
+}
 const pageSize = 25;
 const fingerprint = (data: object) =>
   createHash("sha256").update(JSON.stringify(data)).digest("hex");
@@ -198,7 +219,28 @@ export class AccountingService {
   }
 
   async invoice(id: string) {
-    return invoiceView(await this.invoiceRecord(id));
+    const row = await this.invoiceRecord(id);
+    if (
+      row.externalId &&
+      this.enabled &&
+      (row.status === "observed" || row.status === "rejected") &&
+      (!row.observation ||
+        row.observation === "El comprobante requiere corrección.")
+    ) {
+      const result = await this.fiscal
+        .status(row.externalId, AbortSignal.timeout(4_000))
+        .catch(() => null);
+      if (
+        result?.id === row.externalId &&
+        (row.status === "observed"
+          ? observed(result.status)
+          : result.status === "rejected")
+      ) {
+        const observation = fiscalObservation(result);
+        if (observation) return invoiceView({ ...row, observation });
+      }
+    }
+    return invoiceView(row);
   }
 
   async requestedInvoice(workId: string) {
@@ -301,6 +343,14 @@ export class AccountingService {
       );
     const issueDate = limaDate();
     const current = await this.invoiceRecord(id);
+    if (current.status !== "draft" || current.version !== version)
+      throw new ConflictException(
+        "La factura cambió. Vuelve a abrirla para continuar.",
+      );
+    if (!invoiceInput.safeParse(invoiceFields(current)).success)
+      throw new BadRequestException(
+        "Completa el cliente, RUC, conceptos y datos de pago antes de emitir.",
+      );
     await this.work(current.workId);
     if (current.method === "credit" && current.dueDate < issueDate)
       throw new BadRequestException(
@@ -359,7 +409,7 @@ export class AccountingService {
     const status: InvoiceStatus =
       result.status === "accepted"
         ? "accepted"
-        : ["accepted_with_observations", "observed"].includes(result.status)
+        : observed(result.status)
           ? "observed"
           : result.status === "rejected"
             ? "rejected"
@@ -376,9 +426,7 @@ export class AccountingService {
       number: result.fullNumber || invoice.number,
       observation: mismatched
         ? "El total fiscal difiere del cálculo local. Requiere revisión."
-        : status === "rejected"
-          ? "El comprobante requiere corrección."
-          : "",
+        : fiscalObservation(result),
     });
   }
 

@@ -70,11 +70,13 @@ export function AccountingProofField({
 }
 
 export function AccountingProofRetry({
+  description = "El registro se guardó. Puedes reintentar el adjunto o dejarlo para después.",
   initialFile,
   initialError,
   onUpload,
   onSkip,
 }: {
+  description?: string;
   initialFile: File;
   initialError: string;
   onUpload: (file: File) => Promise<void>;
@@ -98,7 +100,7 @@ export function AccountingProofRetry({
   return (
     <Modal
       title="Sustento pendiente"
-      description="El registro se guardó. Puedes reintentar el adjunto o dejarlo para después."
+      description={description}
       onClose={onSkip}
       busy={busy}
       footer={

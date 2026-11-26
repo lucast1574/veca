@@ -62,7 +62,12 @@ const invoices: AccountingInvoice[] = (
     createdAt: "2026-11-20T14:00:00Z",
     issueDate: status === "draft" || status === "requested" ? "" : "2026-11-20",
     number: status === "draft" || status === "requested" ? "" : `F001-${i + 1}`,
-    observation: "",
+    observation:
+      status === "observed"
+        ? "Ejemplo: revisa la dirección fiscal del cliente para tus próximas emisiones."
+        : status === "rejected"
+          ? "Ejemplo: el RUC del cliente no es válido. Verifica los 11 dígitos en Editar factura."
+          : "",
     canCheck: status === "pending",
     method: "credit",
     dueDate: "2026-12-15",

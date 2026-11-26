@@ -38,12 +38,12 @@ const saleTotal = ({ currency, total }: SunatSale) =>
 export function SireSalesReview({
   month,
   refreshing = false,
-  revision,
+  revision = 0,
   onRefresh,
 }: {
   month: string;
   refreshing?: boolean;
-  revision: number;
+  revision?: number;
   onRefresh?: () => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");

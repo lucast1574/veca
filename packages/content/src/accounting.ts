@@ -9,31 +9,58 @@ export const accountingMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 export const accountingId = z.string().regex(/^[0-9a-f]{24}$/i);
 const workId = accountingId.or(z.literal(""));
 
-export const invoiceInput = z
+const invoiceDraftItem = z
+  .object({
+    description: z.string().trim().max(250),
+    quantityMilli: z.number().int().nonnegative().max(1_000_000),
+    unitCents: amount,
+  })
+  .strict();
+
+export const invoiceDraftInput = z
   .object({
     workId: workId.default(""),
-    customer: text(150),
-    customerRuc: z.string().regex(/^\d{11}$/, "Ingresa un RUC de 11 dígitos."),
+    customer: z.string().trim().max(150),
+    customerRuc: z
+      .string()
+      .regex(/^\d{0,11}$/, "Usa hasta 11 dígitos para el RUC."),
     method: z.enum(["cash", "credit"]),
     dueDate: accountingDate.or(z.literal("")).default(""),
+    items: z.array(invoiceDraftItem).max(30),
+  })
+  .strict();
+
+export const invoiceInput = invoiceDraftInput
+  .extend({
+    customer: text(150),
+    customerRuc: z.string().regex(/^\d{11}$/, "Ingresa un RUC de 11 dígitos."),
     items: z
       .array(
-        z
-          .object({
-            description: text(250),
-            quantityMilli: z.number().int().positive().max(1_000_000),
-            unitCents: amount.positive(),
-          })
-          .strict(),
+        invoiceDraftItem.extend({
+          description: text(250),
+          quantityMilli: invoiceDraftItem.shape.quantityMilli.positive(),
+          unitCents: amount.positive(),
+        }),
       )
       .min(1)
       .max(30),
   })
-  .strict()
   .refine((data) => data.method !== "credit" || Boolean(data.dueDate), {
     message: "Indica la fecha de vencimiento.",
   });
-export type InvoiceInput = z.infer<typeof invoiceInput>;
+export type InvoiceInput = z.infer<typeof invoiceDraftInput>;
+
+export function invoiceFields({
+  workId,
+  customer,
+  customerRuc,
+  method,
+  dueDate,
+  items,
+}: InvoiceInput): InvoiceInput {
+  return { workId, customer, customerRuc, method, dueDate, items };
+}
+
 export type InvoiceStatus =
   | "requested"
   | "draft"

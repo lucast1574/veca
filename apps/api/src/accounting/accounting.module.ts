@@ -23,7 +23,7 @@ import {
   type FiscalOverview,
   accountingMonth,
   costInput,
-  invoiceInput,
+  invoiceDraftInput,
   invoicePayment,
   sireIncorporation,
 } from "@veca/content";
@@ -117,7 +117,7 @@ class AccountingController {
   createInvoice(@Body() raw: unknown, @Req() request: AuthenticatedRequest) {
     const { id, data } = parse(entry, raw);
     return this.accounts.createInvoice(
-      parse(invoiceInput, data),
+      parse(invoiceDraftInput, data),
       request.session.user.username,
       id,
     );
@@ -127,7 +127,7 @@ class AccountingController {
   @RequirePermission("accounting_write", "accounting")
   editInvoice(@Param("id") id: string, @Body() raw: unknown) {
     const { version, data } = parse(
-      revision.extend({ data: invoiceInput }),
+      revision.extend({ data: invoiceDraftInput }),
       raw,
     );
     return this.accounts.editInvoice(parse(accountingId, id), version, data);

@@ -239,6 +239,26 @@
   gap: 16px;
 }
 
+.invoice-detail > .notice {
+  margin: 0;
+}
+
+.notice:has(> .invoice-fiscal-message) {
+  display: grid;
+  gap: 4px;
+}
+
+.notice[role="status"]:has(> .invoice-fiscal-message) {
+  background: #fbebdf;
+  border-color: #ead3bd;
+  color: #754728;
+}
+
+.invoice-fiscal-message {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .invoice-detail-section {
   padding-top: 16px;
   border-top: 1px solid var(--panel-edge);

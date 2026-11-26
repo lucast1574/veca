@@ -104,13 +104,31 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
         issuerRuc: payload.ruc,
         type: "01",
         test: false,
-        status: "accepted",
-        fullNumber: "F001-90",
+        status:
+          payload.customer.name === "Cliente QA observado"
+            ? "accepted_with_observations"
+            : payload.customer.name === "Cliente QA rechazado"
+              ? "rejected"
+              : "accepted",
+        fullNumber: "F001-" + (90 + invoices.size),
         total: 118,
       };
+      if (issued.status === "accepted_with_observations")
+        issued.sunat = {
+          description: "Verifica la dirección fiscal del cliente.",
+        };
+      if (issued.status === "rejected")
+        issued.sunat = {
+          errorMessage: "El RUC del receptor no es válido.",
+          fix: { message: "Corrige el RUC en los datos del cliente." },
+        };
       invoices.set(attempt, issued);
       return Response.json(issued, { status: 202 });
     }
+    const invoice = [...invoices.values()].find(
+      (entry) => path === `/documents/${entry.id}`,
+    );
+    if (invoice && !options.method) return Response.json(invoice);
     if (path === "/guides" && options.method === "POST") {
       assert.ok(
         issuerEnabled,

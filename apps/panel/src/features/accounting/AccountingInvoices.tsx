@@ -9,6 +9,8 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import {
   accountingTotals,
+  invoiceDraftInput,
+  invoiceFields,
   invoiceInput,
   type AccountingInvoice,
   type AccountingWork,
@@ -50,6 +52,9 @@ const label: Record<AccountingInvoice["status"], string> = {
 };
 const isIssued = (row: AccountingInvoice) =>
   row.status === "accepted" || row.status === "observed";
+const canEmitInvoice = (data: InvoiceInput) =>
+  invoiceInput.safeParse(invoiceFields(data)).success &&
+  (data.method !== "credit" || data.dueDate >= today());
 type InvoicePage = {
   items: AccountingInvoice[];
   hasMore: boolean;
@@ -84,11 +89,14 @@ export function AccountingInvoices({
   const [page, setPage] = useState(1);
   const [queue, setQueue] = useState(initialQueue);
   const [month, setMonth] = useState(initialMonth || today().slice(0, 7));
-  const [openInvoice, setOpenInvoice] = useState<string>();
+  const [openInvoice, setOpenInvoice] = useState<{
+    id: string;
+    emissionError?: string;
+  }>();
   const [creating, setCreating] = useState(false);
   const [revision, setRevision] = useState(0);
   const filterId = useId();
-  const detailId = openInvoice || (selected !== "nueva" ? selected : "");
+  const detailId = openInvoice?.id || (selected !== "nueva" ? selected : "");
   const listHash = baseHash + (month ? `?month=${month}` : "");
   const query = useAccountingQuery<InvoicePage>(
     `${root}?page=${page}${queue ? `&queue=${queue}` : month ? `&month=${month}` : ""}`,
@@ -185,7 +193,7 @@ export function AccountingInvoices({
                 return (
                   <li key={row.id}>
                     <div className="accounting-record-label">
-                      <strong>{row.customer}</strong>
+                      <strong>{row.customer || "Factura sin cliente"}</strong>
                       <small>
                         {row.number || row.workName || "Venta directa"}
                         {row.issueDate && ` · ${displayDate(row.issueDate)}`}
@@ -214,7 +222,7 @@ export function AccountingInvoices({
                     </div>
                     <Button
                       variant="ghost"
-                      onClick={() => setOpenInvoice(row.id)}
+                      onClick={() => setOpenInvoice({ id: row.id })}
                     >
                       Ver detalle <ChevronRight size={14} aria-hidden="true" />
                     </Button>
@@ -230,21 +238,18 @@ export function AccountingInvoices({
           change={setPage}
         />
       </section>
-      {canWrite && (creating || selected === "nueva") && (
+      {canWrite && (creating || (selected === "nueva" && !openInvoice)) && (
         <InvoiceForm
+          enabled={Boolean(query.data?.enabled)}
           onClose={() => {
             if (selected === "nueva") location.hash = listHash;
             else setCreating(false);
           }}
-          onSaved={(saved) => {
+          onSaved={(saved, emissionError) => {
             setPage(1);
             invoiceChanged();
-            if (selected === "nueva") {
-              location.hash = `${baseHash}/${saved.id}${month ? `?month=${month}` : ""}`;
-            } else {
-              setCreating(false);
-              setOpenInvoice(saved.id);
-            }
+            setCreating(false);
+            setOpenInvoice({ id: saved.id, emissionError });
           }}
         />
       )}
@@ -252,10 +257,11 @@ export function AccountingInvoices({
         <InvoiceDetail
           key={detailId}
           id={detailId}
+          emissionError={openInvoice?.emissionError}
           onChanged={invoiceChanged}
           onClose={() => {
-            if (openInvoice) setOpenInvoice(undefined);
-            else location.hash = listHash;
+            if (!openInvoice || selected === "nueva") location.hash = listHash;
+            else setOpenInvoice(undefined);
           }}
         />
       )}
@@ -270,16 +276,38 @@ export function AccountingInvoices({
   );
 }
 
+function InvoiceFiscalNotice({ row }: { row: AccountingInvoice }) {
+  if (row.status !== "observed" && row.status !== "rejected")
+    return row.observation ? <Notice>{row.observation}</Notice> : null;
+
+  const rejected = row.status === "rejected";
+  const message =
+    row.observation && row.observation !== "El comprobante requiere corrección."
+      ? row.observation
+      : rejected
+        ? "El motivo no está disponible. Consulta el comprobante en SUNAT antes de volver a emitir."
+        : "El detalle no está disponible en VECA. Revisa el CDR en Archivos.";
+  return (
+    <Notice error={rejected}>
+      <strong>{rejected ? "Qué corregir" : "Observaciones de SUNAT"}</strong>
+      <span className="invoice-fiscal-message">{message}</span>
+    </Notice>
+  );
+}
+
 function InvoiceForm({
   current,
+  enabled,
   onSaved,
   onClose,
 }: {
   onClose: () => void;
   current?: AccountingInvoice;
-  onSaved: (invoice: AccountingInvoice) => void;
+  enabled: boolean;
+  onSaved: (invoice: AccountingInvoice, emissionError?: string) => void;
 }) {
   const formId = useId();
+  const canIssue = useAccountingPermission("accounting_issue") && enabled;
   const works = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
   const [work, setWork] = useState(current?.workId || "");
   const [customer, setCustomer] = useState(current?.customer || "");
@@ -295,11 +323,13 @@ function InvoiceForm({
     ).map((item) => ({
       id: crypto.randomUUID(),
       description: item.description,
-      quantity: String(item.quantityMilli / 1000),
+      quantity: item.quantityMilli ? String(item.quantityMilli / 1000) : "",
       unit: item.unitCents ? String(item.unitCents / 100) : "",
     })),
   );
-  const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
+  const [operation, setOperation] = useState<"draft" | "issue">();
+  const busy = Boolean(operation);
   const [dirty, setDirty] = useState(false);
   const clearGuard = useUnsavedChanges(dirty, busy);
   const [error, setError] = useState("");
@@ -309,10 +339,10 @@ function InvoiceForm({
     file: File;
     error: string;
   }>();
-  function finish(saved: AccountingInvoice) {
+  function finish(saved: AccountingInvoice, emissionError?: string) {
     clearGuard();
     setDirty(false);
-    onSaved(saved);
+    onSaved(saved, emissionError);
   }
   function close() {
     if (confirmDiscard(dirty, busy)) {
@@ -323,8 +353,8 @@ function InvoiceForm({
   const id = useRef(recordId());
   const items = draft.map((item) => ({
     description: item.description,
-    quantityMilli: decimal(item.quantity, 3),
-    unitCents: decimal(item.unit),
+    quantityMilli: item.quantity.trim() ? decimal(item.quantity, 3) : 0,
+    unitCents: item.unit.trim() ? decimal(item.unit) : 0,
   }));
   const totals = accountingTotals(items);
   const workOptions = [
@@ -337,25 +367,42 @@ function InvoiceForm({
   )
     workOptions.push({ value: current.workId, label: current.workName });
 
-  const parseInvoice = () =>
-    invoiceInput.safeParse({
-      workId: work,
-      customer,
-      customerRuc: ruc,
-      method,
-      dueDate: method === "credit" ? due : "",
-      items,
-    });
+  const parsed = invoiceDraftInput.safeParse({
+    workId: work,
+    customer,
+    customerRuc: ruc,
+    method,
+    dueDate: method === "credit" ? due : "",
+    items,
+  });
+  const hasDraftContent = Boolean(
+    current ||
+    work ||
+    customer.trim() ||
+    ruc.trim() ||
+    method === "credit" ||
+    due ||
+    proofFile ||
+    items.some(
+      (item) =>
+        item.description.trim() ||
+        item.unitCents > 0 ||
+        (item.quantityMilli > 0 && item.quantityMilli !== 1000),
+    ),
+  );
+  const canSave = parsed.success && hasDraftContent;
+  const canSend = canIssue && parsed.success && canEmitInvoice(parsed.data);
+
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
-    setError("");
-    const parsed = parseInvoice();
-    if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+    const emit =
+      (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ===
+      "issue";
+    if (saving.current || !parsed.success || (emit ? !canSend : !canSave))
       return;
-    }
-    setBusy(true);
+    setError("");
+    saving.current = true;
+    setOperation(emit ? "issue" : "draft");
     try {
       let saved = current
         ? await api<AccountingInvoice>(`${root}/${current.id}`, {
@@ -386,17 +433,32 @@ function InvoiceForm({
           return;
         }
       }
+      if (emit) {
+        try {
+          saved = await accountingPost<AccountingInvoice>(
+            `${root}/${saved.id}/issue`,
+            {
+              version: saved.version,
+            },
+          );
+        } catch (error) {
+          finish(saved, `La factura se guardó. ${(error as Error).message}`);
+          return;
+        }
+      }
       finish(saved);
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setBusy(false);
+      saving.current = false;
+      setOperation(undefined);
     }
   }
 
   if (pendingProof)
     return (
       <AccountingProofRetry
+        description="Se guardó el borrador. Puedes reintentar el sustento y emitir más adelante."
         initialFile={pendingProof.file}
         initialError={pendingProof.error}
         onUpload={async (file) => {
@@ -412,8 +474,18 @@ function InvoiceForm({
     );
   return (
     <Modal
-      title={current ? "Editar borrador" : "Nueva factura"}
-      description="Prepara el comprobante y revisa los importes antes de emitirlo."
+      title={
+        current?.status === "rejected"
+          ? "Corregir factura"
+          : current
+            ? "Editar borrador"
+            : "Nueva factura"
+      }
+      description={
+        canIssue
+          ? "Guarda tus avances o emite cuando completes los datos."
+          : "Guarda tus avances para continuar después."
+      }
       size="wide"
       busy={busy}
       onClose={close}
@@ -425,10 +497,22 @@ function InvoiceForm({
           <Button
             type="submit"
             form={formId}
-            disabled={busy || !parseInvoice().success}
+            formNoValidate
+            variant={canIssue ? "ghost" : "primary"}
+            disabled={busy || !canSave}
           >
-            {busy ? "Guardando…" : "Guardar borrador"}
+            {operation === "draft" ? "Guardando…" : "Guardar borrador"}
           </Button>
+          {canIssue && (
+            <Button
+              type="submit"
+              form={formId}
+              value="issue"
+              disabled={busy || !canSend}
+            >
+              {operation === "issue" ? "Emitiendo…" : "Emitir factura"}
+            </Button>
+          )}
         </footer>
       }
     >
@@ -438,6 +522,9 @@ function InvoiceForm({
         onSubmit={save}
         onChange={() => setDirty(true)}
       >
+        {current?.status === "rejected" && (
+          <InvoiceFiscalNotice row={current} />
+        )}
         <fieldset disabled={busy}>
           <div className="accounting-grid">
             <Field label="Cliente o razón social">
@@ -448,7 +535,14 @@ function InvoiceForm({
                 onChange={(e) => setCustomer(e.target.value)}
               />
             </Field>
-            <Field label="RUC">
+            <Field
+              label="RUC"
+              hint={
+                ruc && !/^\d{11}$/.test(ruc)
+                  ? "Ingresa 11 dígitos para emitir."
+                  : undefined
+              }
+            >
               <input
                 required
                 inputMode="numeric"
@@ -486,7 +580,14 @@ function InvoiceForm({
               />
             </Field>
             {method === "credit" && (
-              <Field label="Vencimiento">
+              <Field
+                label="Vencimiento"
+                hint={
+                  due && due < today()
+                    ? "Para emitir, usa una fecha igual o posterior a hoy."
+                    : undefined
+                }
+              >
                 <input
                   type="date"
                   required
@@ -605,10 +706,12 @@ function InvoiceForm({
 
 function InvoiceDetail({
   id,
+  emissionError,
   onClose,
   onChanged,
 }: {
   id: string;
+  emissionError?: string;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -627,7 +730,7 @@ function InvoiceDetail({
   const [date, setDate] = useState(today);
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(emissionError || "");
   const deadline = useRef(false);
   async function attachProof(file: File) {
     if (deadline.current) return;
@@ -675,7 +778,11 @@ function InvoiceDetail({
 
   const canEdit =
     canWrite && row && ["requested", "draft", "rejected"].includes(row.status);
-  const canSend = canIssue && row?.status === "draft" && query.data?.enabled;
+  const canSend =
+    canIssue &&
+    row?.status === "draft" &&
+    query.data?.enabled &&
+    canEmitInvoice(row);
   const canCheck = canIssue && row?.canCheck;
   const issued = row && isIssued(row);
   const balance = row ? row.totalCents - row.paidCents : 0;
@@ -684,7 +791,9 @@ function InvoiceDetail({
   return (
     <>
       <Modal
-        title={row?.customer || "Detalle de factura"}
+        title={
+          row ? row.customer || "Factura sin cliente" : "Detalle de factura"
+        }
         description={
           row
             ? [row.number, row.workName || "Venta directa"]
@@ -747,6 +856,7 @@ function InvoiceDetail({
               <div className="invoice-detail-status">
                 <InvoiceStatus row={row} />
               </div>
+              <InvoiceFiscalNotice row={row} />
               <dl className="accounting-record-facts">
                 {row.status !== "requested" && (
                   <div className="accounting-record-total">
@@ -785,7 +895,6 @@ function InvoiceDetail({
                   </div>
                 )}
               </dl>
-              {row.observation && <Notice>{row.observation}</Notice>}
               {row.items.length > 0 && (
                 <section className="invoice-detail-section">
                   <h3>Conceptos</h3>
@@ -793,7 +902,9 @@ function InvoiceDetail({
                     {row.items.map((item, index) => (
                       <li key={index}>
                         <div>
-                          <strong>{item.description}</strong>
+                          <strong>
+                            {item.description || "Concepto sin descripción"}
+                          </strong>
                           <small>Cantidad · {item.quantityMilli / 1000}</small>
                         </div>
                         <strong>
@@ -873,9 +984,12 @@ function InvoiceDetail({
       {edit && row && (
         <InvoiceForm
           current={row}
+          enabled={Boolean(query.data?.enabled)}
           onClose={() => setEdit(false)}
-          onSaved={(saved) => {
-            setOverride(saved);
+          onSaved={(saved, issueError) => {
+            setOverride(issueError ? undefined : saved);
+            setError(issueError || "");
+            if (issueError) query.refresh();
             setEdit(false);
             onChanged();
           }}

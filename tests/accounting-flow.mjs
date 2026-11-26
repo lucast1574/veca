@@ -280,6 +280,56 @@ try {
     );
     assert.ok(csv.includes('"\'=SUM(1,2)"'));
     assert.ok(csv.includes("Con sustento"));
+    if (process.env.VECA_GUIDE_QA_MOCK === "1") {
+      const partial = await request(root + "/invoices", 201, "POST", {
+        id: requestId(),
+        data: {
+          ...creation.data,
+          customer: "Cliente QA observado",
+          customerRuc: "",
+          items: [],
+        },
+      });
+      assert.equal(partial.status, "draft");
+      assert.equal(partial.totalCents, 0);
+      const partialPath = `${root}/invoices/${partial.id}`;
+      await request(partialPath + "/issue", 400, "POST", {
+        version: partial.version,
+      });
+      const completed = await request(partialPath, 200, "PUT", {
+        version: partial.version,
+        data: { ...creation.data, customer: partial.customer },
+      });
+      const observed = await request(partialPath + "/issue", 201, "POST", {
+        version: completed.version,
+      });
+      assert.equal(observed.status, "observed");
+      assert.match(observed.observation, /dirección fiscal/);
+      await db
+        .collection("accounting_invoices")
+        .updateOne(
+          { _id: new ObjectId(observed.id) },
+          { $set: { observation: "" } },
+        );
+      assert.equal(
+        (await request(partialPath)).invoice.observation,
+        observed.observation,
+      );
+
+      const retry = await request(root + "/invoices", 201, "POST", {
+        id: requestId(),
+        data: { ...creation.data, customer: "Cliente QA rechazado" },
+      });
+      const rejected = await request(
+        `${root}/invoices/${retry.id}/issue`,
+        201,
+        "POST",
+        { version: retry.version },
+      );
+      assert.equal(rejected.status, "rejected");
+      assert.match(rejected.observation, /RUC del receptor no es válido/);
+      assert.match(rejected.observation, /Corrige el RUC/);
+    }
   } finally {
     await users.updateOne({ _id: admin._id }, { $set: { role: admin.role } });
   }

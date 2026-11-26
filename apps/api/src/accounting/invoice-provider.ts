@@ -17,6 +17,14 @@ const doc = z.object({
   status: z.string(),
   fullNumber: z.string().nullable().optional(),
   total: z.number().nullable().optional(),
+  sunat: z
+    .object({
+      description: z.string().nullish().catch(undefined),
+      errorMessage: z.string().nullish().catch(undefined),
+      fix: z.object({ message: z.string() }).nullish().catch(undefined),
+    })
+    .nullish()
+    .catch(undefined),
 });
 export type FiscalInvoice = z.infer<typeof doc>;
 
@@ -179,8 +187,8 @@ export class InvoiceProvider {
     });
   }
 
-  status(id: string) {
-    return this.document(`/documents/${encodeURIComponent(id)}`);
+  status(id: string, signal?: AbortSignal) {
+    return this.document(`/documents/${encodeURIComponent(id)}`, { signal });
   }
 
   async file(id: string, type: "pdf" | "xml" | "cdr") {
@@ -216,13 +224,18 @@ export class InvoiceProvider {
     const response = await fetch(url + path, {
       ...options,
       redirect: "error",
-      signal: AbortSignal.timeout(15_000),
+      signal: options.signal || AbortSignal.timeout(15_000),
       headers: { ...options.headers, Authorization: `Bearer ${this.key}` },
     });
     if ([400, 401, 402, 403, 409, 422].includes(response.status)) {
       const payload: unknown = await response.json().catch(() => null);
       const error = z
-        .object({ error: z.object({ code: z.string() }) })
+        .object({
+          error: z.object({
+            code: z.string(),
+            fields: z.record(z.string(), z.array(z.string())).optional(),
+          }),
+        })
         .safeParse(payload);
       const code = error.success ? error.data.error.code : "";
       const setup = [
@@ -234,10 +247,20 @@ export class InvoiceProvider {
         throw new BadRequestException(
           "La conexión fiscal requiere revisión. Contacta al administrador.",
         );
-      if ([400, 422].includes(response.status))
+      if ([400, 422].includes(response.status)) {
+        const details =
+          error.success && code === "VALIDATION_ERROR"
+            ? Object.values(error.data.error.fields || {})
+                .flat()
+                .join("\n")
+                .trim()
+                .slice(0, 1400)
+            : "";
         throw new BadRequestException(
-          "Revisa los datos del cliente y los conceptos antes de emitir nuevamente.",
+          details ||
+            "Revisa los datos del cliente y los conceptos antes de emitir nuevamente.",
         );
+      }
     }
     if (!response.ok)
       throw new ServiceUnavailableException(
