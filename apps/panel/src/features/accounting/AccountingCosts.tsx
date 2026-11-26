@@ -13,7 +13,7 @@ import {
 } from "./AccountingProof";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { ChevronRight, Download, Plus, Trash2, Upload } from "lucide-react";
 import {
   costInput,
   costKinds,
@@ -32,6 +32,7 @@ import {
   accountingPath,
   amount,
   decimal,
+  displayDate,
   Pagination,
   QueryState,
   recordId,
@@ -40,8 +41,25 @@ import {
   useAccountingQuery,
 } from "./accounting-shared";
 
+import "./accounting-costs.css";
+
 const path = accountingPath + "/costs";
 type CostPage = { items: AccountingCost[]; hasMore: boolean };
+
+function CostReviewStatus({ row }: { row: AccountingCost }) {
+  return (
+    <span
+      className="cost-review-status"
+      data-state={row.reviewed ? "reviewed" : row.proof ? "ready" : "missing"}
+    >
+      {row.reviewed
+        ? "Revisado"
+        : row.proof
+          ? "Por revisar"
+          : "Sustento pendiente"}
+    </span>
+  );
+}
 
 export function AccountingCosts({
   purchaseId,
@@ -173,54 +191,48 @@ export function AccountingCosts({
           query.refresh();
         }}
       />
-      <h3 className="sire-saved-title">Compras guardadas</h3>
-      <p className="hint">
-        Aquí están los comprobantes que ya incorporaste o registraste
-        directamente en VECA.
-      </p>
-      <QueryState
-        {...query}
-        empty="Todavía no hay compras ni gastos guardados en este periodo."
-      >
-        {rows.length > 0 && (
-          <ul className="dispatch-list dispatch-queue">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <div>
-                  <strong>{row.description}</strong>
-                  <small>
-                    {COST_KIND_LABELS[row.kind]} · {row.date}
-                  </small>
-                </div>
-                <span className="accounting-value">
-                  {amount(row.netCents + row.taxCents)}
-                </span>
-                <span className="dispatch-pill">
-                  {row.reviewed
-                    ? "Revisado"
-                    : row.proof
-                      ? "Por revisar"
-                      : "Falta sustento"}
-                </span>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setError("");
-                    setActive(row);
-                  }}
-                >
-                  Abrir
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </QueryState>
-      <Pagination
-        page={page}
-        hasMore={Boolean(query.data?.hasMore)}
-        change={setPage}
-      />
+      <section className="saved-costs" aria-labelledby="saved-costs-heading">
+        <h3 id="saved-costs-heading">Compras y gastos guardados</h3>
+        <QueryState
+          {...query}
+          empty="Todavía no hay compras ni gastos guardados en este periodo."
+        >
+          {rows.length > 0 && (
+            <ul className="saved-cost-list">
+              {rows.map((row) => (
+                <li key={row.id}>
+                  <div className="saved-cost-label">
+                    <strong>{row.description}</strong>
+                    <small>
+                      {COST_KIND_LABELS[row.kind]} · {displayDate(row.date)}
+                    </small>
+                  </div>
+                  <div className="saved-cost-meta">
+                    <strong className="saved-cost-total">
+                      {amount(row.netCents + row.taxCents)}
+                    </strong>
+                    <CostReviewStatus row={row} />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setError("");
+                      setActive(row);
+                    }}
+                  >
+                    Ver detalle <ChevronRight size={14} aria-hidden="true" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryState>
+        <Pagination
+          page={page}
+          hasMore={Boolean(query.data?.hasMore)}
+          change={setPage}
+        />
+      </section>
       {!purchaseId && month && (
         <SireClosingGuide key={`sire-closing:${month}`} month={month} />
       )}
@@ -286,87 +298,117 @@ export function AccountingCosts({
       {active && (
         <Modal
           title={active.description}
+          description={`${COST_KIND_LABELS[active.kind]} · ${displayDate(active.date)}`}
           busy={busy}
           onClose={() => setActive(undefined)}
+          footer={
+            canWrite &&
+            !active.reviewed && (
+              <footer className="ve-modal-actions">
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => {
+                    setEntry(active);
+                    setActive(undefined);
+                  }}
+                >
+                  Editar registro
+                </Button>
+                {active.proof && (
+                  <Button disabled={busy} onClick={() => void apply("review")}>
+                    {busy ? "Guardando…" : "Marcar como revisado"}
+                  </Button>
+                )}
+              </footer>
+            )
+          }
         >
-          <p>
-            {COST_KIND_LABELS[active.kind]} · {active.date} ·{" "}
-            {amount(active.netCents + active.taxCents)}
-          </p>
-          {active.supplier && (
-            <p>
-              {active.supplier}
-              {active.supplierRuc && ` · ${active.supplierRuc}`}
-              {active.reference && ` · ${active.reference}`}
-            </p>
-          )}
-          <p>
-            {active.allocations.length
-              ? `Asignado a ${active.allocations.length} obra(s)`
-              : "Gasto general"}
-          </p>
-          {active.purchaseId && <PurchaseCostDetail id={active.purchaseId} />}
-          {active.purchaseId && inventoryAccess && (
-            <a
-              className="accounting-inline"
-              href={`#inventory/compras/${active.purchaseId}`}
-            >
-              Ver pedido y recepciones
-            </a>
-          )}
-          {active.purchaseId && (
-            <RelatedCost
-              label="Pedido de materiales asociado"
-              id={active.purchaseId}
-              name="purchases"
-            />
-          )}
-          {active.dispatchId && (
-            <RelatedCost
-              label="Despacho asociado"
-              id={active.dispatchId}
-              name="dispatches"
-            />
-          )}
-          {active.proof ? (
-            <a
-              className="accounting-inline"
-              href={`${API_BASE}${path}/${active.id}/proof`}
-            >
-              Descargar sustento
-            </a>
-          ) : (
-            <AccountingProofField
-              file={null}
-              optionalAtSave={false}
-              hint="Adjunta una foto o PDF de hasta 8 MB para marcar este registro como revisado."
-              disabled={!canWrite || busy}
-              onSelect={(file) => void apply("proof", file)}
-            />
-          )}
-          {error && <Notice error>{error}</Notice>}
-          {active.reviewed ? (
-            <Notice>Registro revisado.</Notice>
-          ) : (
-            <div className="accounting-form-actions">
-              <Button
-                variant="ghost"
-                disabled={!canWrite || busy}
-                onClick={() => {
-                  setEntry(active);
-                  setActive(undefined);
-                }}
-              >
-                Editar registro
-              </Button>
-              <Button
-                disabled={!canWrite || busy || !active.proof}
-                onClick={() => void apply("review")}
-              >
-                Marcar como revisado
-              </Button>
-            </div>
-          )}
+          <div className="cost-detail">
+            <dl className="cost-detail-facts">
+              <div className="cost-detail-total">
+                <dt>Total</dt>
+                <dd>{amount(active.netCents + active.taxCents)}</dd>
+              </div>
+              {active.reference && (
+                <div>
+                  <dt>Comprobante</dt>
+                  <dd>{active.reference}</dd>
+                </div>
+              )}
+              {active.supplier && (
+                <div>
+                  <dt>Proveedor</dt>
+                  <dd>{active.supplier}</dd>
+                </div>
+              )}
+              {active.supplierRuc && (
+                <div>
+                  <dt>RUC</dt>
+                  <dd>{active.supplierRuc}</dd>
+                </div>
+              )}
+              {(!active.purchaseId || active.allocations.length > 0) && (
+                <div>
+                  <dt>Asignación del gasto</dt>
+                  <dd>
+                    {active.allocations.length
+                      ? `${active.allocations.length} ${active.allocations.length === 1 ? "obra" : "obras"}`
+                      : "Gasto general"}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            {active.purchaseId && (
+              <PurchaseCostDetail
+                id={active.purchaseId}
+                inventoryAccess={inventoryAccess}
+              />
+            )}
+            {active.dispatchId && (
+              <RelatedCost
+                label="Despacho asociado"
+                id={active.dispatchId}
+                name="dispatches"
+              />
+            )}
+            <section className="cost-detail-review">
+              <header>
+                <h3>Revisión interna</h3>
+                <span role="status">
+                  <CostReviewStatus row={active} />
+                </span>
+              </header>
+              {!active.reviewed && active.proof && canWrite && (
+                <p className="hint">
+                  Verifica que el sustento coincida con el comprobante.
+                </p>
+              )}
+              {active.proof ? (
+                <a
+                  className="accounting-inline cost-detail-proof"
+                  href={`${API_BASE}${path}/${active.id}/proof`}
+                >
+                  <Download size={15} aria-hidden="true" /> Descargar sustento
+                </a>
+              ) : (
+                canWrite && (
+                  <AccountingProofField
+                    file={null}
+                    optionalAtSave={false}
+                    hint={
+                      active.reviewed
+                        ? "Foto o PDF de hasta 8 MB."
+                        : "Adjunta una foto o PDF de hasta 8 MB para completar la revisión interna."
+                    }
+                    disabled={busy}
+                    onSelect={(file) => void apply("proof", file)}
+                  />
+                )
+              )}
+              {error && <Notice error>{error}</Notice>}
+            </section>
+          </div>
         </Modal>
       )}
     </section>

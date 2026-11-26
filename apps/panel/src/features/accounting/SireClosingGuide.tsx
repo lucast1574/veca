@@ -18,17 +18,22 @@ export function SireClosingGuide({
   book?: SireBook;
 }) {
   const [open, setOpen] = useState(false);
-  const name = book === "purchases" ? "compras" : "ventas";
   return (
     <>
       <section className="ops-card sire-closing-guide">
         <div className="sire-next-step">
           <div>
-            <strong>Presentar el registro de {name} del mes</strong>
-            <p>
-              Primero revisa las {name}. El último paso se completa en SUNAT con
-              la persona responsable de Contabilidad.
-            </p>
+            {book === "purchases" ? (
+              <strong>Registro mensual de compras en SUNAT</strong>
+            ) : (
+              <>
+                <strong>Presentar el registro de ventas del mes</strong>
+                <p>
+                  Primero revisa las ventas. El último paso se completa en SUNAT
+                  con la persona responsable de Contabilidad.
+                </p>
+              </>
+            )}
           </div>
           <Button type="button" variant="ghost" onClick={() => setOpen(true)}>
             <FileCheck2 size={16} /> Ver pasos para presentar

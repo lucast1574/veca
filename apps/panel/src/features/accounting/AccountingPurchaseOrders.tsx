@@ -273,12 +273,12 @@ function PurchaseSummary({ order }: { order: Purchase }) {
                 {item.sku} · {item.name}
               </strong>
               <small>
-                Comprado: {quantity(item.ordered)} {unitName(item.unit)} ·
-                Precio unitario: {amount(item.unitCents)} sin IGV
+                {quantity(item.ordered)} {unitName(item.unit)} comprados ·{" "}
+                {amount(item.unitCents)} por unidad de medida, sin IGV
               </small>
               <small>
-                Confirmado por Almacén: {quantity(item.received)}{" "}
-                {unitName(item.unit)}
+                {quantity(item.received)} {unitName(item.unit)} recibidos en
+                Almacén
               </small>
             </div>
           </li>
@@ -287,23 +287,39 @@ function PurchaseSummary({ order }: { order: Purchase }) {
     </section>
   );
 }
-export function PurchaseCostDetail({ id }: { id: string }) {
+export function PurchaseCostDetail({
+  id,
+  inventoryAccess,
+}: {
+  id: string;
+  inventoryAccess: boolean;
+}) {
   const query = useAccountingQuery<Purchase>(`${purchaseOrdersPath}/${id}`);
+  const order = query.data;
   return (
-    <QueryState {...query}>
-      {query.data && (
-        <>
-          <PurchaseSummary order={query.data} />
-          <a
-            className="warehouse-link"
-            href={`#accounting/gastos/${id}${query.data.status === "requested" ? "/preparar" : ""}`}
-          >
-            {query.data.status === "requested"
-              ? "Completar materiales y precios"
-              : "Ver detalle de la compra"}
-          </a>
-        </>
+    <div className="cost-detail-purchase">
+      <QueryState {...query}>
+        {order && <PurchaseSummary order={order} />}
+      </QueryState>
+      {(order || inventoryAccess) && (
+        <div className="cost-detail-links">
+          {order && (
+            <a
+              className="accounting-inline"
+              href={`#accounting/gastos/${id}${order.status === "requested" ? "/preparar" : ""}`}
+            >
+              {order.status === "requested"
+                ? "Completar materiales y precios"
+                : "Ver compra"}
+            </a>
+          )}
+          {inventoryAccess && (
+            <a className="accounting-inline" href={`#inventory/compras/${id}`}>
+              Ver recepción en Inventario
+            </a>
+          )}
+        </div>
       )}
-    </QueryState>
+    </div>
   );
 }

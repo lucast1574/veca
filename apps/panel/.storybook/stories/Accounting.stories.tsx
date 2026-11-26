@@ -315,7 +315,7 @@ export const IrACompras: Story = {
       page.getAllByRole("region", { name: "Compras por registrar" }),
     ).toHaveLength(1);
     await expect(
-      await page.findByText("Presentar el registro de compras del mes"),
+      await page.findByText("Registro mensual de compras en SUNAT"),
     ).toBeVisible();
     await userEvent.click(
       page.getByRole("button", { name: "Ver pasos para presentar" }),
