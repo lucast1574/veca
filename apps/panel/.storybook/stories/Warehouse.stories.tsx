@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent, within } from "storybook/test";
 import type { SessionUser } from "@veca/content";
@@ -5,7 +6,7 @@ import { AccountingWorkspace } from "../../src/features/accounting/AccountingWor
 import { InventoryWorkspace } from "../../src/features/warehouse/InventoryWorkspace";
 import { StoryFrame } from "./StoryFrame";
 import { handlers, user } from "./fixtures";
-import { orders, warehouseHandlers } from "./warehouse-fixtures";
+import { materials, orders, warehouseHandlers } from "./warehouse-fixtures";
 const meta = {
   title: "VECA/Almacén y stock",
   parameters: { msw: [...warehouseHandlers, ...handlers] },
@@ -20,6 +21,7 @@ const warehouseUser: SessionUser = {
     "dashboard",
     "inventory",
     "inventory_receive",
+    "inventory_adjust",
     "inventory_request",
     "inventory_dispatch",
     "inventory_reserve",
@@ -48,6 +50,31 @@ const accountingScreen = () => (
 export const SolicitudesDeObra: Story = {
   name: "01 · Las solicitudes llegan desde Obras",
   render: screen("solicitudes"),
+};
+function MaterialesStory({ materialId }: { materialId?: string }) {
+  const [selected, setSelected] = useState(materialId);
+  useEffect(() => {
+    const navigate = () => setSelected(location.hash.split("/")[2]);
+    window.addEventListener("hashchange", navigate);
+    return () => window.removeEventListener("hashchange", navigate);
+  }, []);
+  return (
+    <StoryFrame view="inventory" sessionUser={warehouseUser}>
+      <InventoryWorkspace
+        user={warehouseUser}
+        tab="materiales"
+        selected={selected}
+      />
+    </StoryFrame>
+  );
+}
+export const MaterialesEnAlmacen: Story = {
+  name: "Stock disponible y acciones de materiales",
+  render: () => <MaterialesStory />,
+};
+export const HistorialDeMaterial: Story = {
+  name: "Historial de stock de un material",
+  render: () => <MaterialesStory materialId={materials[0].id} />,
 };
 export const PedidosPorRecibir: Story = {
   name: "02 · Pedidos y recepciones de proveedores",

@@ -42,7 +42,12 @@ function actions(
   }
   const offered: SupplyAction["action"][] = [];
   if (user.permissions.includes("inventory")) {
-    if (!row.cancelled && row.delivered < row.quantity) offered.push("reserve");
+    if (
+      !row.cancelled &&
+      row.delivered < row.quantity &&
+      (row.available !== 0 || row.reserved > 0)
+    )
+      offered.push("reserve");
     if (!row.cancelled && row.delivered < row.quantity) offered.push("cancel");
     if (!row.cancelled && row.reserved > 0) offered.push("deliver");
     if (row.returnRequested > 0) offered.push("accept_return");
@@ -60,6 +65,49 @@ function actions(
         actionPermissions[action as keyof typeof actionPermissions],
       ),
   );
+}
+
+type RequestActionName = SupplyAction["action"];
+type NextAction = RequestActionName | "guide";
+
+function nextAction(
+  row: SupplyRequest,
+  offered: RequestActionName[],
+  canRequestGuide: boolean,
+): NextAction | undefined {
+  if (row.pending) return offered[0];
+  if (offered.includes("accept_return")) return "accept_return";
+  if (offered.includes("receive")) return "receive";
+  if (offered.includes("request_return")) return "request_return";
+  if (offered.includes("deliver") && row.guideRequest) return "deliver";
+  if (canRequestGuide) return "guide";
+  if (offered.includes("reserve") && row.reserved === 0 && row.available !== 0)
+    return "reserve";
+  if (offered.includes("purchase") && row.available === 0) return "purchase";
+}
+
+function actionLabel(row: SupplyRequest, action: RequestActionName) {
+  if (row.pending)
+    return "Reintentar " + supplyActionLabels[action].toLowerCase();
+  if (action === "reserve")
+    return row.reserved ? "Ajustar reserva" : "Reservar material";
+  if (action === "deliver" && !row.guideRequest) return "Usar guía ya emitida";
+  return supplyActionLabels[action];
+}
+
+function requestStatusMessage(row: SupplyRequest, guideReady: boolean) {
+  if (row.pending) return "Hay una operación pendiente.";
+  if (row.returnRequested > 0) return "Almacén debe recibir la devolución.";
+  if (row.guideRequest && !guideReady && row.reserved > 0) {
+    return ["returned", "rejected"].includes(row.guideRequest.status)
+      ? "Contabilidad debe revisar la guía."
+      : "En espera de la guía de Contabilidad.";
+  }
+  if (row.purchaseId && row.quantity > row.delivered)
+    return "Hay un pedido por el material faltante.";
+  if (row.delivered > row.received) return "En espera de la recepción en obra.";
+  if (row.quantity <= row.delivered) return "La obra confirmó lo recibido.";
+  return "Pendiente de atención por Almacén.";
 }
 
 export function SupplyRequests({
@@ -132,10 +180,6 @@ export function SupplyRequests({
           ]}
         />
       </div>
-      <p className="hint">
-        Las obras indican qué necesitan y para cuándo. Reserva el material
-        disponible y solicita la guía antes de confirmar su salida.
-      </p>
       {message && (
         <p className="warehouse-message" role="status">
           {message}
@@ -202,15 +246,52 @@ export function SupplyRequests({
                 if (row.received - row.returned - row.returnRequested > 0)
                   offered.push("request_return");
               }
+              const guideReady = ["accepted", "observed"].includes(
+                row.guideRequest?.status ?? "",
+              );
+              const canRequestGuide =
+                !workId &&
+                !row.cancelled &&
+                !row.pending &&
+                row.reserved > 0 &&
+                !row.guideRequest &&
+                user.permissions.includes("inventory") &&
+                user.permissions.includes("inventory_dispatch");
+              const usable = offered.filter(
+                (action) =>
+                  action !== "deliver" ||
+                  row.pending ||
+                  !row.guideRequest ||
+                  guideReady,
+              );
+              const primary = nextAction(row, usable, canRequestGuide);
+              const canCancel =
+                primary !== "cancel" && usable.includes("cancel");
+              const secondary = usable.filter(
+                (action) => action !== primary && action !== "cancel",
+              );
+              const requester =
+                row.requestedByName ||
+                (!/^[a-f0-9]{24}$/i.test(row.requestedBy)
+                  ? row.requestedBy
+                  : "");
+              const unit = unitName(row.unit);
+              const remaining = row.cancelled
+                ? 0
+                : Math.max(0, row.quantity - row.delivered);
+              const inTransit = Math.max(0, row.delivered - row.received);
+              const outstanding = row.returnRequested || remaining || inTransit;
               return (
                 <li key={row.id}>
                   <div className="supply-summary">
-                    <div className="supply-title">
-                      <strong>
-                        <Package size={16} aria-hidden="true" /> {row.sku} ·{" "}
+                    <header className="supply-title">
+                      <h3>
+                        <Package size={16} aria-hidden="true" />{" "}
                         {row.materialName}
-                      </strong>
-                      <span className="ops-stock-status">
+                      </h3>
+                      <span
+                        className={`ops-stock-status${row.cancelled ? " is-cancelled" : row.returnRequested > 0 || (!row.reserved && remaining > 0) ? " low" : ""}`}
+                      >
                         {row.cancelled
                           ? "Cancelada"
                           : row.returnRequested > 0
@@ -223,165 +304,167 @@ export function SupplyRequests({
                                   ? "En camino a obra"
                                   : "Entregada a obra"}
                       </span>
-                    </div>
-                    {!workId &&
-                      (user.permissions.includes("works") &&
-                      user.permissions.some(
-                        (p) => p === "works_all" || p === "works_manage",
-                      ) ? (
-                        <a href={`#works/${row.workId}`}>{row.workName}</a>
-                      ) : (
-                        <span>{row.workName}</span>
-                      ))}
-                    <small>
-                      Necesario el {row.neededBy.split("-").reverse().join("/")}{" "}
-                      · {unitName(row.unit)}
-                    </small>
-                    <p>{row.reason}</p>
-                    <div className="supply-next-summary">
+                    </header>
+                    <dl className="supply-meta">
                       <div>
-                        <span>
-                          {row.cancelled
-                            ? "Pendiente cancelado"
-                            : "Por entregar a la obra"}
-                        </span>
-                        <strong>
-                          {amount(Math.max(0, row.quantity - row.delivered))}{" "}
-                          <small>{unitName(row.unit)}</small>
-                        </strong>
-                        <small>
-                          De {amount(row.quantity)} {unitName(row.unit)}{" "}
-                          solicitados · {amount(row.delivered)} entregados
-                        </small>
+                        <dt>Solicitado por</dt>
+                        <dd>{requester || "Nombre no registrado"}</dd>
                       </div>
-                      <p>
-                        {row.cancelled
-                          ? "Revisa el historial para consultar los movimientos realizados."
-                          : row.pending
-                            ? "Hay un movimiento por terminar. Continúa la operación pendiente."
-                            : row.returnRequested > 0
-                              ? "La obra solicita devolver material. Confirma lo que llegue al almacén."
-                              : row.reserved > 0
-                                ? "Ya hay material separado. La salida requiere una guía aceptada."
-                                : row.quantity > row.delivered
-                                  ? "Separa existencias con Reservar. Si no alcanzan, solicita la compra del faltante."
-                                  : row.received < row.delivered
-                                    ? "El material salió del almacén. La obra debe confirmar su recepción."
-                                    : "La obra confirmó lo recibido."}
-                      </p>
-                    </div>
-                    <details className="supply-tracking">
-                      <summary>
-                        Ver seguimiento de cantidades <ChevronDown size={15} />
-                      </summary>
-                      <dl className="supply-quantities">
-                        {[
-                          ["Solicitado", row.quantity],
-                          ["Reservado", row.reserved],
-                          ["Entregado", row.delivered],
-                          ["Recibido", row.received],
-                          ["Devuelto", row.returned],
-                        ].map(([label, value]) => (
-                          <div key={String(label)}>
-                            <dt>{label}</dt>
-                            <dd>
-                              {amount(Number(value))}{" "}
-                              <small>{unitName(row.unit)}</small>
-                            </dd>
+                      {!workId && (
+                        <div>
+                          <dt>Obra</dt>
+                          <dd>
+                            {user.permissions.includes("works") &&
+                            user.permissions.some(
+                              (p) => p === "works_all" || p === "works_manage",
+                            ) ? (
+                              <a
+                                className="warehouse-link"
+                                href={`#works/${row.workId}`}
+                              >
+                                {row.workName}
+                              </a>
+                            ) : (
+                              row.workName
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                      <div>
+                        <dt>Se necesita el</dt>
+                        <dd>{row.neededBy.split("-").reverse().join("/")}</dd>
+                      </div>
+                    </dl>
+                    {(!row.cancelled || outstanding > 0 || primary) && (
+                      <div className="supply-next-summary">
+                        {outstanding > 0 && (
+                          <div className="supply-needed">
+                            <span>
+                              {row.returnRequested > 0
+                                ? "Por devolver"
+                                : remaining > 0
+                                  ? "Por entregar"
+                                  : "Por recibir en obra"}
+                            </span>
+                            <strong>
+                              {amount(outstanding)} <small>{unit}</small>
+                            </strong>
+                            {row.reserved > 0 && (
+                              <span>
+                                Reservado{" "}
+                                <b>
+                                  {amount(row.reserved)} {unit}
+                                </b>
+                              </span>
+                            )}
                           </div>
-                        ))}
-                      </dl>
-                    </details>
-                    {!workId && (
-                      <p className="hint">
-                        Disponible en Almacén · {amount(row.available || 0)}{" "}
-                        {unitName(row.unit)}
-                      </p>
+                        )}
+                        <div className="supply-next-action">
+                          {primary ? (
+                            <Button
+                              onClick={() =>
+                                primary === "guide"
+                                  ? setGuide(row)
+                                  : setSelected({ row, action: primary })
+                              }
+                            >
+                              {primary === "guide" ? (
+                                <>
+                                  <Truck size={16} /> Solicitar guía de remisión
+                                </>
+                              ) : (
+                                actionLabel(row, primary)
+                              )}
+                            </Button>
+                          ) : (
+                            <p>{requestStatusMessage(row, guideReady)}</p>
+                          )}
+                          {row.available !== undefined && (
+                            <p>
+                              Disponible en Almacén{" "}
+                              <strong>
+                                {amount(row.available)} {unit}
+                              </strong>
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    {row.returnRequested > 0 && (
-                      <p className="hint">
-                        Devolución por recibir · {amount(row.returnRequested)}
+                    {row.guideRequest && (
+                      <p className="supply-guide">
+                        <Truck size={15} aria-hidden="true" />
+                        Guía de remisión ·{" "}
+                        {[
+                          row.guideRequest.number,
+                          DISPATCH_STATUS[row.guideRequest.status],
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     )}
                     {row.purchaseId &&
                       user.permissions.includes("inventory") && (
-                        <a href={`#inventory/compras/${row.purchaseId}`}>
-                          Revisar pedido del faltante
+                        <a
+                          className="warehouse-link supply-purchase"
+                          href={`#inventory/compras/${row.purchaseId}`}
+                        >
+                          Ver pedido del material faltante
                         </a>
                       )}
-                    {row.cancelled && (
-                      <p className="hint">
-                        {row.delivered
-                          ? "Faltante cancelado"
-                          : "Solicitud cancelada"}
+                    <details className="supply-tracking">
+                      <summary>
+                        {secondary.length || canCancel
+                          ? "Detalles y más acciones"
+                          : "Ver detalles de la solicitud"}
+                        <ChevronDown size={15} aria-hidden="true" />
+                      </summary>
+                      <p className="supply-reason">
+                        <strong>{row.sku}</strong> · {row.reason}
                       </p>
-                    )}
-                    {row.pending && (
-                      <p className="hint">
-                        Hay una operación pendiente. Reinténtala para confirmar
-                        el movimiento.
-                      </p>
-                    )}
-                    {row.guideRequest && (
-                      <p className="hint">
-                        <Truck size={15} aria-hidden="true" /> Guía de remisión
-                        ·{" "}
-                        {row.guideRequest.number ||
-                          DISPATCH_STATUS[row.guideRequest.status]}
-                        {["review", "draft", "returned", "rejected"].includes(
-                          row.guideRequest.status,
-                        )
-                          ? " · Contabilidad debe completar o revisar el traslado."
-                          : ""}
-                      </p>
-                    )}
-                    <div className="supply-actions">
-                      {!workId &&
-                        !row.cancelled &&
-                        !row.pending &&
-                        row.reserved > 0 &&
-                        !row.guideRequest &&
-                        user.permissions.includes("inventory_dispatch") && (
-                          <Button onClick={() => setGuide(row)}>
-                            <Truck size={15} />
-                            Solicitar guía de remisión
-                          </Button>
-                        )}
-                      {offered
-                        .sort(
-                          (a, b) =>
-                            Number(a === "cancel") - Number(b === "cancel"),
-                        )
-                        .map((action) => (
-                          <Button
-                            variant={
-                              (action === "reserve" && row.reserved === 0) ||
-                              action === "receive" ||
-                              (action === "deliver" &&
-                                !!row.guideRequest &&
-                                ["accepted", "observed"].includes(
-                                  row.guideRequest.status,
-                                ))
-                                ? "primary"
-                                : "ghost"
-                            }
-                            disabled={
-                              action === "deliver" &&
-                              !!row.guideRequest &&
-                              !["accepted", "observed"].includes(
-                                row.guideRequest.status,
-                              )
-                            }
-                            key={action}
-                            onClick={() => setSelected({ row, action })}
-                          >
-                            {row.pending
-                              ? "Reintentar " +
-                                supplyActionLabels[action].toLowerCase()
-                              : supplyActionLabels[action]}
-                          </Button>
+                      <dl className="supply-quantities">
+                        {(
+                          [
+                            ["Solicitado", row.quantity],
+                            ["Reservado", row.reserved],
+                            ["Entregado", row.delivered],
+                            ["Recibido", row.received],
+                            ["Devuelto", row.returned],
+                          ] as const
+                        ).map(([label, value]) => (
+                          <div key={label}>
+                            <dt>{label}</dt>
+                            <dd>
+                              {amount(value)} <small>{unit}</small>
+                            </dd>
+                          </div>
                         ))}
-                    </div>
+                      </dl>
+                      {(secondary.length > 0 || canCancel) && (
+                        <div className="supply-actions">
+                          {secondary.map((action) => (
+                            <Button
+                              key={action}
+                              variant="ghost"
+                              onClick={() => setSelected({ row, action })}
+                            >
+                              {actionLabel(row, action)}
+                            </Button>
+                          ))}
+                          {canCancel && (
+                            <div className="supply-cancel">
+                              <Button
+                                variant="ghost"
+                                onClick={() =>
+                                  setSelected({ row, action: "cancel" })
+                                }
+                              >
+                                Cancelar solicitud
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </details>
                   </div>
                 </li>
               );
@@ -536,9 +619,16 @@ function RequestAction({
   const path = warehouse
     ? `/admin/supply-requests/${row.id}/actions`
     : `/admin/works/${workId}/supplies/${row.id}/actions`;
+  const maximumReserve =
+    row.available === undefined
+      ? undefined
+      : Math.round(
+          Math.min(row.quantity - row.delivered, row.available + row.reserved) *
+            1000,
+        ) / 1000;
   const quantity =
     action === "reserve"
-      ? row.reserved
+      ? row.reserved || maximumReserve || 0
       : action === "receive"
         ? row.delivered - row.received
         : action === "accept_return"
@@ -548,8 +638,18 @@ function RequestAction({
             : row.reserved;
   return (
     <WarehouseForm
-      title={supplyActionLabels[action]}
-      action="Confirmar"
+      title={
+        action === "deliver"
+          ? supplyActionLabels[action]
+          : actionLabel(row, action)
+      }
+      action={
+        action === "cancel"
+          ? "Cancelar solicitud"
+          : action === "reserve"
+            ? "Guardar reserva"
+            : "Confirmar"
+      }
       onClose={close}
       canSubmit={
         !cancelling && (action !== "deliver" || !!guideId || !!pending)
@@ -676,6 +776,7 @@ function RequestAction({
             name="quantity"
             type="number"
             min={action === "reserve" ? 0 : 0.001}
+            max={action === "reserve" ? maximumReserve : undefined}
             step="0.001"
             required
             defaultValue={pending?.quantity ?? quantity}

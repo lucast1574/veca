@@ -253,6 +253,18 @@ try {
   await post(`/admin/works/${otherId}/supplies`, sessions.worker, input, 403);
   let request = await post(root + "/supplies", sessions.operations, input);
   requests.push(request.id);
+  assert.equal(request.requestedByName, "operations");
+  await db
+    .collection("supply_requests")
+    .updateOne(
+      { _id: new ObjectId(request.id) },
+      { $unset: { requestedByName: "" } },
+    );
+  const requestDetail = await get(
+    `/admin/supply-requests/${request.id}`,
+    sessions.warehouse,
+  );
+  assert.equal(requestDetail.items[0].requestedByName, "operations");
   const actionsPath = "/admin/supply-requests/" + request.id + "/actions";
   const action = async (
     name,
@@ -503,7 +515,10 @@ try {
     "/admin/supply-requests?filter=all",
     sessions.warehouse,
   );
-  assert(page.items.some((row) => row.id === request.id));
+  assert.equal(
+    page.items.find((row) => row.id === request.id)?.requestedByName,
+    "operations",
+  );
   console.log(
     "PASS tasks, worker scope, action permissions, reservations, shortage purchase, accepted-guide delivery, receipt and idempotent return",
   );

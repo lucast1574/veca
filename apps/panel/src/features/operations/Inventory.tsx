@@ -14,7 +14,14 @@ import {
   type Movement,
 } from "@veca/content";
 import { Select } from "@veca/ui/src/Select";
-import { Plus, Package, Search, RefreshCw } from "lucide-react";
+import {
+  Plus,
+  Package,
+  Search,
+  RefreshCw,
+  History,
+  ClipboardCheck,
+} from "lucide-react";
 import { post } from "../../lib/api";
 import {
   CatalogImport,
@@ -231,9 +238,7 @@ export function Inventory({
   }, [reloadCatalog, reloadSelected, reloadHistory]);
   const items = catalog.data || [];
   useLiveRefresh(refresh, false);
-  const filtered = (
-    materialId ? (selected.data ? [selected.data] : []) : items
-  ).filter(
+  const filtered = items.filter(
     (m) =>
       `${m.name} ${m.sku} ${m.category} ${m.location} ${m.dimensions ? formatMaterialDimensions(m.dimensions) : ""}`
         .toLowerCase()
@@ -256,19 +261,18 @@ export function Inventory({
           <h2>{selected.data?.name || "Materiales"}</h2>
         </div>
         <div className="ops-heading-actions">
-          {canCatalog && (
+          {!materialId && canCatalog && (
             <ImportCatalogButton onClick={() => setImporting(true)} />
           )}
+          {!materialId && canCatalog && (
+            <Button variant="ghost" onClick={() => setCreate(true)}>
+              <Plus size={16} /> Nuevo material
+            </Button>
+          )}
           <Button
-            variant="ghost"
-            disabled={!canCatalog}
-            onClick={() => setCreate(true)}
-          >
-            <Plus size={16} />
-            Nuevo material
-          </Button>
-          <Button
-            disabled={!canReceive || (!items.length && !selected.data)}
+            disabled={
+              !canReceive || (materialId ? !selected.data : !items.length)
+            }
             onClick={() => setMovement(materialId || "")}
           >
             <Package size={17} />
@@ -423,24 +427,83 @@ export function Inventory({
           </button>
         </div>
       )}
-      {(materialId ? selected.data : catalog.data) && (
-        <div className="ops-table-wrap">
-          <table className="ops-material-table">
-            <thead>
-              <tr>
-                <th>Material</th>
-                <th>Familia</th>
-                <th>Ubicación</th>
-                <th>Disponible</th>
-                <th>Mínimo</th>
-                <th>Estado</th>
-                <th>Acción</th>
+      {selected.data && (
+        <section
+          className="ops-card material-detail"
+          aria-label="Existencias del material"
+        >
+          <p>
+            {[
+              selected.data.sku,
+              selected.data.category,
+              selected.data.location || "Sin ubicación",
+              selected.data.dimensions &&
+                formatMaterialDimensions(selected.data.dimensions),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <dl className="material-stock">
+            {(
+              [
+                [
+                  "Disponible para usar",
+                  selected.data.available ?? selected.data.balance,
+                ],
+                ["En almacén", selected.data.balance],
+                ["Reservado", selected.data.reserved || 0],
+                ["Stock mínimo", selected.data.minimum],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>
+                  {amount(value)}{" "}
+                  <small>{unitName(selected.data?.unit || "")}</small>
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <div className="material-actions">
+            {canAdjust && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setCount(selected.data)}
+              >
+                <ClipboardCheck size={16} /> Hacer conteo físico
+              </Button>
+            )}
+            {canCatalog && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditingDimensions(selected.data)}
+              >
+                Editar medidas
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
+      {!materialId && catalog.data && (
+        <div className="ops-table-wrap material-catalog">
+          <table className="ops-material-table" role="table">
+            <thead role="rowgroup">
+              <tr role="row">
+                <th role="columnheader">Material</th>
+                <th role="columnheader">Familia</th>
+                <th role="columnheader">Ubicación</th>
+                <th role="columnheader">Disponible</th>
+                <th role="columnheader">Mínimo</th>
+                <th role="columnheader">Estado</th>
+                <th role="columnheader">Acciones</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {filtered.map((m) => (
-                <tr key={m.id}>
-                  <td>
+                <tr key={m.id} role="row">
+                  <td role="cell">
                     <a
                       className="warehouse-link"
                       href={`#inventory/materiales/${m.id}`}
@@ -457,9 +520,13 @@ export function Inventory({
                         .join(" · ")}
                     </small>
                   </td>
-                  <td>{m.category}</td>
-                  <td>{m.location || "Sin ubicación"}</td>
-                  <td>
+                  <td role="cell" data-label="Familia">
+                    {m.category}
+                  </td>
+                  <td role="cell" data-label="Ubicación">
+                    {m.location || "Sin ubicación"}
+                  </td>
+                  <td role="cell" data-label="Disponible">
                     <strong>{amount(m.available ?? m.balance)}</strong>{" "}
                     {unitName(m.unit)}
                     <small>
@@ -467,10 +534,10 @@ export function Inventory({
                       Reservado {amount(m.reserved || 0)} {unitName(m.unit)}
                     </small>
                   </td>
-                  <td>
+                  <td role="cell" data-label="Mínimo">
                     {amount(m.minimum)} {unitName(m.unit)}
                   </td>
-                  <td>
+                  <td role="cell">
                     <span
                       className={`ops-stock-status ${(m.available ?? m.balance) <= m.minimum ? "low" : ""}`}
                     >
@@ -481,42 +548,40 @@ export function Inventory({
                           : "Disponible"}
                     </span>
                   </td>
-                  <td>
-                    {materialId && canCatalog && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setEditingDimensions(m)}
-                      >
-                        Editar medidas
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={!canAdjust}
-                      onClick={() => setCount(m)}
-                      aria-label={`Contar ${m.name}`}
-                    >
-                      Contar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      aria-label={`Registrar entrada de ${m.name}`}
-                      disabled={!canReceive}
-                      onClick={() => setMovement(m.id)}
-                    >
-                      Entrada
-                    </Button>
-                    {!materialId && (
+                  <td role="cell">
+                    <div className="material-catalog-actions">
+                      {(canAdjust || canReceive) && (
+                        <div className="material-actions">
+                          {canAdjust && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => setCount(m)}
+                              aria-label={`Hacer conteo físico de ${m.name}`}
+                            >
+                              Conteo físico
+                            </Button>
+                          )}
+                          {canReceive && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              aria-label={`Registrar entrada de ${m.name}`}
+                              onClick={() => setMovement(m.id)}
+                            >
+                              Registrar entrada
+                            </Button>
+                          )}
+                        </div>
+                      )}
                       <a
                         className="warehouse-link"
+                        aria-label={`Ver historial de ${m.name}`}
                         href={`#inventory/materiales/${m.id}`}
                       >
-                        Historial
+                        <History size={16} aria-hidden="true" /> Ver historial
                       </a>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -539,9 +604,9 @@ export function Inventory({
           )}
         </div>
       )}
-      <section className="ops-card">
+      <section className="ops-card material-history">
         <div className="ops-card-heading">
-          <h2>Últimos movimientos</h2>
+          <h2>{materialId ? "Historial de stock" : "Últimos movimientos"}</h2>
           <span>Hasta 100 registros recientes</span>
         </div>
         {history.loading && !history.data && (
@@ -555,7 +620,23 @@ export function Inventory({
             </button>
           </Notice>
         )}
-        {history.data && <Movements items={history.data} />}
+        {history.data &&
+          (history.data.length || !materialId ? (
+            <Movements items={history.data} />
+          ) : (
+            <div className="material-history-empty">
+              <History size={22} aria-hidden="true" />
+              <div>
+                <strong>
+                  Este material aún no tiene movimientos registrados
+                </strong>
+                <p>
+                  Las entradas, salidas y conteos aparecerán aquí con su fecha y
+                  saldo.
+                </p>
+              </div>
+            </div>
+          ))}
       </section>
     </main>
   );

@@ -48,6 +48,7 @@ export type SupplyRequest = z.infer<typeof supplyRequestInput> & {
   purchaseId?: string;
   createdAt: string;
   requestedBy: string;
+  requestedByName?: string;
   operations: (SupplyAction & {
     actor: string;
     at: string;

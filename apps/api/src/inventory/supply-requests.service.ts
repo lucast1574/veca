@@ -24,6 +24,7 @@ import { parse } from "../common/validation";
 import { InventoryService } from "./inventory.service";
 import { WarehouseService } from "./warehouse.service";
 import { DispatchService } from "../dispatch/dispatch.service";
+import type { UserDocument } from "../auth/auth.types";
 const quantity = (value: number) => Math.round(value * 1000) / 1000;
 type Operation = SupplyRequest["operations"][number] & { failed?: boolean };
 type Document = Omit<SupplyRequest, "id" | "operations"> & {
@@ -50,6 +51,33 @@ export class SupplyRequests {
   }
   view({ _id, ...row }: Document): SupplyRequest {
     return { ...row, id: String(_id) };
+  }
+
+  private async requesterNames(rows: Document[]) {
+    const ids = [
+      ...new Set(
+        rows
+          .filter(
+            (row) => !row.requestedByName && ObjectId.isValid(row.requestedBy),
+          )
+          .map((row) => row.requestedBy),
+      ),
+    ];
+    if (!ids.length) return new Map<string, string>();
+    const users = await this.db.db
+      .collection<UserDocument>("users")
+      .find({ _id: { $in: ids.map((id) => new ObjectId(id)) } })
+      .project<Pick<UserDocument, "_id" | "name" | "username">>({
+        name: 1,
+        username: 1,
+      })
+      .toArray();
+    return new Map(
+      users.map((user) => [
+        String(user._id),
+        user.name?.trim() || user.username,
+      ]),
+    );
   }
 
   private async coverage(workId: string) {
@@ -112,14 +140,16 @@ export class SupplyRequests {
   async detail(id: string) {
     const row = await this.collection.findOne({ _id: this.inventory.id(id) });
     if (!row) throw new NotFoundException();
-    const material = await this.inventory.detail(row.materialId);
-    const guideRequests = await this.dispatches.supplyGuideRequests([
-      String(row._id),
+    const [material, guideRequests, names] = await Promise.all([
+      this.inventory.detail(row.materialId),
+      this.dispatches.supplyGuideRequests([String(row._id)]),
+      this.requesterNames([row]),
     ]);
     return {
       items: [
         {
           ...this.view(row),
+          requestedByName: row.requestedByName || names.get(row.requestedBy),
           guideRequest: guideRequests.get(String(row._id)),
           available: material.available,
         },
@@ -166,13 +196,16 @@ export class SupplyRequests {
         this.inventory.view(row).available,
       ]),
     );
-    const guideRequests = await this.dispatches.supplyGuideRequests(
-      rows.slice(0, 30).map((row) => String(row._id)),
-    );
+    const items = rows.slice(0, 30);
+    const [guideRequests, names] = await Promise.all([
+      this.dispatches.supplyGuideRequests(items.map((row) => String(row._id))),
+      this.requesterNames(items),
+    ]);
     return {
-      items: rows.slice(0, 30).map((row) => ({
+      items: items.map((row) => ({
         guideRequest: guideRequests.get(String(row._id)),
         ...this.view(row),
+        requestedByName: row.requestedByName || names.get(row.requestedBy),
         ...(!workId ? { available: available.get(row.materialId) || 0 } : {}),
       })),
       hasMore: rows.length > 30,
@@ -296,6 +329,7 @@ export class SupplyRequests {
           cancelled: false,
           createdAt: new Date().toISOString(),
           requestedBy: user.id,
+          requestedByName: user.name || user.username,
           operations: [],
         },
       },

@@ -919,3 +919,143 @@
   font-size: 11px;
   line-height: 1.6;
 }
+
+.material-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.material-actions .btn {
+  margin: 0;
+}
+.material-catalog-actions {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+@media (min-width: 1280px) {
+  .material-catalog-actions {
+    min-width: 248px;
+  }
+}
+.material-catalog .material-actions .btn {
+  min-height: 36px;
+  padding: 6px 10px;
+}
+.material-catalog .warehouse-link {
+  white-space: nowrap;
+}
+.material-detail {
+  display: grid;
+  gap: 16px;
+}
+.material-detail > p {
+  margin: 0;
+  color: var(--panel-secondary);
+  font-size: 13px;
+}
+.material-stock {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.material-stock > div {
+  background: var(--panel-soft);
+  padding: 12px;
+  border-radius: 8px;
+}
+.material-stock > div:first-child {
+  background: var(--panel-raised);
+}
+.material-stock dt {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+.material-stock dd {
+  margin: 4px 0 0;
+  color: var(--panel-ink);
+  font-size: 22px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+.material-stock small {
+  font-size: 12px;
+  font-weight: 500;
+}
+.material-history .ops-ledger p,
+.material-history .ops-ledger small,
+.material-history .ops-card-heading > span {
+  color: var(--panel-secondary);
+}
+.material-history .ops-ledger > div:last-child {
+  border-bottom: 0;
+}
+.material-history-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 0 4px;
+}
+.material-history-empty svg {
+  flex: none;
+  color: var(--panel-accent);
+}
+.material-history-empty p {
+  margin: 4px 0 0;
+  color: var(--panel-secondary);
+  font-size: 13px;
+}
+@media (max-width: 620px) {
+  .material-stock {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .material-catalog .ops-material-table {
+    display: block;
+    min-width: 0;
+  }
+  .material-catalog thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .material-catalog tbody {
+    display: block;
+  }
+  .material-catalog tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 16px;
+  }
+  .material-catalog tr + tr {
+    border-top: 1px solid var(--panel-edge);
+  }
+  .material-catalog td {
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .material-catalog td:first-child,
+  .material-catalog td:last-child {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+  .material-catalog td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--panel-secondary);
+    font-size: 11px;
+  }
+  .material-catalog td:last-child {
+    border-top: 1px solid var(--panel-edge);
+    padding-top: 10px;
+  }
+}

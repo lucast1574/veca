@@ -3,6 +3,7 @@ import {
   MATERIAL_CATEGORIES,
   materialSchema,
   type Material,
+  type Movement,
   type Purchase,
   type SupplyRequest,
   type WorkCloseout,
@@ -33,7 +34,7 @@ export const materials: Material[] = [
     sku: "HER-INOX",
     name: "Kit de herrajes de acero inoxidable",
     unit: "unit",
-    category: MATERIAL_CATEGORIES[0],
+    category: "Herrajes",
     location: "Estante B · Nivel 1",
     description: "Anclajes y accesorios de instalación",
     minimum: 6,
@@ -45,6 +46,48 @@ export const materials: Material[] = [
     updatedAt: at,
   },
 ];
+export const stockMovements: Movement[] = [
+  {
+    id: "demo-glass-receipt",
+    materialId: materials[0].id,
+    materialName: materials[0].name,
+    unit: materials[0].unit,
+    leadId: null,
+    kind: "receipt",
+    quantity: 12,
+    reason: "Recepción de paños de vidrio del proveedor",
+    actor: "Jorge Quispe",
+    at,
+    balanceAfter: 36,
+  },
+  {
+    id: "demo-glass-dispatch",
+    materialId: materials[0].id,
+    materialName: materials[0].name,
+    unit: materials[0].unit,
+    leadId: works[0].id,
+    kind: "dispatch",
+    quantity: 16,
+    reason: "Salida para la fachada de Edificio Alameda",
+    actor: "Jorge Quispe",
+    at: "2026-11-24T14:00:00.000Z",
+    balanceAfter: 24,
+  },
+  {
+    id: "demo-hardware-receipt",
+    materialId: materials[1].id,
+    materialName: materials[1].name,
+    unit: materials[1].unit,
+    leadId: null,
+    kind: "receipt",
+    quantity: 4,
+    reason: "Recepción parcial de kits para instalación",
+    actor: "Jorge Quispe",
+    at: "2026-11-23T14:00:00.000Z",
+    balanceAfter: 4,
+  },
+];
+
 export const supplies: SupplyRequest[] = materials.map((m, i) => ({
   id: i ? "ccccccccccccccccccccccc2" : "ccccccccccccccccccccccc1",
   materialId: m.id,
@@ -67,7 +110,8 @@ export const supplies: SupplyRequest[] = materials.map((m, i) => ({
   returned: 0,
   cancelled: false,
   createdAt: at,
-  requestedBy: "Luis Medina",
+  requestedBy: "222222222222222222222222",
+  requestedByName: "Luis Medina",
   operations: [],
 }));
 const orderBase = {
@@ -328,6 +372,23 @@ export const warehouseHandlers = [
   ),
 
   http.get(`${base}/admin/crm/materials`, () => HttpResponse.json(materials)),
+  http.get(`${base}/admin/crm/materials/:id`, ({ params }) => {
+    const material = materials.find((item) => item.id === params.id);
+    return material
+      ? HttpResponse.json(material)
+      : HttpResponse.json(
+          { message: "Material no encontrado" },
+          { status: 404 },
+        );
+  }),
+  http.get(`${base}/admin/crm/movements`, ({ request }) => {
+    const materialId = new URL(request.url).searchParams.get("materialId");
+    return HttpResponse.json(
+      stockMovements.filter(
+        (item) => !materialId || item.materialId === materialId,
+      ),
+    );
+  }),
   http.get(`${base}/admin/warehouse/works`, () =>
     HttpResponse.json(
       works.map((w) => ({ id: w.id, name: w.workName, stage: w.stage })),
