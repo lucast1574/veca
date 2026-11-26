@@ -190,7 +190,7 @@ export function Purchases({
   const [receivedMessage, setReceivedMessage] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState(canReceive ? "pending_receipt" : "");
+  const [status, setStatus] = useState("");
   const params = new URLSearchParams({ page: String(page) });
   if (search.trim()) params.set("search", search.trim());
   if (status) params.set("status", status);
@@ -251,8 +251,8 @@ export function Purchases({
             setStatus(value);
           }}
           options={[
-            { value: "pending_receipt", label: "Por recibir" },
             { value: "", label: "Todas las compras" },
+            { value: "pending_receipt", label: "Por recibir" },
             { value: "requested", label: "En Contabilidad" },
             { value: "received", label: "Recibidas" },
             { value: "cancelled", label: "Canceladas" },
