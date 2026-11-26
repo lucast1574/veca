@@ -83,7 +83,7 @@ export function GuideAccounting({
           <Plus size={16} aria-hidden="true" /> Nueva guía
         </Button>
       </div>
-      <div className="accounting-section-head">
+      <div className="guide-queue-filters">
         <Field label="Buscar guías">
           <input
             type="search"
@@ -96,8 +96,9 @@ export function GuideAccounting({
             }}
           />
         </Field>
-        <div className="accounting-tools">
+        <Field label="Estado de las guías" htmlFor="guide-queue-status">
           <Select
+            id="guide-queue-status"
             label="Estado de las guías"
             value={filter}
             options={[
@@ -112,8 +113,8 @@ export function GuideAccounting({
               setPage(1);
             }}
           />
-          <Refresh loading={query.loading} onClick={query.refresh} />
-        </div>
+        </Field>
+        <Refresh loading={query.loading} onClick={query.refresh} />
       </div>
       <QueryState
         {...query}

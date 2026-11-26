@@ -14,8 +14,8 @@ import {
 } from "./shared";
 import {
   MaterialDimensionsFields,
-  readMaterialDimensions,
   validMaterialDimensions,
+  type DraftDimensions,
 } from "./MaterialDimensionsFields";
 
 export function MaterialForm({
@@ -29,22 +29,20 @@ export function MaterialForm({
 }) {
   const [unit, setUnit] = useState("unit");
   const [category, setCategory] = useState("Vidrio");
+  const [dimensions, setDimensions] = useState<DraftDimensions>();
   return (
     <WarehouseForm
       title="Nuevo material"
       action="Crear material"
       onClose={close}
-      validateForm={(form) =>
-        validMaterialDimensions(readMaterialDimensions(form))
-      }
+      canSubmit={validMaterialDimensions(dimensions)}
       save={async (form) => {
-        const { baseMm, heightMm, ...fields } = Object.fromEntries(form);
         const material = await create({
-          ...fields,
+          ...Object.fromEntries(form),
           unit,
           category,
           minimum: Number(form.get("minimum")),
-          dimensions: readMaterialDimensions(form),
+          dimensions,
         });
         done(material);
       }}
@@ -81,7 +79,10 @@ export function MaterialForm({
             label: value,
           }))}
         />
-        <MaterialDimensionsFields />
+        <MaterialDimensionsFields
+          dimensions={dimensions}
+          onChange={setDimensions}
+        />
       </div>
       <p className="hint">
         Las medidas son opcionales. Si las indicas, completa la base y la altura
@@ -125,20 +126,21 @@ export function EditMaterialDimensions({
   close: () => void;
   done: () => void;
 }) {
+  const [dimensions, setDimensions] = useState<DraftDimensions | undefined>(
+    material.dimensions,
+  );
   return (
     <WarehouseForm
       title="Editar medidas del material"
       action="Guardar medidas"
       onClose={close}
-      validateForm={(form) =>
-        validMaterialDimensions(readMaterialDimensions(form))
-      }
-      save={async (form) => {
+      canSubmit={validMaterialDimensions(dimensions)}
+      save={async () => {
         await putWarehouse(
           `${warehousePath}/materials/${material.id}/dimensions`,
           {
             version: material.version,
-            dimensions: readMaterialDimensions(form) ?? null,
+            dimensions: dimensions ?? null,
           },
         );
         done();
@@ -149,7 +151,10 @@ export function EditMaterialDimensions({
         distinta, usa otro código.
       </p>
       <div className="warehouse-grid">
-        <MaterialDimensionsFields dimensions={material.dimensions} />
+        <MaterialDimensionsFields
+          dimensions={dimensions}
+          onChange={setDimensions}
+        />
       </div>
     </WarehouseForm>
   );

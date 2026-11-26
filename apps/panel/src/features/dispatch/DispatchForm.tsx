@@ -23,6 +23,7 @@ import {
 
 type DraftItem = Omit<DispatchInput["items"][number], "dimensions"> & {
   dimensions?: DraftDimensions;
+  key: string;
 };
 type DispatchDraft = Omit<DispatchInput, "items"> & { items: DraftItem[] };
 
@@ -80,8 +81,11 @@ export function DispatchForm({
   onSave,
 }: Props) {
   const formId = useId();
-  const [draft, setDraft] = useState<DispatchDraft>(initial);
-  const [savedDraft, setSavedDraft] = useState<DispatchDraft>(initial);
+  const [draft, setDraft] = useState<DispatchDraft>(() => ({
+    ...initial,
+    items: initial.items.map((item) => ({ ...item, key: crypto.randomUUID() })),
+  }));
+  const [savedDraft, setSavedDraft] = useState(draft);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sendError, setSendError] = useState("");
@@ -117,6 +121,7 @@ export function DispatchForm({
     const material = materials.find((row) => row.sku === code);
     if (!material) return;
     const item = {
+      key: crypto.randomUUID(),
       code: material.sku,
       materialId: material.id,
       description: material.name,
@@ -127,7 +132,11 @@ export function DispatchForm({
     const blank =
       draft.items.length === 1 &&
       !draft.items[0].description &&
-      !draft.items[0].code;
+      !draft.items[0].code &&
+      !draft.items[0].materialId &&
+      !draft.items[0].dimensions &&
+      draft.items[0].quantity === emptyLine.quantity &&
+      draft.items[0].unitCode === emptyLine.unitCode;
     patch("items", blank ? [item] : [...draft.items, item]);
   }
 
@@ -151,7 +160,10 @@ export function DispatchForm({
       );
       return;
     }
-    const parsed = dispatchSchema.safeParse(draft);
+    const parsed = dispatchSchema.safeParse({
+      ...draft,
+      items: draft.items.map(({ key, ...item }) => item),
+    });
     if (!parsed.success) {
       setError(
         "Revisa los datos de la guía y las cantidades de los materiales.",
@@ -289,7 +301,7 @@ export function DispatchForm({
             </div>
           )}
           {draft.items.map((item, index) => (
-            <div className="dispatch-item" key={index}>
+            <div className="dispatch-item" key={item.key}>
               <Field label="Código">
                 <input
                   maxLength={60}
@@ -333,8 +345,8 @@ export function DispatchForm({
                   }
                 />
               </Field>
-              <Button
-                variant="ghost"
+              <button
+                className="ops-icon-button dispatch-item-remove"
                 type="button"
                 aria-label={`Quitar material ${index + 1}`}
                 onClick={() =>
@@ -344,8 +356,8 @@ export function DispatchForm({
                   )
                 }
               >
-                <Trash2 size={16} />
-              </Button>
+                <Trash2 size={16} aria-hidden="true" />
+              </button>
               {item.materialId ? (
                 item.dimensions &&
                 item.dimensions.baseMm !== undefined &&
@@ -361,12 +373,10 @@ export function DispatchForm({
               ) : (
                 <details className="dispatch-item-dimensions">
                   <summary>Medidas de la pieza (opcional)</summary>
-                  <div className="dispatch-grid">
-                    <MaterialDimensionsFields
-                      dimensions={item.dimensions}
-                      onChange={(dimensions) => setLine(index, { dimensions })}
-                    />
-                  </div>
+                  <MaterialDimensionsFields
+                    dimensions={item.dimensions}
+                    onChange={(dimensions) => setLine(index, { dimensions })}
+                  />
                   {!validMaterialDimensions(item.dimensions) && (
                     <p className="hint">
                       Completa ambas medidas o déjalas vacías.
@@ -380,7 +390,12 @@ export function DispatchForm({
             variant="ghost"
             type="button"
             disabled={draft.items.length >= 50}
-            onClick={() => patch("items", [...draft.items, { ...emptyLine }])}
+            onClick={() =>
+              patch("items", [
+                ...draft.items,
+                { ...emptyLine, key: crypto.randomUUID() },
+              ])
+            }
           >
             <Plus size={16} /> Agregar material
           </Button>

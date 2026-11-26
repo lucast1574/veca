@@ -414,7 +414,8 @@ export function Inventory({
             ]}
           />
           <button
-            className="ops-icon-button"
+            type="button"
+            className="accounting-refresh"
             aria-label="Actualizar inventario"
             onClick={refresh}
           >

@@ -2,22 +2,24 @@ import {
   materialDimensionsSchema,
   type MaterialDimensions,
 } from "@veca/content";
-import type { ChangeEvent } from "react";
+import { useState } from "react";
 import { Field } from "../../components/ui";
+import { WarehouseSelect } from "./shared";
+import "./material-dimensions.css";
 
 export type DraftDimensions = Partial<MaterialDimensions>;
 const fields = [
-  ["baseMm", "Base (mm)"],
-  ["heightMm", "Altura (mm)"],
+  ["baseMm", "Base"],
+  ["heightMm", "Altura"],
+] as const;
+const units = [
+  { value: "mm", label: "Milímetros (mm)", millimeters: 1 },
+  { value: "cm", label: "Centímetros (cm)", millimeters: 10 },
+  { value: "m", label: "Metros (m)", millimeters: 1000 },
 ] as const;
 
-export function readMaterialDimensions(form: FormData) {
-  const base = String(form.get("baseMm") ?? "").trim();
-  const height = String(form.get("heightMm") ?? "").trim();
-  return base || height
-    ? { baseMm: Number(base), heightMm: Number(height) }
-    : undefined;
-}
+// Remove binary floating-point noise without rounding to the stored increment.
+const decimal = (value: number) => Number(value.toPrecision(15));
 
 export function validMaterialDimensions(dimensions?: DraftDimensions) {
   return (
@@ -31,33 +33,49 @@ export function MaterialDimensionsFields({
   onChange,
 }: {
   dimensions?: DraftDimensions;
-  onChange?: (value: DraftDimensions | undefined) => void;
+  onChange: (value: DraftDimensions | undefined) => void;
 }) {
-  return fields.map(([key, label]) => (
-    <Field label={label} key={key}>
-      <input
-        type="number"
-        min="0.001"
-        max="1000000"
-        step="0.001"
-        {...(onChange
-          ? {
-              value: dimensions?.[key] ?? "",
-              onChange: (event: ChangeEvent<HTMLInputElement>) => {
+  const [unit, setUnit] = useState<(typeof units)[number]>(units[0]);
+  const scale = unit.millimeters;
+  const increment = 0.001 / scale;
+  return (
+    <div className="material-dimensions-fields">
+      <WarehouseSelect
+        label="Unidad de las medidas"
+        value={unit.value}
+        options={units}
+        onChange={(value) => {
+          const selected = units.find((item) => item.value === value);
+          if (selected) setUnit(selected);
+        }}
+      />
+      {fields.map(([key, label]) => {
+        const measure = dimensions?.[key];
+        return (
+          <Field label={`${label} (${unit.value})`} key={key}>
+            <input
+              type="number"
+              min={increment}
+              max={1_000_000 / scale}
+              step={increment}
+              value={measure === undefined ? "" : decimal(measure / scale)}
+              onChange={(event) => {
                 const value = event.currentTarget.value;
                 const next = {
                   ...dimensions,
-                  [key]: value ? Number(value) : undefined,
+                  [key]:
+                    value === "" ? undefined : decimal(Number(value) * scale),
                 };
                 onChange(
                   next.baseMm === undefined && next.heightMm === undefined
                     ? undefined
                     : next,
                 );
-              },
-            }
-          : { name: key, defaultValue: dimensions?.[key] })}
-      />
-    </Field>
-  ));
+              }}
+            />
+          </Field>
+        );
+      })}
+    </div>
+  );
 }

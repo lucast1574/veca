@@ -176,7 +176,7 @@ export function WarehouseSelect({
   label: string;
   name?: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: readonly { value: string; label: string }[];
   onChange: (value: string) => void;
   placeholder?: string;
   required?: boolean;
