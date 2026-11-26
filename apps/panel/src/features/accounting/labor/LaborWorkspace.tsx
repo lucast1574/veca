@@ -1,11 +1,10 @@
 import {
   EmployeeAccountDialog,
   ApprovePayrollDeductionDialog,
-  incidentState,
 } from "./PersonnelDialogs";
 import "./personnel.css";
 import { useState } from "react";
-import { FileText, Plus, Users, Wallet } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   laborSourceKey,
   payrollLineCost,
@@ -16,7 +15,6 @@ import {
 import { Select } from "@veca/ui/src/Select";
 import { Button, Field, Notice } from "../../../components/ui";
 import {
-  amount,
   QueryState,
   Refresh,
   today,
@@ -32,10 +30,18 @@ import { LaborAllocationForm } from "./LaborAllocationForm";
 import {
   Metrics,
   payrollEffective,
+  PayrollDetail,
+  ReceiptDetail,
   PayrollRecords,
   ReceiptRecords,
   type Dialog,
 } from "./LaborRecords";
+import {
+  DiscountDetail,
+  DiscountRecords,
+  EmployeeDetail,
+  EmployeeRecords,
+} from "./PersonnelRecords";
 import { useLiveRefresh } from "../../operations/shared";
 import { laborPath } from "./labor-shared";
 import "./labor.css";
@@ -53,10 +59,10 @@ const months = Array.from({ length: 12 }, (_, index) => {
 });
 
 const sections = [
-  { id: "runs", label: "Planilla", Icon: Wallet },
-  { id: "receipts", label: "Honorarios", Icon: FileText },
-  { id: "employees", label: "Trabajadores", Icon: Users },
-  { id: "incidents", label: "Descuentos al personal", Icon: FileText },
+  { id: "runs", label: "Planilla" },
+  { id: "receipts", label: "Honorarios" },
+  { id: "employees", label: "Trabajadores" },
+  { id: "incidents", label: "Descuentos al personal" },
 ] as const;
 type Section = (typeof sections)[number]["id"];
 export function LaborWorkspace({
@@ -73,17 +79,18 @@ export function LaborWorkspace({
     const value = String(latestYear - index);
     return { value, label: value };
   });
+  const [selectedId, setSelectedId] = useState("");
   const [dialog, setDialog] = useState<Dialog>();
   const [feedback, setFeedback] = useState("");
   const query = useAccountingQuery<Ledger>(laborPath + "?period=" + period);
   useLiveRefresh(query.refresh, false, true, "/account/notifications/events");
   const data = query.data;
-  const pendingCount =
-    data?.incidents?.filter(
-      (incident) =>
-        !incident.payrollRunId &&
-        (incident.status === "authorized" || incident.status === "approved"),
-    ).length || 0;
+  const pendingDiscounts = (data?.incidents || []).filter(
+    (incident) =>
+      !incident.payrollRunId &&
+      (incident.status === "authorized" || incident.status === "approved"),
+  );
+  const pendingCount = pendingDiscounts.length;
   const allocations = new Map(
     data?.allocations.map((row) => [laborSourceKey(row.source), row]),
   );
@@ -128,26 +135,86 @@ export function LaborWorkspace({
     setDialog(next);
   };
   const runExists = data?.runs.some((run) => run.status !== "void");
+  function changeSection(next: Section) {
+    setSelectedId("");
+    setFeedback("");
+    setSection(next);
+  }
+
+  function changePeriod(next: string) {
+    setSelectedId("");
+    setFeedback("");
+    setPeriod(next);
+  }
+
+  const closeDetail = () => {
+    setSelectedId("");
+    setFeedback("");
+  };
+  const showDetail = (id: string) => {
+    setFeedback("");
+    setSelectedId(id);
+  };
+  const detailActions = {
+    allocation,
+    canWrite,
+    open,
+    close: closeDetail,
+    feedback,
+  };
+  const selectedRun =
+    section === "runs" && data?.runs.find((row) => row.id === selectedId);
+  const selectedReceipt =
+    section === "receipts" &&
+    data?.receipts.find((row) => row.id === selectedId);
+  const selectedEmployee =
+    section === "employees" &&
+    data?.employees.find((row) => row.id === selectedId);
+  const selectedDiscount =
+    section === "incidents" &&
+    data?.incidents?.find((row) => row.id === selectedId);
+  const sectionTitle = {
+    runs: "Planilla del mes",
+    receipts: "Recibos por honorarios",
+    employees: "Trabajadores registrados",
+    incidents: "Descuentos por incidencias de obra",
+  }[section];
   return (
     <section className="labor-workspace" aria-labelledby="labor-title">
       <header className="accounting-section-head">
-        <div>
-          <h2 id="labor-title">Planilla y honorarios</h2>
-          <p className="hint">
-            Calcula la planilla en API SUNAT, registra los recibos de
-            profesionales y reparte los costos entre las obras.
-          </p>
-        </div>
-        <div className="accounting-tools">
+        <h2 id="labor-title">Planilla y honorarios</h2>
+        <Refresh loading={query.loading} onClick={query.refresh} />
+      </header>
+      <nav className="labor-sections" aria-label="Registros de personal">
+        {sections.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={section === id}
+            aria-label={
+              id === "incidents" && pendingCount
+                ? `${label}, ${pendingCount} ${pendingCount === 1 ? "pendiente" : "pendientes"}`
+                : label
+            }
+            onClick={() => changeSection(id)}
+          >
+            {label}
+            {id === "incidents" && pendingCount > 0 && (
+              <span className="labor-pending-count" aria-hidden="true">
+                {pendingCount > 99 ? "99+" : pendingCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </nav>
+      {section !== "employees" && (
+        <div className="labor-period" role="group" aria-label="Periodo">
           <Field label="Mes">
             <Select
               label="Mes del periodo"
               value={month}
               options={months}
-              onChange={(next) => {
-                setFeedback("");
-                setPeriod(year + "-" + next);
-              }}
+              onChange={(next) => changePeriod(year + "-" + next)}
             />
           </Field>
           <Field label="Año">
@@ -155,236 +222,128 @@ export function LaborWorkspace({
               label="Año del periodo"
               value={year}
               options={years}
-              onChange={(next) => {
-                setFeedback("");
-                setPeriod(next + "-" + month);
-              }}
+              onChange={(next) => changePeriod(next + "-" + month)}
             />
           </Field>
-          <Refresh loading={query.loading} onClick={query.refresh} />
         </div>
-      </header>
-      {feedback && <Notice>{feedback}</Notice>}
+      )}
+      {!selectedId && feedback && <Notice>{feedback}</Notice>}
       <QueryState {...query}>
         {data && (
-          <>
-            <Metrics
-              entries={[
-                ["Costo de planilla", payroll],
-                ["Honorarios registrados", fees],
-                ["Asignado a obras", distributed],
-                ["Sin asignar", payroll + fees - distributed],
-              ]}
-            />
-            <section className="labor-ledger">
-              <div className="labor-toolbar">
-                <nav aria-label="Registros de personal">
-                  {sections.map(({ id, label, Icon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={section === id}
-                      aria-label={
-                        id === "incidents" && pendingCount
-                          ? `${label}, ${pendingCount} ${pendingCount === 1 ? "pendiente" : "pendientes"}`
-                          : label
-                      }
-                      onClick={() => setSection(id)}
-                    >
-                      <Icon size={17} aria-hidden="true" /> {label}
-                      {id === "incidents" && pendingCount > 0 && (
-                        <span
-                          className="labor-pending-count"
-                          aria-hidden="true"
-                        >
-                          {pendingCount > 99 ? "99+" : pendingCount}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </nav>
-                {section === "runs" && !runExists && (
-                  <Button
-                    disabled={!canWrite || !data.employees.length}
-                    onClick={() => open({ kind: "payroll" })}
-                  >
-                    <Plus size={16} /> Preparar planilla
-                  </Button>
-                )}
-                {section === "receipts" && (
-                  <Button
-                    disabled={!canWrite}
-                    onClick={() => open({ kind: "fee" })}
-                  >
-                    <Plus size={16} /> Nuevo recibo
-                  </Button>
-                )}
-
-                {section === "employees" && (
-                  <Button
-                    disabled={!canWrite}
-                    onClick={() => open({ kind: "employee" })}
-                  >
-                    <Plus size={16} /> Nuevo trabajador
-                  </Button>
-                )}
-              </div>
-              {section === "runs" && (
-                <PayrollRecords
-                  runs={data.runs}
-                  allocation={allocation}
-                  canWrite={canWrite}
-                  open={open}
-                  emptyWorkers={!data.employees.length}
-                  showEmployees={() => setSection("employees")}
-                />
+          <section
+            className="labor-ledger"
+            aria-labelledby="labor-section-title"
+          >
+            <header className="labor-toolbar">
+              <h3 id="labor-section-title">{sectionTitle}</h3>
+              {section === "runs" && !runExists && (
+                <Button
+                  disabled={!canWrite || !data.employees.length}
+                  onClick={() => open({ kind: "payroll" })}
+                >
+                  <Plus size={16} aria-hidden="true" /> Preparar planilla
+                </Button>
               )}
               {section === "receipts" && (
-                <ReceiptRecords
-                  receipts={data.receipts}
-                  allocation={allocation}
-                  canWrite={canWrite}
-                  open={open}
-                />
+                <Button
+                  disabled={!canWrite}
+                  onClick={() => open({ kind: "fee" })}
+                >
+                  <Plus size={16} aria-hidden="true" /> Registrar recibo
+                </Button>
               )}
-              {section === "incidents" && (
-                <div className="personnel-incidents">
-                  <p className="hint">
-                    Aprueba los descuentos sustentados del trabajador. Se
-                    reflejarán automáticamente en su planilla; la obra indica
-                    dónde ocurrió la incidencia.
-                  </p>
-                  {data.incidents?.length ? (
-                    data.incidents.map((i) => (
-                      <article key={i.id}>
-                        <header>
-                          <div>
-                            <strong>{i.employeeName}</strong>
-                            <small>
-                              {i.workName} · {i.item}
-                            </small>
-                          </div>
-                          <strong>{amount(i.cents)}</strong>
-                        </header>
-                        <p>{i.reason}</p>
-                        <footer>
-                          <span
-                            className="labor-status"
-                            data-state={
-                              i.status === "approved" || i.payrollRunId
-                                ? "approved"
-                                : "draft"
-                            }
-                          >
-                            {incidentState(i)}
-                          </span>
-                          <div className="personnel-actions">
-                            {!i.payrollRunId &&
-                              (i.status === "authorized" ||
-                                (i.status === "approved" &&
-                                  data.runs.some(
-                                    (run) =>
-                                      run.status === "draft" &&
-                                      run.lines.some(
-                                        (line) =>
-                                          line.employeeId === i.employeeId,
-                                      ),
-                                  ))) && (
-                                <Button
-                                  disabled={!canWrite}
-                                  onClick={() =>
-                                    open({
-                                      kind: "deductionApproval",
-                                      record: i,
-                                    })
-                                  }
-                                >
-                                  {i.status === "approved"
-                                    ? "Reintentar actualización"
-                                    : "Aprobar descuento"}
-                                </Button>
-                              )}
-                            <a
-                              className="warehouse-link"
-                              href={`#works/${i.workId}`}
-                            >
-                              Abrir obra
-                            </a>
-                          </div>
-                        </footer>
-                        {i.authorization && (
-                          <small>Sustento: {i.authorization.reference}</small>
-                        )}
-                      </article>
-                    ))
-                  ) : (
-                    <p className="accounting-empty">
-                      No hay incidencias de obra para este periodo.
-                    </p>
-                  )}
-                </div>
+
+              {section === "employees" && (
+                <Button
+                  disabled={!canWrite}
+                  onClick={() => open({ kind: "employee" })}
+                >
+                  <Plus size={16} aria-hidden="true" /> Registrar trabajador
+                </Button>
               )}
-              {section === "employees" &&
-                (data.employees.length ? (
-                  <ul className="labor-employees">
-                    {data.employees.map((employee) => (
-                      <li key={employee.id}>
-                        <div>
-                          <strong>{employee.name}</strong>
-                          <small>
-                            {employee.position ||
-                              data.regimes.find(
-                                (regime) =>
-                                  regime.code === employee.laborRegime,
-                              )?.label}
-                          </small>
-                          {employee.account?.userId && (
-                            <small>
-                              Cuenta VECA · {employee.account.userName}
-                            </small>
-                          )}
-                        </div>
-                        <strong>{amount(employee.salaryCents)}</strong>
-                        <span
-                          className="labor-status"
-                          data-state={employee.active ? "approved" : "draft"}
-                        >
-                          {employee.active ? "Activo" : "Inactivo"}
-                        </span>
-                        <div className="personnel-actions">
-                          <Button
-                            variant="ghost"
-                            disabled={!canWrite}
-                            onClick={() =>
-                              open({ kind: "account", record: employee })
-                            }
-                          >
-                            Cuenta VECA
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            disabled={!canWrite}
-                            aria-label={"Editar a " + employee.name}
-                            onClick={() =>
-                              open({ kind: "employee", record: employee })
-                            }
-                          >
-                            Editar
-                          </Button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="accounting-empty">
-                    Todavía no hay trabajadores. Registra a la primera persona
-                    para preparar una planilla.
-                  </p>
-                ))}
-            </section>
-          </>
+            </header>
+            {section === "runs" && (
+              <PayrollRecords
+                runs={data.runs}
+                onOpen={showDetail}
+                emptyWorkers={!data.employees.length}
+                showEmployees={() => changeSection("employees")}
+              />
+            )}
+            {section === "receipts" && (
+              <ReceiptRecords receipts={data.receipts} onOpen={showDetail} />
+            )}
+            {section === "incidents" && (
+              <DiscountRecords
+                incidents={data.incidents || []}
+                onOpen={showDetail}
+              />
+            )}
+            {section === "employees" && (
+              <EmployeeRecords employees={data.employees} onOpen={showDetail} />
+            )}
+          </section>
         )}
       </QueryState>
+      {data && (section === "runs" || section === "receipts") && (
+        <section
+          className="labor-summary"
+          aria-labelledby="labor-summary-title"
+        >
+          <header>
+            <h3 id="labor-summary-title">Costos del periodo</h3>
+            <a className="accounting-inline" href="#accounting/margen">
+              Ver margen por obra
+            </a>
+          </header>
+          <Metrics
+            entries={[
+              ["Planilla aprobada", payroll],
+              ["Honorarios registrados", fees],
+              ["Asignado a obras", distributed],
+              ["Sin asignar", payroll + fees - distributed],
+            ]}
+          />
+        </section>
+      )}
+      {selectedRun && (
+        <PayrollDetail
+          {...detailActions}
+          run={selectedRun}
+          hasPendingDiscounts={
+            Boolean(selectedRun.deductionPending) ||
+            pendingDiscounts.some(
+              (incident) =>
+                incident.period === selectedRun.period &&
+                selectedRun.lines.some(
+                  (line) => line.employeeId === incident.employeeId,
+                ),
+            )
+          }
+          reviewDiscounts={() => changeSection("incidents")}
+        />
+      )}
+      {selectedReceipt && (
+        <ReceiptDetail {...detailActions} receipt={selectedReceipt} />
+      )}
+      {selectedEmployee && (
+        <EmployeeDetail
+          {...detailActions}
+          employee={selectedEmployee}
+          regime={
+            data?.regimes.find(
+              (item) => item.code === selectedEmployee.laborRegime,
+            )?.label
+          }
+        />
+      )}
+      {data && selectedDiscount && (
+        <DiscountDetail
+          {...detailActions}
+          incident={selectedDiscount}
+          runs={data.runs}
+        />
+      )}
       {data && dialog?.kind === "account" && (
         <EmployeeAccountDialog
           employee={dialog.record}
@@ -453,12 +412,6 @@ export function LaborWorkspace({
           saved={saved}
         />
       )}
-      <a
-        className="accounting-inline labor-margin-link"
-        href="#accounting/margen"
-      >
-        Consultar margen por obra
-      </a>
     </section>
   );
 }

@@ -23,6 +23,8 @@ import {
   validate,
 } from "./labor-shared";
 
+import { laborPeriod } from "./LaborRecords";
+
 type FormActions = { close: () => void; saved: (message: string) => void };
 const choices = (labels: Record<string, string>) =>
   Object.entries(labels).map(([value, label]) => ({ value, label }));
@@ -48,7 +50,7 @@ export function EmployeeForm({
   return (
     <LaborForm
       title={employee ? "Editar trabajador" : "Nuevo trabajador"}
-      description="Los datos se guardan en API SUNAT y se usan al calcular la planilla."
+      description="Estos datos se usan para calcular la planilla."
       label="Guardar trabajador"
       onClose={close}
       onSaved={() => saved("Trabajador guardado.")}
@@ -253,11 +255,7 @@ export function PayrollForm({
     <LaborForm
       title={run ? "Editar planilla" : "Preparar planilla"}
       wide
-      description={
-        "Periodo " +
-        period +
-        ". Guarda el borrador para ver los importes calculados por API SUNAT."
-      }
+      description={`${laborPeriod(period)} · Agrega a los trabajadores y guarda el borrador para revisar los importes.`}
       label="Calcular y guardar borrador"
       validateForm={() => workers.length > 0}
       onClose={close}

@@ -1,4 +1,5 @@
-import { ChevronDown } from "lucide-react";
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import {
   payrollLineCost,
   type LaborAllocation,
@@ -8,9 +9,11 @@ import {
   type PayrollRun,
   type WorkPayrollIncident,
 } from "@veca/content";
-import { Button } from "../../../components/ui";
-import { amount } from "../accounting-shared";
+import { Modal } from "../../../components/Modal";
+import { Button, Notice } from "../../../components/ui";
+import { amount, displayDate } from "../accounting-shared";
 import type { AllocationTarget } from "./LaborAllocationForm";
+import "../accounting-records.css";
 
 export type Dialog =
   | { kind: "employee"; record?: LaborEmployee }
@@ -59,17 +62,89 @@ type RecordActions = {
   canWrite: boolean;
 };
 
+export function laborPeriod(period: string) {
+  return new Intl.DateTimeFormat("es-PE", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(period + "-01T12:00:00Z"));
+}
+
+export const payrollStatus = (run: PayrollRun) =>
+  run.status === "void" ? "Anulada" : statusLabels[run.status];
+
+export const receiptStatus = (receipt: LaborReceipt) =>
+  receipt.status === "registered"
+    ? receipt.balanceGrossCents > 0
+      ? "Por pagar"
+      : "Pagado"
+    : statusLabels[receipt.status];
+
+export function LaborStatus({
+  state,
+  children,
+}: {
+  state: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="accounting-record-status labor-status" data-state={state}>
+      {children}
+    </span>
+  );
+}
+
+export function LaborRow({
+  title,
+  subtitle,
+  total,
+  totalLabel,
+  state,
+  status,
+  onOpen,
+}: {
+  title: string;
+  subtitle: string;
+  total: number;
+  totalLabel?: string;
+  state: string;
+  status: string;
+  onOpen: () => void;
+}) {
+  return (
+    <li>
+      <div className="accounting-record-label">
+        <strong>{title}</strong>
+        {subtitle && <small>{subtitle}</small>}
+      </div>
+      <div className="accounting-record-meta">
+        <div className="accounting-record-amount invoice-row-amount">
+          <strong>{amount(total)}</strong>
+          {totalLabel && <small>{totalLabel}</small>}
+        </div>
+        <LaborStatus state={state}>{status}</LaborStatus>
+      </div>
+      <Button
+        variant="ghost"
+        aria-label={`Ver detalle de ${title}`}
+        onClick={onOpen}
+      >
+        Ver detalle <ChevronRight size={14} aria-hidden="true" />
+      </Button>
+    </li>
+  );
+}
+
 export function PayrollRecords({
   runs,
-  allocation,
-  canWrite,
-  open,
   emptyWorkers,
   showEmployees,
-}: RecordActions & {
+  onOpen,
+}: {
   runs: PayrollRun[];
   emptyWorkers: boolean;
   showEmployees: () => void;
+  onOpen: (id: string) => void;
 }) {
   if (!runs.length)
     return (
@@ -82,34 +157,124 @@ export function PayrollRecords({
         )}
       </div>
     );
-  return runs.map((run) => (
-    <details
-      className="labor-record"
-      key={run.id}
-      open={run.status !== "void" || undefined}
-    >
-      <summary>
-        <ChevronDown size={17} aria-hidden="true" />
-        <strong>Planilla {run.period}</strong>
-        <span className="labor-status" data-state={run.status}>
-          {run.status === "void" ? "Anulada" : statusLabels[run.status]}
-        </span>
-        <b>{amount(run.grossCents + run.employerEssaludCents)}</b>
-      </summary>
-      <div className="labor-record-body">
-        <Metrics
-          entries={[
-            ["Bruto", run.grossCents],
-            ["Descuentos", run.deductionCents],
-            ["Neto a pagar", run.netCents],
-            ["Aporte del empleador", run.employerEssaludCents],
-          ]}
+  return (
+    <ul className="accounting-record-list labor-record-list">
+      {runs.map((run) => (
+        <LaborRow
+          key={run.id}
+          title={`Planilla de ${laborPeriod(run.period)}`}
+          subtitle={`${run.lines.length} ${run.lines.length === 1 ? "trabajador" : "trabajadores"}`}
+          total={run.netCents}
+          totalLabel={
+            run.status === "paid" ? "Neto pagado" : "Neto de planilla"
+          }
+          state={run.status}
+          status={payrollStatus(run)}
+          onOpen={() => onOpen(run.id)}
         />
-        {run.paidAt && (
-          <p className="hint">
-            Pago registrado el {run.paidAt} · {run.paymentReference}
-          </p>
-        )}
+      ))}
+    </ul>
+  );
+}
+
+export function PayrollDetail({
+  run,
+  allocation,
+  canWrite,
+  open,
+  close,
+  hasPendingDiscounts,
+  reviewDiscounts,
+  feedback,
+}: RecordActions & {
+  run: PayrollRun;
+  close: () => void;
+  hasPendingDiscounts: boolean;
+  reviewDiscounts: () => void;
+  feedback: string;
+}) {
+  const actions = (
+    <>
+      {(run.status === "draft" || run.status === "approved") && (
+        <Button
+          variant="ghost"
+          disabled={!canWrite}
+          onClick={() => open({ kind: "state", status: "void", record: run })}
+        >
+          Anular planilla
+        </Button>
+      )}
+      {run.status === "draft" && (
+        <>
+          <Button
+            variant="ghost"
+            disabled={!canWrite}
+            onClick={() => open({ kind: "payroll", record: run })}
+          >
+            Editar borrador
+          </Button>
+          {hasPendingDiscounts ? (
+            <Button onClick={reviewDiscounts}>Revisar descuentos</Button>
+          ) : (
+            <Button
+              disabled={!canWrite}
+              onClick={() =>
+                open({ kind: "state", status: "approved", record: run })
+              }
+            >
+              Aprobar planilla
+            </Button>
+          )}
+        </>
+      )}
+      {run.status === "approved" && (
+        <Button
+          disabled={!canWrite}
+          onClick={() => open({ kind: "payment", record: run })}
+        >
+          Registrar pago
+        </Button>
+      )}
+      {run.status === "paid" || run.status === "void" ? (
+        <Button variant="ghost" onClick={close}>
+          Cerrar
+        </Button>
+      ) : null}
+    </>
+  );
+  return (
+    <LaborDetail
+      title="Detalle de planilla"
+      description={`Periodo de ${laborPeriod(run.period)}`}
+      close={close}
+      state={run.status}
+      status={payrollStatus(run)}
+      actions={actions}
+      feedback={feedback}
+    >
+      {run.status === "draft" && hasPendingDiscounts && (
+        <p className="notice labor-notice-pending" role="status">
+          Revisa los descuentos pendientes antes de aprobar la planilla.
+        </p>
+      )}
+      <Metrics
+        entries={[
+          [
+            run.status === "paid" ? "Neto pagado" : "Neto a pagar",
+            run.netCents,
+          ],
+          ["Sueldo bruto", run.grossCents],
+          ["Descuentos", run.deductionCents],
+          ["Aporte del empleador", run.employerEssaludCents],
+        ]}
+      />
+      {run.paidAt && (
+        <p className="hint">
+          Pago registrado el {displayDate(run.paidAt)} · {run.paymentReference}
+        </p>
+      )}
+      <section className="labor-detail-section">
+        <h3>Trabajadores en la planilla</h3>
         <ul className="labor-lines" aria-label="Trabajadores en la planilla">
           {run.lines.map((line) => {
             const source: LaborSource = {
@@ -177,166 +342,195 @@ export function PayrollRecords({
             );
           })}
         </ul>
-        {run.deductionPending && (
-          <p className="hint">
-            Hay una actualización pendiente de descuentos al personal. Revísala
-            desde su pestaña antes de aprobar esta planilla.
-          </p>
-        )}
-        <div className="labor-record-actions">
-          {run.status === "draft" && (
-            <>
-              <Button
-                variant="ghost"
-                disabled={!canWrite}
-                onClick={() => open({ kind: "payroll", record: run })}
-              >
-                Editar borrador
-              </Button>
-              <Button
-                disabled={!canWrite}
-                onClick={() =>
-                  open({ kind: "state", status: "approved", record: run })
-                }
-              >
-                Aprobar planilla
-              </Button>
-            </>
-          )}
-          {run.status === "approved" && (
-            <Button
-              disabled={!canWrite}
-              onClick={() => open({ kind: "payment", record: run })}
-            >
-              Registrar pago
-            </Button>
-          )}
-          {(run.status === "draft" || run.status === "approved") && (
-            <Button
-              variant="ghost"
-              disabled={!canWrite}
-              onClick={() =>
-                open({ kind: "state", status: "void", record: run })
-              }
-            >
-              Anular planilla
-            </Button>
-          )}
-        </div>
-      </div>
-    </details>
-  ));
+      </section>
+    </LaborDetail>
+  );
 }
 
 export function ReceiptRecords({
   receipts,
-  allocation,
-  canWrite,
-  open,
-}: RecordActions & { receipts: LaborReceipt[] }) {
+  onOpen,
+}: {
+  receipts: LaborReceipt[];
+  onOpen: (id: string) => void;
+}) {
   if (!receipts.length)
     return (
       <p className="accounting-empty">
         Todavía no hay recibos por honorarios para este periodo.
       </p>
     );
-  return receipts.map((receipt) => {
-    const source: LaborSource = { kind: "fee", id: receipt.id };
-    const registered = receipt.status === "registered";
-    return (
-      <details className="labor-record" key={receipt.id}>
-        <summary>
-          <ChevronDown size={17} aria-hidden="true" />
-          <span>
-            <strong>{receipt.professionalName}</strong>
-            <small>
-              {receiptLabel(receipt)} · {receipt.issueDate}
-            </small>
-          </span>
-          <span className="labor-status" data-state={receipt.status}>
-            {registered && !receipt.balanceGrossCents
-              ? "Pagado"
-              : statusLabels[receipt.status]}
-          </span>
-          <b>{amount(receipt.grossCents)}</b>
-        </summary>
-        <div className="labor-record-body">
-          <p>{receipt.service}</p>
-          {receipt.paymentTerms === "credit" && (
-            <p className="hint">Vencimiento {receipt.dueDate}</p>
-          )}
-          {receipt.notes && <p className="hint">{receipt.notes}</p>}
-          <Metrics
-            entries={[
-              ["Importe bruto", receipt.grossCents],
-              ["Saldo bruto", receipt.balanceGrossCents],
-              ["Pagado al profesional", receipt.paidCents],
-              ["Retenido al pagar", receipt.withheldPaidCents],
-            ]}
-          />
-          {receipt.payments.length > 0 && (
-            <ul className="labor-lines" aria-label="Pagos registrados">
-              {receipt.payments.map((payment) => (
-                <li key={payment.id}>
-                  <div>
-                    <strong>{payment.reference}</strong>
-                    <small>{payment.date}</small>
-                  </div>
-                  <div>
-                    <strong>{amount(payment.amountCents)}</strong>
-                    <small>Retención {amount(payment.withholdingCents)}</small>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="labor-record-actions">
-            {receipt.status === "draft" && (
-              <Button
-                disabled={!canWrite}
-                onClick={() => open({ kind: "fee", record: receipt })}
-              >
-                Editar o registrar
-              </Button>
-            )}
-            {registered && receipt.balanceGrossCents > 0 && (
-              <Button
-                disabled={!canWrite}
-                onClick={() => open({ kind: "payment", record: receipt })}
-              >
-                Registrar pago
-              </Button>
-            )}
-            {registered && (
-              <AllocationButton
-                target={{
-                  source,
-                  name:
-                    receiptLabel(receipt) + " · " + receipt.professionalName,
-                  cost: receipt.grossCents,
-                  revision: receipt.revision,
-                }}
-                allocation={allocation}
-                canWrite={canWrite}
-                open={open}
-              />
-            )}
-            {receipt.status !== "void" && !receipt.paidGrossCents && (
-              <Button
-                variant="ghost"
-                disabled={!canWrite}
-                onClick={() =>
-                  open({ kind: "state", status: "void", record: receipt })
-                }
-              >
-                Anular registro
-              </Button>
-            )}
-          </div>
-        </div>
-      </details>
-    );
-  });
+  return (
+    <ul className="accounting-record-list labor-record-list">
+      {receipts.map((receipt) => (
+        <LaborRow
+          key={receipt.id}
+          title={receipt.professionalName}
+          subtitle={`${receiptLabel(receipt)} · ${displayDate(receipt.issueDate)}`}
+          total={receipt.grossCents}
+          state={receiptState(receipt)}
+          status={receiptStatus(receipt)}
+          onOpen={() => onOpen(receipt.id)}
+        />
+      ))}
+    </ul>
+  );
+}
+
+const receiptState = (receipt: LaborReceipt) =>
+  receipt.status === "registered"
+    ? receipt.balanceGrossCents > 0
+      ? "pending"
+      : "paid"
+    : receipt.status;
+
+export function ReceiptDetail({
+  receipt,
+  allocation,
+  canWrite,
+  open,
+  close,
+  feedback,
+}: RecordActions & {
+  receipt: LaborReceipt;
+  close: () => void;
+  feedback: string;
+}) {
+  const source: LaborSource = { kind: "fee", id: receipt.id };
+  const registered = receipt.status === "registered";
+  const actions = (
+    <>
+      {receipt.status !== "void" && !receipt.paidGrossCents && (
+        <Button
+          variant="ghost"
+          disabled={!canWrite}
+          onClick={() =>
+            open({ kind: "state", status: "void", record: receipt })
+          }
+        >
+          Anular registro
+        </Button>
+      )}
+      {registered && (
+        <AllocationButton
+          target={{
+            source,
+            name: receiptLabel(receipt) + " · " + receipt.professionalName,
+            cost: receipt.grossCents,
+            revision: receipt.revision,
+          }}
+          allocation={allocation}
+          canWrite={canWrite}
+          open={open}
+        />
+      )}
+      {receipt.status === "draft" && (
+        <Button
+          disabled={!canWrite}
+          onClick={() => open({ kind: "fee", record: receipt })}
+        >
+          Editar borrador
+        </Button>
+      )}
+      {registered && receipt.balanceGrossCents > 0 && (
+        <Button
+          disabled={!canWrite}
+          onClick={() => open({ kind: "payment", record: receipt })}
+        >
+          Registrar pago
+        </Button>
+      )}
+      {receipt.status === "void" && (
+        <Button variant="ghost" onClick={close}>
+          Cerrar
+        </Button>
+      )}
+    </>
+  );
+  return (
+    <LaborDetail
+      title={receipt.professionalName}
+      description={`${receiptLabel(receipt)} · ${displayDate(receipt.issueDate)}`}
+      close={close}
+      state={receiptState(receipt)}
+      status={receiptStatus(receipt)}
+      actions={actions}
+      feedback={feedback}
+    >
+      <p>{receipt.service}</p>
+      {receipt.paymentTerms === "credit" && (
+        <p className="hint">Vence el {displayDate(receipt.dueDate)}</p>
+      )}
+      {receipt.notes && <p className="hint">{receipt.notes}</p>}
+      <Metrics
+        entries={[
+          ["Importe bruto", receipt.grossCents],
+          ["Saldo bruto", receipt.balanceGrossCents],
+          ["Pagado al profesional", receipt.paidCents],
+          ["Retenido al pagar", receipt.withheldPaidCents],
+        ]}
+      />
+      {receipt.payments.length > 0 && (
+        <section className="labor-detail-section">
+          <h3>Pagos registrados</h3>
+          <ul className="labor-lines" aria-label="Pagos registrados">
+            {receipt.payments.map((payment) => (
+              <li key={payment.id}>
+                <div>
+                  <strong>{payment.reference}</strong>
+                  <small>{displayDate(payment.date)}</small>
+                </div>
+                <div>
+                  <strong>{amount(payment.amountCents)}</strong>
+                  <small>Retención {amount(payment.withholdingCents)}</small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </LaborDetail>
+  );
+}
+
+export function LaborDetail({
+  title,
+  description,
+  close,
+  state,
+  status,
+  actions,
+  feedback,
+  children,
+}: {
+  title: string;
+  description?: string;
+  close: () => void;
+  state: string;
+  status: string;
+  actions: ReactNode;
+  feedback: string;
+  children: ReactNode;
+}) {
+  return (
+    <Modal
+      title={title}
+      description={description}
+      onClose={close}
+      className="labor-modal"
+      footer={
+        <footer className="ve-modal-actions labor-detail-actions">
+          {actions}
+        </footer>
+      }
+    >
+      <div className="labor-detail">
+        <LaborStatus state={state}>{status}</LaborStatus>
+        {feedback && <Notice>{feedback}</Notice>}
+        {children}
+      </div>
+    </Modal>
+  );
 }
 
 function AllocationButton({

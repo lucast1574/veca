@@ -198,22 +198,3 @@
     flex-wrap: wrap;
   }
 }
-
-.labor-lines .labor-line-detail {
-  grid-column: 1 / -1;
-  grid-row: 2;
-}
-.labor-lines li > .btn {
-  grid-column: 3;
-  grid-row: 1;
-}
-@media (max-width: 620px) {
-  .labor-lines li > .btn {
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
-}
-
-.labor-lines li {
-  grid-template-rows: auto auto;
-}

@@ -415,7 +415,10 @@ export const VincularCuenta: Story = {
       await page.findByRole("button", { name: /Trabajadores/ }),
     );
     await userEvent.click(
-      await page.findByRole("button", { name: "Cuenta VECA" }),
+      await page.findByRole("button", { name: /^Ver detalle de / }),
+    );
+    await userEvent.click(
+      await page.findByRole("button", { name: "Cambiar cuenta VECA" }),
     );
     await expect(
       page.findByRole("dialog", { name: "Vincular cuenta VECA" }),
@@ -465,6 +468,14 @@ export const IncorporarDescuento: Story = {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
       await page.findByRole("button", { name: /^Descuentos al personal/ }),
+    );
+    const row = (
+      await page.findByText("Pendiente de aprobación", { exact: true })
+    ).closest("li")!;
+    await userEvent.click(
+      within(row).getByRole("button", {
+        name: `Ver detalle de ${incident.employeeName}`,
+      }),
     );
     await userEvent.click(
       await page.findByRole("button", { name: "Aprobar descuento" }),

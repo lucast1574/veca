@@ -18,6 +18,8 @@ import {
   validate,
 } from "./labor-shared";
 
+import { laborPeriod } from "./LaborRecords";
+
 type Actions = { close: () => void; saved: (message: string) => void };
 type Withholding = Pick<
   LaborReceipt,
@@ -89,7 +91,7 @@ export function HonorariumForm({
       title={
         receipt ? "Editar recibo por honorarios" : "Nuevo recibo por honorarios"
       }
-      description="Registra el comprobante emitido por el profesional en SUNAT. Puedes preparar primero un borrador."
+      description="Usa la serie y el número del recibo emitido en SUNAT. Puedes guardar un borrador mientras los consigues."
       label="Registrar recibo"
       secondary="Guardar borrador"
       validateForm={(form, action) =>
@@ -249,10 +251,18 @@ export function LaborPaymentForm({
       title="Registrar pago realizado"
       description={
         fee
-          ? "Ingresa el importe bruto abonado, total o parcial. API SUNAT calcula la retención del pago."
-          : "Registra la fecha y la referencia del pago de la planilla."
+          ? record.professionalName
+          : `Planilla de ${laborPeriod(record.period)}`
       }
       label="Guardar pago"
+      validateForm={
+        fee
+          ? (form) => {
+              const value = money(form, "gross");
+              return value > 0 && value <= record.balanceGrossCents;
+            }
+          : undefined
+      }
       onClose={close}
       onSaved={() => saved("Pago registrado.")}
       onSave={(form) => {
@@ -279,29 +289,34 @@ export function LaborPaymentForm({
         );
       }}
     >
-      <Field label="Fecha de pago">
-        <input
-          type="date"
-          name="date"
-          min={fee ? record.issueDate : record.period + "-01"}
-          max={today()}
-          defaultValue={today()}
-          required
-        />
-      </Field>
-      <Field label="Referencia del pago">
-        <input
-          name="reference"
-          placeholder="Número de operación o constancia"
-          maxLength={180}
-          required
-        />
-      </Field>
+      <dl className="accounting-record-facts">
+        <div className="accounting-record-total">
+          <dt>{fee ? "Saldo bruto pendiente" : "Neto de la planilla"}</dt>
+          <dd>{amount(fee ? record.balanceGrossCents : record.netCents)}</dd>
+        </div>
+      </dl>
+      <div className="labor-grid">
+        <Field label="Fecha de pago">
+          <input
+            type="date"
+            name="date"
+            min={fee ? record.issueDate : record.period + "-01"}
+            max={today()}
+            defaultValue={today()}
+            required
+          />
+        </Field>
+        <Field label="Referencia del pago">
+          <input
+            name="reference"
+            placeholder="Número de operación o constancia"
+            maxLength={180}
+            required
+          />
+        </Field>
+      </div>
       {fee && (
         <>
-          <p className="hint">
-            Saldo bruto pendiente {amount(record.balanceGrossCents)}
-          </p>
           <MoneyField
             label="Importe bruto abonado (S/)"
             name="gross"
@@ -334,13 +349,18 @@ export function LaborStatusForm({
   return (
     <LaborForm
       title={title}
+      description={
+        fee
+          ? record.professionalName
+          : `Planilla de ${laborPeriod(record.period)}`
+      }
       label={approving ? "Aprobar" : "Confirmar anulación"}
       danger={!approving}
       onClose={close}
       onSaved={() =>
         saved(
           approving
-            ? "Planilla aprobada. Ya puedes repartir su costo."
+            ? "Planilla aprobada. Ya puedes registrar el pago."
             : "Registro anulado.",
         )
       }
@@ -357,7 +377,7 @@ export function LaborStatusForm({
     >
       <p>
         {approving
-          ? "La planilla quedará cerrada para edición y podrás asignar su costo a las obras."
+          ? "La planilla quedará cerrada para edición. Después podrás registrar el pago y asignar el costo a las obras."
           : fee
             ? "El registro dejará de sumar al costo por obra. Si corresponde anular el recibo oficial, el profesional debe gestionarlo en SUNAT."
             : "La planilla dejará de sumar al costo de personal del periodo y al margen de las obras."}
