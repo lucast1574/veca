@@ -204,6 +204,9 @@ function GuideReview({
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const mayIssue = useAccountingPermission("accounting_issue");
+  const hasWorks = useAccountingPermission("works");
+  const canManageWorks = useAccountingPermission("works_manage");
+  const canDispatch = useAccountingPermission("dispatches");
   const path = `${guidePath}/${id}`;
   const query = useAccountingQuery<GuideDetail>(path);
   const [updated, setUpdated] = useState<GuideDetail>();
@@ -259,12 +262,17 @@ function GuideReview({
     row &&
     !row.createdInAccounting &&
     ["review", "rejected"].includes(row.status);
-  const canIssue =
-    mayIssue &&
+  const awaitingIssue =
+    row && row.status === (row.createdInAccounting ? "draft" : "review");
+  const showIssue = mayIssue && awaitingIssue && !row.demo;
+  const needsData = Boolean(data?.issues.length);
+  const canIssue = showIssue && !needsData;
+  const needsOperations =
     row &&
-    row.status === (row.createdInAccounting ? "draft" : "review") &&
-    !row.demo &&
-    !data?.issues.length;
+    !row.createdInAccounting &&
+    ["draft", "returned"].includes(row.status);
+  const canOpenDispatch =
+    needsOperations && hasWorks && canManageWorks && canDispatch;
   const external = row?.transportMode === "01";
   const issued = row && ["accepted", "observed"].includes(row.status);
   const mayDiscard =
@@ -291,6 +299,21 @@ function GuideReview({
         footer={
           row && (
             <footer className="ve-modal-actions guide-detail-actions">
+              {awaitingIssue && !row.demo && !mayIssue && (
+                <p className="hint guide-action-hint">
+                  La guía debe enviarla alguien con permiso de emisión.
+                </p>
+              )}
+              {showIssue && needsData && (
+                <p className="hint guide-action-hint">
+                  Completa los datos señalados para emitir la guía.
+                </p>
+              )}
+              {canOpenDispatch && (
+                <a className="btn btn-ghost" href={`#works/${row.leadId}/work`}>
+                  Abrir despacho en la obra
+                </a>
+              )}
               {mayReturn && (
                 <Button
                   type="button"
@@ -317,10 +340,12 @@ function GuideReview({
                     : "Editar borrador"}
                 </Button>
               )}
-              {canIssue && (
+              {showIssue && (
                 <Button
                   type="button"
-                  disabled={busy || query.loading || Boolean(query.error)}
+                  disabled={
+                    !canIssue || busy || query.loading || Boolean(query.error)
+                  }
                   onClick={() => setConfirmIssue(true)}
                 >
                   {operation === "issue" ? "Enviando…" : "Emitir guía"}
@@ -358,7 +383,8 @@ function GuideReview({
               {!(
                 mayReturn ||
                 mayEdit ||
-                canIssue ||
+                showIssue ||
+                canOpenDispatch ||
                 (mayIssue && row.canCheckStatus) ||
                 row.status === "sending" ||
                 issued
@@ -383,6 +409,12 @@ function GuideReview({
                 </span>
               </div>
               {error && !returning && <Notice error>{error}</Notice>}
+              {needsOperations && (
+                <Notice>
+                  Operaciones debe abrir el despacho y enviarlo a Contabilidad
+                  para revisión.
+                </Notice>
+              )}
               {row.demo && (
                 <Notice>
                   Despacho de demostración. La emisión está deshabilitada.
@@ -402,13 +434,15 @@ function GuideReview({
                     : "El envío sigue sin confirmarse. Verifica si la guía figura en SUNAT antes de preparar otra."}
                 </p>
               )}
-              {(mayReturn || mayEdit) && data.issues.length > 0 && (
+              {(mayReturn || awaitingIssue) && needsData && (
                 <div className="dispatch-card dispatch-issues">
                   <h3>Datos por completar</h3>
                   <p className="hint">
                     {mayEdit
                       ? "Abre el borrador para corregirlos."
-                      : "Devuelve la guía a Operaciones con lo que falta."}
+                      : mayReturn
+                        ? "Devuelve la guía a Operaciones con lo que falta."
+                        : "Pide al equipo responsable que complete los datos."}
                   </p>
                   <ul>
                     {data.issues.map((issue) => (
