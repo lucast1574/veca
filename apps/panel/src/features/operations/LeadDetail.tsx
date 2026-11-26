@@ -1,5 +1,9 @@
 import { WorkPayrollIncidents } from "../works/WorkPayrollIncidents";
-import { LeadDocuments } from "./LeadDocuments";
+import {
+  isWorkDocument,
+  LeadDocumentFiles,
+  LeadDocuments,
+} from "./LeadDocuments";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import {
   useCallback,
@@ -334,6 +338,8 @@ export function LeadDetail({
       </main>
     );
   const lead = data.lead;
+  const workDocuments = data.attachments.filter(isWorkDocument);
+  const otherFiles = data.attachments.filter((file) => !isWorkDocument(file));
   const index = phases.indexOf(lead.stage);
   const nextStage = (
     lead.stage === "discarded" ? "prelead" : phases[index + 1]
@@ -579,13 +585,16 @@ export function LeadDetail({
               (p) => p === "works_all" || p === "works_manage",
             )
           }
-          saved={async () => {
+          onShowFiles={() => setTab("files")}
+          saved={async (type) => {
             const next = await api<LeadDetailData>(detailPath);
             setData((old) =>
               old ? { ...old, attachments: next.attachments } : old,
             );
             setNotice(
-              "Documento guardado. El presupuesto usa la última cotización.",
+              type === "plan"
+                ? "Plano guardado en Archivos."
+                : "Cotización guardada en Archivos.",
             );
           }}
         />
@@ -845,6 +854,7 @@ export function LeadDetail({
           </form>
         </Modal>
       )}
+      {tab === "files" && <LeadDocumentFiles documents={workDocuments} />}
       {tab === "files" && (
         <section className="ops-card">
           {demoCase && (
@@ -857,7 +867,6 @@ export function LeadDetail({
               <h2>Fotos de obra y contratos</h2>
               <p className="hint">
                 Archivos privados. Añadirlos aquí no los publica en la landing.
-                Los planos y cotizaciones se adjuntan desde Resumen.
               </p>
             </div>
             {(!readOnly || canReport) && (
@@ -895,7 +904,7 @@ export function LeadDetail({
             }}
           />
           <div className="ops-files">
-            {data.attachments.map((a) => (
+            {otherFiles.map((a) => (
               <a
                 key={a.id}
                 href={API_BASE + a.url}
@@ -907,13 +916,7 @@ export function LeadDetail({
                 ) : (
                   <div className="ops-pdf">
                     <FileText size={36} />
-                    <span>
-                      {a.type === "plan"
-                        ? "Plano"
-                        : a.type === "quotation"
-                          ? "Cotización"
-                          : "Contrato PDF"}
-                    </span>
+                    <span>Contrato PDF</span>
                   </div>
                 )}
                 <strong>{a.caption || a.name}</strong>
@@ -929,7 +932,7 @@ export function LeadDetail({
               </a>
             ))}
           </div>
-          {!data.attachments.length && (
+          {!otherFiles.length && (
             <p className="ops-empty-small">
               Documenta el antes, el avance y el resultado de la obra. También
               puedes añadir contratos PDF.

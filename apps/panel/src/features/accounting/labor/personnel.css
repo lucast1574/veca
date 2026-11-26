@@ -71,6 +71,9 @@
 .personnel-work {
   margin-top: 24px;
 }
+.personnel-work > .lead-detail-section-head {
+  margin-bottom: 16px;
+}
 .personnel-work h2 {
   display: flex;
   align-items: center;

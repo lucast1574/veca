@@ -14,18 +14,73 @@ import { date } from "./shared";
 import "./lead-documents.css";
 
 type Purpose = "plan" | "quotation";
+export const isWorkDocument = (file: LeadAttachment) =>
+  file.type === "plan" || file.type === "quotation";
+
+export function LeadDocumentFiles({
+  documents,
+}: {
+  documents: LeadAttachment[];
+}) {
+  if (!documents.length) return null;
+  const latestPlan = documents.find((file) => file.type === "plan")?.id;
+  const latestQuotation = documents.find(
+    (file) => file.type === "quotation",
+  )?.id;
+  return (
+    <section
+      className="ops-card lead-documents"
+      aria-labelledby="lead-document-files-title"
+    >
+      <div className="ops-card-heading">
+        <h2 id="lead-document-files-title">Planos y cotizaciones</h2>
+      </div>
+      <ul className="lead-document-file-list">
+        {documents.map((file) => {
+          const isPlan = file.type === "plan";
+          const isLatest = file.id === (isPlan ? latestPlan : latestQuotation);
+          const Icon = isPlan ? Ruler : FileText;
+          return (
+            <li key={file.id}>
+              <Icon size={20} aria-hidden="true" />
+              <div>
+                <strong>{file.name}</strong>
+                <small>
+                  {isPlan ? "Plano" : "Cotización"} · {date(file.createdAt)}
+                  {isLatest && " · Última versión"}
+                </small>
+              </div>
+              <a
+                className="warehouse-link"
+                href={API_BASE + file.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Descargar ${file.name}`}
+              >
+                <Download size={15} aria-hidden="true" /> Descargar
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 export function LeadDocuments({
   attachments,
   path,
   canUpload,
   canReadQuotation,
+  onShowFiles,
   saved,
 }: {
   attachments: LeadAttachment[];
   path: string;
   canUpload: boolean;
   canReadQuotation: boolean;
-  saved: () => Promise<void>;
+  onShowFiles: () => void;
+  saved: (type: Purpose) => Promise<void>;
 }) {
   const [purpose, setPurpose] = useState<Purpose>();
   return (
@@ -33,11 +88,20 @@ export function LeadDocuments({
       className="ops-card lead-documents"
       aria-labelledby="lead-documents-title"
     >
-      <header>
+      <header className="lead-documents-header">
         <div>
           <h2 id="lead-documents-title">Documentos de la obra</h2>
-          <p>La última versión, disponible desde esta misma ficha.</p>
+          <p>Última versión de cada documento.</p>
         </div>
+        {attachments.some(
+          (file) =>
+            file.type === "plan" ||
+            (canReadQuotation && file.type === "quotation"),
+        ) && (
+          <Button type="button" variant="ghost" onClick={onShowFiles}>
+            Ver en Archivos
+          </Button>
+        )}
       </header>
       <div className="lead-document-grid">
         {(
@@ -106,7 +170,7 @@ export function LeadDocuments({
           path={path}
           close={() => setPurpose(undefined)}
           done={async () => {
-            await saved();
+            await saved(purpose);
             setPurpose(undefined);
           }}
         />
