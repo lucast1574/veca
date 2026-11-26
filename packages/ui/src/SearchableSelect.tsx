@@ -14,22 +14,32 @@ export function SearchableSelect({
   id,
   label,
   value,
+  selectedLabel,
   options,
   placeholder,
   onChange,
+  search,
   floating = true,
 }: {
   id: string;
   label: string;
   value: string;
+  selectedLabel?: string;
   options: readonly SelectOption[];
   placeholder: string;
   onChange: (value: string) => void;
+  search?: {
+    onChange: (query: string) => void;
+    loading: boolean;
+    empty: string;
+    error?: string;
+  };
   floating?: boolean;
 }) {
   const uid = useId();
   const listId = uid + "-options";
-  const selected = options.find((option) => option.value === value);
+  const currentLabel =
+    selectedLabel ?? options.find((option) => option.value === value)?.label;
   const root = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -37,9 +47,13 @@ export function SearchableSelect({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const needle = normalized(query);
-  const matches = needle
-    ? options.filter((option) => normalized(option.label).includes(needle))
-    : options;
+  const matches = search
+    ? search.loading || search.error
+      ? []
+      : options
+    : needle
+      ? options.filter((option) => normalized(option.label).includes(needle))
+      : options;
 
   useFloatingMenu(open, floating, input, menu);
 
@@ -62,6 +76,7 @@ export function SearchableSelect({
   function show() {
     if (open) return;
     setQuery("");
+    search?.onChange("");
     setActive(
       Math.max(
         options.findIndex((option) => option.value === value),
@@ -93,13 +108,15 @@ export function SearchableSelect({
         autoComplete="off"
         autoCapitalize="none"
         spellCheck={false}
-        value={open ? query : (selected?.label ?? "")}
-        placeholder={selected?.label ?? placeholder}
+        maxLength={search ? 100 : undefined}
+        value={open ? query : (currentLabel ?? "")}
+        placeholder={open ? placeholder : (currentLabel ?? placeholder)}
         onFocus={show}
         onClick={show}
         onBlur={() => setOpen(false)}
         onChange={(event) => {
           setQuery(event.currentTarget.value);
+          search?.onChange(event.currentTarget.value);
           setActive(0);
           setOpen(true);
         }}
@@ -124,6 +141,18 @@ export function SearchableSelect({
           }
         }}
       />
+      <svg
+        className="veca-select-search-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="11" cy="11" r="6.5" />
+        <path d="m16 16 4 4" />
+      </svg>
       <svg
         className="veca-select-search-chevron"
         viewBox="0 0 24 24"
@@ -153,13 +182,19 @@ export function SearchableSelect({
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => choose(option)}
               >
-                <strong>{option.label}</strong>
+                <span>
+                  <strong>{option.label}</strong>
+                  {option.description && <small>{option.description}</small>}
+                </span>
               </div>
             ))}
           </div>
           {!matches.length && (
             <p className="veca-select-empty" role="status">
-              Sin coincidencias
+              {search?.error ||
+                (search?.loading
+                  ? "Buscando…"
+                  : search?.empty || "Sin coincidencias")}
             </p>
           )}
         </div>

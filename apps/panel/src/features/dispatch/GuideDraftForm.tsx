@@ -1,11 +1,11 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type {
   Dispatch,
   DispatchInput,
   GuideWork,
   Material,
 } from "@veca/content";
-import { Select } from "@veca/ui/src/Select";
+import { SearchableSelect } from "@veca/ui/src/SearchableSelect";
 import { Modal } from "../../components/Modal";
 import { Button, Field } from "../../components/ui";
 import {
@@ -54,15 +54,19 @@ export function NewGuide({
   const selectorId = useId();
   const [id] = useState(recordId);
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState("");
+  const [requested, setRequested] = useState("");
+  const [selected, setSelected] = useState<GuideWork>();
   const [work, setWork] = useState<GuideWork>();
+  const term = search.trim();
+  useEffect(() => {
+    const timer = setTimeout(() => setRequested(term), 250);
+    return () => clearTimeout(timer);
+  }, [term]);
   const query = useAccountingQuery<GuideWork[]>(
-    work
-      ? ""
-      : `${guidePath}/works?search=${encodeURIComponent(search.trim())}`,
+    work ? "" : `${guidePath}/works?search=${encodeURIComponent(requested)}`,
   );
   const works = query.data ?? [];
-  const selected = works.find((item) => item.id === selectedId);
+  const loading = query.loading || term !== requested;
   if (work)
     return (
       <GuideDraftForm
@@ -92,7 +96,7 @@ export function NewGuide({
           </Button>
           <Button
             type="button"
-            disabled={!selected || query.loading}
+            disabled={!selected}
             onClick={() => setWork(selected)}
           >
             Continuar
@@ -101,42 +105,30 @@ export function NewGuide({
       }
     >
       <div className="dispatch-stack">
-        <Field label="Buscar obra" hint="Busca por nombre o distrito.">
-          <input
-            type="search"
-            maxLength={100}
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setSelectedId("");
+        <Field label="Obra" htmlFor={selectorId}>
+          <SearchableSelect
+            id={selectorId}
+            label="Obra"
+            placeholder="Busca por nombre o distrito"
+            value={selected?.id ?? ""}
+            selectedLabel={selected?.name}
+            options={works.map(({ id, name, district }) => ({
+              value: id,
+              label: name,
+              description: district,
+            }))}
+            onChange={(id) => setSelected(works.find((item) => item.id === id))}
+            search={{
+              onChange: setSearch,
+              loading,
+              error: loading ? undefined : query.error,
+              empty: term
+                ? "No encontramos obras con esa búsqueda."
+                : "No hay obras en coordinación o ejecución.",
             }}
           />
         </Field>
-        <QueryState
-          {...query}
-          empty={
-            search.trim()
-              ? "No encontramos obras con esa búsqueda."
-              : "No hay obras en coordinación o ejecución."
-          }
-        >
-          {works.length > 0 && (
-            <Field label="Obra" htmlFor={selectorId}>
-              <Select
-                id={selectorId}
-                label="Obra"
-                value={selectedId}
-                disabled={query.loading}
-                options={works.map(({ id, name, district }) => ({
-                  value: id,
-                  label: name,
-                  description: district,
-                }))}
-                onChange={setSelectedId}
-              />
-            </Field>
-          )}
-        </QueryState>
+        {query.error && !loading && <QueryState {...query} />}
       </div>
     </Modal>
   );
