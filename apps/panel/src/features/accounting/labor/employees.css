@@ -26,11 +26,11 @@
   box-shadow: none;
 }
 .employee-grid-table {
-  --employee-divider: color-mix(
-    in srgb,
-    var(--panel-ink) 16%,
-    var(--panel-edge)
-  );
+  --employee-header: #dfebf8;
+  --employee-row: #edf5fd;
+  --employee-row-alt: #f6faff;
+  --employee-divider: #c7d8ea;
+  --employee-header-ink: #304c6a;
   border: 1px solid var(--employee-divider);
   border-radius: 12px;
   overflow: hidden;
@@ -45,11 +45,13 @@
   padding: 14px 16px;
 }
 .employee-grid-table thead {
-  background: var(--panel-raised);
-  color: var(--panel-ink);
+  background: var(--employee-header);
+  color: var(--employee-header-ink);
+  border-bottom: 1px solid var(--employee-divider);
 }
 .employee-grid-table thead th {
-  padding-block: 8px;
+  height: 44px;
+  padding-block: 5px;
   font-size: 12px;
   font-weight: 750;
 }
@@ -68,22 +70,24 @@
 }
 .employee-grid-table thead button:is(:hover, :focus-visible) {
   outline: none;
-  color: var(--panel-accent);
+  color: var(--panel-ink);
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 .employee-grid-table thead button svg {
   flex-shrink: 0;
 }
-.employee-grid-table tbody {
-  background: var(--panel-surface);
+.employee-grid-table:not(.payroll-table) tbody > tr,
+.payroll-table tbody {
+  background: var(--employee-row);
+}
+.employee-grid-table:not(.payroll-table) tbody > tr:nth-child(even),
+.payroll-table tbody:nth-of-type(even) {
+  background: var(--employee-row-alt);
 }
 .employee-grid-table tbody tr + tr,
 .payroll-table tbody + tbody {
   border-top: 1px solid var(--employee-divider);
-}
-.employee-grid-table th[scope="row"] {
-  background: var(--panel-brand-surface);
 }
 .employee-grid-person {
   display: grid;
@@ -164,8 +168,8 @@
 .payroll-table-mobile {
   display: none;
 }
-.payroll-table-breakdown td {
-  background: var(--panel-soft);
+.payroll-table .payroll-table-breakdown td {
+  background: var(--employee-row-alt);
 }
 .payroll-table-breakdown dl {
   max-width: 32rem;
