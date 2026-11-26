@@ -1,5 +1,5 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
-import type { DispatchInput } from "@veca/content";
+import { guideItemDescription, type DispatchInput } from "@veca/content";
 import { config } from "../common/config";
 import { fiscalIssuerRuc, fiscalLiveKey } from "../common/fiscal-config";
 
@@ -100,9 +100,13 @@ export class GuideProvider {
                 driverLicense: data.driverLicense.toUpperCase(),
               }),
           weightKg: data.weightKg,
-          items: data.items.map(({ materialId, ...item }) => ({
+          items: data.items.map(({ materialId, dimensions, ...item }) => ({
             ...item,
             code: item.code || undefined,
+            description: guideItemDescription({
+              description: item.description,
+              dimensions,
+            }),
           })),
         }),
       }),

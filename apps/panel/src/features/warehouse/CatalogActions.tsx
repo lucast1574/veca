@@ -3,6 +3,7 @@ import { Download, FileUp } from "lucide-react";
 import {
   MATERIAL_CATEGORIES,
   MATERIAL_UNITS,
+  formatMaterialDimensions,
   materialSchema,
   type Material,
 } from "@veca/content";
@@ -19,6 +20,8 @@ const header = [
   "ubicacion",
   "descripcion",
   "minimo",
+  "base_mm",
+  "altura_mm",
 ];
 const template = header.join(",") + "\r\n";
 const normalize = (value: string) =>
@@ -77,6 +80,8 @@ async function readCatalog(file: File) {
         normalize(value.name) === normalize(get("unidad")) ||
         value.id === normalize(get("unidad")),
     );
+    const base = get("base_mm");
+    const height = get("altura_mm");
     const parsed = materialSchema.safeParse({
       sku: get("codigo"),
       name: get("nombre"),
@@ -85,10 +90,18 @@ async function readCatalog(file: File) {
       location: get("ubicacion"),
       description: get("descripcion"),
       minimum: Number(get("minimo").replace(",", ".")),
+      ...(base || height
+        ? {
+            dimensions: {
+              baseMm: Number(base.replace(",", ".")),
+              heightMm: Number(height.replace(",", ".")),
+            },
+          }
+        : {}),
     });
     if (!parsed.success) {
       issues.push(
-        `Fila ${index + 2}. Revisa el nombre, código, familia, unidad y mínimo.`,
+        `Fila ${index + 2}. Revisa los datos. Si indicas medidas, completa base_mm y altura_mm con valores positivos.`,
       );
       return [];
     }
@@ -216,6 +229,10 @@ export function CatalogImport({
             cero.
           </li>
           <li>
+            Para indicar medidas, completa las columnas opcionales{" "}
+            <strong>base_mm</strong> y <strong>altura_mm</strong>.
+          </li>
+          <li>
             Elige una familia y unidad de las listas de Excel. Usa un código
             único por material y mínimos positivos o cero, con hasta tres
             decimales.
@@ -268,17 +285,25 @@ export function CatalogImport({
               const changes = previous
                 ? fields.filter(([key]) => previous[key] !== row[key])
                 : [];
+              const measure =
+                row.dimensions && formatMaterialDimensions(row.dimensions);
+              const previousMeasure =
+                previous?.dimensions &&
+                formatMaterialDimensions(previous.dimensions);
+              const changedMeasure = Boolean(
+                previous && measure && measure !== previousMeasure,
+              );
               return (
                 <li key={row.sku}>
                   <strong>
                     {row.sku} · {row.name}
                   </strong>{" "}
                   {previous
-                    ? changes.length
+                    ? changes.length || changedMeasure
                       ? "Actualizar"
                       : "Sin cambios de datos"
                     : "Crear"}
-                  {previous && changes.length > 0 && (
+                  {previous && (changes.length > 0 || changedMeasure) && (
                     <ul>
                       {changes.map(([key, label]) => (
                         <li key={key}>
@@ -289,6 +314,12 @@ export function CatalogImport({
                           → {String(row[key] === "" ? "Sin valor" : row[key])}
                         </li>
                       ))}
+                      {changedMeasure && (
+                        <li>
+                          Medidas · {previousMeasure || "Sin medidas"} →{" "}
+                          {measure}
+                        </li>
+                      )}
                     </ul>
                   )}
                   {!previous && (
@@ -296,6 +327,7 @@ export function CatalogImport({
                       {row.category} · {unitName(row.unit)} · Mínimo{" "}
                       {amount(row.minimum)}
                       {row.location && ` · ${row.location}`}
+                      {measure && ` · ${measure}`}
                     </p>
                   )}
                 </li>

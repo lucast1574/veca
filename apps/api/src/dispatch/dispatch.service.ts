@@ -15,6 +15,8 @@ import { z } from "zod";
 import { ObjectId } from "mongodb";
 import {
   dispatchSchema,
+  GUIDE_ITEM_DESCRIPTION_LIMIT,
+  guideItemDescription,
   guideUnitForMaterial,
   quantitySchema,
   isDemoLead,
@@ -108,6 +110,15 @@ export function guideIssues(data: DispatchInput): string[] {
     data.items.some((item) => !item.description || item.quantity <= 0)
   )
     issues.push("Completa los materiales y sus cantidades.");
+  if (
+    data.items.some(
+      (item) =>
+        guideItemDescription(item).length > GUIDE_ITEM_DESCRIPTION_LIMIT,
+    )
+  )
+    issues.push(
+      "Acorta las descripciones de los materiales para que incluyan sus medidas.",
+    );
   if (!data.startAddress || !data.arrivalAddress)
     issues.push("Completa las direcciones de origen y destino.");
   if (!/^\d{6}$/.test(data.startUbigeo) || !/^\d{6}$/.test(data.arrivalUbigeo))
@@ -539,6 +550,47 @@ export class DispatchService {
       this.createRecord(leadId, data, actor, accountingId, id),
     );
   }
+
+  private async withItemDimensions(
+    data: DispatchInput,
+    previous: DispatchInput["items"] = [],
+  ) {
+    const ids = [
+      ...new Set(
+        data.items.flatMap(({ materialId }) =>
+          materialId ? [materialId.toLowerCase()] : [],
+        ),
+      ),
+    ];
+    if (!ids.length) return data;
+    const snapshots = new Map(
+      previous.flatMap(({ materialId, dimensions }) =>
+        materialId && dimensions
+          ? [[materialId.toLowerCase(), dimensions] as const]
+          : [],
+      ),
+    );
+    const materials = await this.inventory.materials
+      .find(
+        { _id: { $in: ids.filter((id) => !snapshots.has(id)).map(idOf) } },
+        { projection: { dimensions: 1 } },
+      )
+      .toArray();
+    for (const material of materials) {
+      if (material.dimensions)
+        snapshots.set(String(material._id), material.dimensions);
+    }
+    return {
+      ...data,
+      items: data.items.map((item) => {
+        if (!item.materialId) return item;
+        const { dimensions, ...line } = item;
+        const snapshot = snapshots.get(item.materialId.toLowerCase());
+        return snapshot ? { ...line, dimensions: snapshot } : line;
+      }),
+    };
+  }
+
   private async createRecord(
     leadId: string,
     input: unknown,
@@ -564,7 +616,7 @@ export class DispatchService {
         : {}),
       leadId: lead._id.toHexString(),
       workName: lead.workName || lead.name,
-      data,
+      data: await this.withItemDimensions(data),
       demo,
       status: "draft",
       version: 1,
@@ -611,7 +663,10 @@ export class DispatchService {
     const doc = await this.get(id);
     if (!doc.accountingCreationHash)
       throw new NotFoundException("Borrador de Contabilidad no encontrado.");
-    const data = parse(dispatchSchema, input);
+    const data = await this.withItemDimensions(
+      parse(dispatchSchema, input),
+      doc.data.items,
+    );
     const dispatch = await this.change(
       doc,
       version,
@@ -644,7 +699,10 @@ export class DispatchService {
     actor: string,
   ) {
     const doc = await this.operationsDraft(leadId, id);
-    const data = parse(dispatchSchema, input);
+    const data = await this.withItemDimensions(
+      parse(dispatchSchema, input),
+      doc.data.items,
+    );
     return this.change(doc, version, editable, { data }, actor, "edit");
   }
 

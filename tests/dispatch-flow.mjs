@@ -142,6 +142,25 @@ try {
       password: "Local-only-visual-test-2026!",
     })
   ).csrf;
+  const dimensions = { baseMm: 1200, heightMm: 850 };
+  const material = await request("/admin/crm/materials", 201, "POST", {
+    sku: "DIM-GUIA-QA",
+    name: "Paño de vidrio",
+    unit: "unit",
+    category: "Vidrio",
+    location: "",
+    description: "",
+    minimum: 0,
+    dimensions,
+  });
+  assert.deepEqual(material.dimensions, dimensions);
+  const dimensionedLine = {
+    code: material.sku,
+    description: material.name,
+    unitCode: "NIU",
+    quantity: 3,
+    materialId: material.id,
+  };
   const inventoryBefore = await db
     .collection("inventory_movements")
     .countDocuments();
@@ -224,6 +243,13 @@ try {
       data: {
         ...ownTransport,
         arrivalAddress: "Obra de prueba desde Contabilidad",
+        items: [
+          ...ownTransport.items,
+          {
+            ...dimensionedLine,
+            dimensions: { baseMm: 1, heightMm: 1 },
+          },
+        ],
       },
     };
     const completed = await request(
@@ -233,8 +259,52 @@ try {
       changeDraft,
     );
     assert.deepEqual(completed.issues, []);
+    assert.deepEqual(completed.dispatch.items[1].dimensions, dimensions);
+    assert.equal(completed.dispatch.items[1].quantity, 3);
     await request(`${fiscal}/${draft.id}`, 409, "PUT", changeDraft);
-    accountingDraft = completed.dispatch;
+    await users.updateOne({ _id: admin._id }, { $set: { role: admin.role } });
+    const editedMaterial = await request(
+      `/admin/warehouse/materials/${material.id}/dimensions`,
+      200,
+      "PUT",
+      {
+        version: material.version,
+        dimensions: { ...dimensions, heightMm: 900 },
+      },
+    );
+    assert.equal(editedMaterial.unit, "unit");
+    assert.equal(editedMaterial.balance, material.balance);
+    await request(
+      `/admin/warehouse/materials/${material.id}/dimensions`,
+      409,
+      "PUT",
+      { version: material.version, dimensions },
+    );
+    await users.updateOne({ _id: admin._id }, { $set: { role: "accounting" } });
+    const resaved = await request(`${fiscal}/${draft.id}`, 200, "PUT", {
+      ...changeDraft,
+      version: completed.dispatch.version,
+    });
+    assert.deepEqual(resaved.dispatch.items[1].dimensions, dimensions);
+    const tooLong = await request(`${fiscal}/${draft.id}`, 200, "PUT", {
+      version: resaved.dispatch.version,
+      data: {
+        ...changeDraft.data,
+        items: [
+          ownTransport.items[0],
+          { ...dimensionedLine, description: "A".repeat(250) },
+        ],
+      },
+    });
+    assert.match(tooLong.issues.join(" "), /descripciones.*medidas/);
+    await request(`${fiscal}/${draft.id}/issue`, 400, "POST", {
+      version: tooLong.dispatch.version,
+    });
+    const corrected = await request(`${fiscal}/${draft.id}`, 200, "PUT", {
+      ...changeDraft,
+      version: tooLong.dispatch.version,
+    });
+    accountingDraft = corrected.dispatch;
     const { items: queue } = await request(fiscal, 200);
     assert.ok(
       queue.findIndex((row) => row.id === first.id) <

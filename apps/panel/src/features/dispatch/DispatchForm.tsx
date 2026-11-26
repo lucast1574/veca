@@ -3,6 +3,9 @@ import { useId, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import {
   GUIDE_UNITS,
+  GUIDE_ITEM_DESCRIPTION_LIMIT,
+  dispatchSchema,
+  formatMaterialDimensions,
   guideUnitForMaterial,
   type DispatchInput,
   type Lead,
@@ -12,6 +15,16 @@ import { Select } from "@veca/ui/src/Select";
 import { Modal } from "../../components/Modal";
 import { Button, Field, Notice } from "../../components/ui";
 import { motiveOptions, transportOptions } from "./shared";
+import {
+  MaterialDimensionsFields,
+  validMaterialDimensions,
+  type DraftDimensions,
+} from "../warehouse/MaterialDimensionsFields";
+
+type DraftItem = Omit<DispatchInput["items"][number], "dimensions"> & {
+  dimensions?: DraftDimensions;
+};
+type DispatchDraft = Omit<DispatchInput, "items"> & { items: DraftItem[] };
 
 const emptyLine: DispatchInput["items"][number] = {
   code: "",
@@ -67,15 +80,15 @@ export function DispatchForm({
   onSave,
 }: Props) {
   const formId = useId();
-  const [draft, setDraft] = useState(initial);
-  const [savedDraft, setSavedDraft] = useState(initial);
+  const [draft, setDraft] = useState<DispatchDraft>(initial);
+  const [savedDraft, setSavedDraft] = useState<DispatchDraft>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sendError, setSendError] = useState("");
   useUnsavedChanges(draft !== savedDraft, busy);
-  const patch = <Key extends keyof DispatchInput>(
+  const patch = <Key extends keyof DispatchDraft>(
     key: Key,
-    value: DispatchInput[Key],
+    value: DispatchDraft[Key],
   ) => setDraft((previous) => ({ ...previous, [key]: value }));
   const text = (
     key: keyof DispatchInput,
@@ -92,10 +105,7 @@ export function DispatchForm({
       />
     </Field>
   );
-  const setLine = (
-    index: number,
-    fields: Partial<DispatchInput["items"][number]>,
-  ) =>
+  const setLine = (index: number, fields: Partial<DraftItem>) =>
     patch(
       "items",
       draft.items.map((item, i) =>
@@ -110,6 +120,7 @@ export function DispatchForm({
       code: material.sku,
       materialId: material.id,
       description: material.name,
+      dimensions: material.dimensions,
       unitCode: guideUnitForMaterial[material.unit],
       quantity: 1,
     };
@@ -127,9 +138,12 @@ export function DispatchForm({
     Boolean(draft.transferAt) &&
     draft.items.length > 0 &&
     draft.items.every((item) => item.description.trim() && item.quantity > 0);
+  const completeDimensions = draft.items.every((item) =>
+    validMaterialDimensions(item.dimensions),
+  );
 
   async function save(submit: boolean) {
-    if (busy) return;
+    if (busy || !completeDimensions) return;
     setError("");
     if (submit && !hasDispatchDetails) {
       setError(
@@ -137,9 +151,16 @@ export function DispatchForm({
       );
       return;
     }
+    const parsed = dispatchSchema.safeParse(draft);
+    if (!parsed.success) {
+      setError(
+        "Revisa los datos de la guía y las cantidades de los materiales.",
+      );
+      return;
+    }
     setBusy(true);
     try {
-      const outcome = await onSave(draft, submit, draft === savedDraft);
+      const outcome = await onSave(parsed.data, submit, draft === savedDraft);
       if (outcome) {
         setSavedDraft(draft);
         setSendError(outcome.sendError);
@@ -169,7 +190,7 @@ export function DispatchForm({
             <Button
               variant="ghost"
               type="button"
-              disabled={busy}
+              disabled={busy || !completeDimensions}
               onClick={() => void save(false)}
             >
               Guardar borrador
@@ -178,7 +199,11 @@ export function DispatchForm({
           <Button
             type="submit"
             form={formId}
-            disabled={busy || (!guideWorkName && !hasDispatchDetails)}
+            disabled={
+              busy ||
+              !completeDimensions ||
+              (!guideWorkName && !hasDispatchDetails)
+            }
           >
             {busy
               ? "Guardando…"
@@ -255,6 +280,9 @@ export function DispatchForm({
                 options={materials.map((item) => ({
                   value: item.sku,
                   label: `${item.sku} · ${item.name}`,
+                  description:
+                    item.dimensions &&
+                    formatMaterialDimensions(item.dimensions),
                 }))}
                 onChange={addMaterial}
               />
@@ -272,7 +300,7 @@ export function DispatchForm({
               </Field>
               <Field label="Descripción">
                 <input
-                  maxLength={250}
+                  maxLength={GUIDE_ITEM_DESCRIPTION_LIMIT}
                   value={item.description}
                   onChange={(e) =>
                     setLine(index, { description: e.target.value })
@@ -318,6 +346,34 @@ export function DispatchForm({
               >
                 <Trash2 size={16} />
               </Button>
+              {item.materialId ? (
+                item.dimensions &&
+                item.dimensions.baseMm !== undefined &&
+                item.dimensions.heightMm !== undefined && (
+                  <p className="hint dispatch-item-dimensions">
+                    Medidas ·{" "}
+                    {formatMaterialDimensions({
+                      baseMm: item.dimensions.baseMm,
+                      heightMm: item.dimensions.heightMm,
+                    })}
+                  </p>
+                )
+              ) : (
+                <details className="dispatch-item-dimensions">
+                  <summary>Medidas de la pieza (opcional)</summary>
+                  <div className="dispatch-grid">
+                    <MaterialDimensionsFields
+                      dimensions={item.dimensions}
+                      onChange={(dimensions) => setLine(index, { dimensions })}
+                    />
+                  </div>
+                  {!validMaterialDimensions(item.dimensions) && (
+                    <p className="hint">
+                      Completa ambas medidas o déjalas vacías.
+                    </p>
+                  )}
+                </details>
+              )}
             </div>
           ))}
           <Button

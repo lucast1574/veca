@@ -97,11 +97,18 @@ try {
       minimum: 2,
     };
     const importing = root + "/materials/import";
+    const dimensions = { baseMm: 2440, heightMm: 1830 };
     await call(importing, 400, { materials: [material, material] });
-    assert.deepEqual(await call(importing, 201, { materials: [material] }), {
-      created: 1,
-      updated: 0,
+    await call(importing, 400, {
+      materials: [{ ...material, dimensions: { baseMm: 2440 } }],
     });
+    assert.deepEqual(
+      await call(importing, 201, { materials: [{ ...material, dimensions }] }),
+      {
+        created: 1,
+        updated: 0,
+      },
+    );
     const current = async () =>
       (await call(crm + "/materials?search=AGL-QA-18"))[0];
     const { id: materialId } = await current();
@@ -184,6 +191,7 @@ try {
       { created: 0, updated: 1 },
     );
     assert.equal((await current()).balance, 10);
+    assert.deepEqual((await current()).dimensions, dimensions);
     const countPath = root + "/materials/" + materialId + "/count";
     const count = {
       operationId: randomUUID(),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatMaterialDimensions, materialDimensionsSchema } from "./crm.js";
 
 const text = (max: number) => z.string().trim().max(max);
 export const GUIDE_UNITS = [
@@ -17,6 +18,7 @@ export const guideUnitForMaterial = {
   kg: "KGM",
   l: "LTR",
 } as const;
+export const GUIDE_ITEM_DESCRIPTION_LIMIT = 250;
 
 export const dispatchSchema = z
   .object({
@@ -48,7 +50,8 @@ export const dispatchSchema = z
               .string()
               .regex(/^[a-f\d]{24}$/i)
               .optional(),
-            description: text(250),
+            description: text(GUIDE_ITEM_DESCRIPTION_LIMIT),
+            dimensions: materialDimensionsSchema.optional(),
             unitCode: z.enum(["NIU", "MTR", "MTK", "KGM", "LTR", "SET"]),
             quantity: z.number().finite().min(0).max(1_000_000),
           })
@@ -59,6 +62,15 @@ export const dispatchSchema = z
   .strict();
 
 export type DispatchInput = z.infer<typeof dispatchSchema>;
+export function guideItemDescription({
+  description,
+  dimensions,
+}: Pick<DispatchInput["items"][number], "description" | "dimensions">) {
+  if (!dimensions) return description;
+  return [description, formatMaterialDimensions(dimensions)]
+    .filter(Boolean)
+    .join(" · ");
+}
 export type GuideWork = {
   id: string;
   name: string;

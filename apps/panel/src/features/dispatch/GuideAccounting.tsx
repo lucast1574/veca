@@ -3,7 +3,12 @@ import { useAccountingPermission } from "../accounting/AccountingAccess";
 import { useCallback, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { ArrowLeft, ChevronRight, Plus } from "lucide-react";
-import { DISPATCH_STATUS, GUIDE_UNITS, type Dispatch } from "@veca/content";
+import {
+  DISPATCH_STATUS,
+  GUIDE_UNITS,
+  guideItemDescription,
+  type Dispatch,
+} from "@veca/content";
 import { Modal } from "../../components/Modal";
 import { Select } from "@veca/ui/src/Select";
 import { Button, Field, Notice } from "../../components/ui";
@@ -391,7 +396,7 @@ function GuideReview({
                 <li key={index}>
                   <span>
                     {item.code && `${item.code} · `}
-                    {item.description}
+                    {guideItemDescription(item)}
                   </span>
                   <strong>
                     {item.quantity} ·{" "}

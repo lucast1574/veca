@@ -10,6 +10,7 @@ import {
 import { ObjectId } from "mongodb";
 import {
   materialSchema,
+  materialDimensionsUpdate,
   movementSchema,
   type Material,
   type Movement,
@@ -234,6 +235,27 @@ export class InventoryService
     const row = await this.materials.findOne({ _id: this.id(id) });
     if (!row) throw new NotFoundException("Material no encontrado.");
     return this.view(row);
+  }
+  async updateDimensions(id: string, input: unknown) {
+    const { version, dimensions } = parse(materialDimensionsUpdate, input);
+    const material = await this.materials.findOneAndUpdate(
+      { _id: this.id(id), version },
+      {
+        $set: {
+          updatedAt: new Date().toISOString(),
+          ...(dimensions && { dimensions }),
+        },
+        ...(!dimensions && { $unset: { dimensions: "" } }),
+        $inc: { version: 1 },
+      },
+      { returnDocument: "after" },
+    );
+    if (!material)
+      throw new ConflictException(
+        "El material cambió. Vuelve a abrirlo para editar las medidas.",
+      );
+    this.events.emit("inventory");
+    return this.view(material);
   }
   async create(input: unknown) {
     const data = parse(materialSchema, input);

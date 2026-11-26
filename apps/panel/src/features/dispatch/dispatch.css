@@ -154,6 +154,17 @@
 .dispatch-grid > * {
   min-width: 0;
 }
+.dispatch-item-dimensions {
+  grid-column: 1 / -1;
+}
+.dispatch-item-dimensions > summary {
+  cursor: pointer;
+  color: var(--panel-secondary);
+}
+.dispatch-item-dimensions > summary:focus-visible {
+  outline: none;
+  text-decoration: underline;
+}
 @media (max-width: 650px) {
   .dispatch-grid,
   .dispatch-queue li {

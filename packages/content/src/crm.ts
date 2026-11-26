@@ -216,6 +216,26 @@ export const quantitySchema = z
     (n) => Math.abs(n * 1000 - Math.round(n * 1000)) < 0.000001,
     "Usa hasta tres decimales.",
   );
+export const materialDimensionsSchema = z
+  .object({ baseMm: quantitySchema, heightMm: quantitySchema })
+  .strict();
+export type MaterialDimensions = z.infer<typeof materialDimensionsSchema>;
+
+const millimeters = new Intl.NumberFormat("es-PE", {
+  maximumFractionDigits: 3,
+  useGrouping: false,
+});
+export function formatMaterialDimensions(dimensions: MaterialDimensions) {
+  return `${millimeters.format(dimensions.baseMm)} × ${millimeters.format(dimensions.heightMm)} mm`;
+}
+
+export const materialDimensionsUpdate = z
+  .object({
+    version: z.number().int().positive(),
+    dimensions: materialDimensionsSchema.nullable(),
+  })
+  .strict();
+
 export const materialSchema = z
   .object({
     sku: text(60)
@@ -226,6 +246,7 @@ export const materialSchema = z
     category: z.enum(MATERIAL_CATEGORIES),
     location: text(200),
     description: text(1000),
+    dimensions: materialDimensionsSchema.optional(),
     minimum: z.number().finite().min(0).max(1_000_000),
   })
   .strict();

@@ -53,6 +53,12 @@ class WarehouseController {
     return this.inventory.count(id, raw, req.session.user.username);
   }
 
+  @Put("materials/:id/dimensions")
+  @RequirePermission("inventory_catalog", "inventory")
+  dimensions(@Param("id") id: string, @Body() raw: unknown) {
+    return this.inventory.updateDimensions(id, raw);
+  }
+
   @Get("works")
   works() {
     return this.warehouse.works();

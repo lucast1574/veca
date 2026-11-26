@@ -1,11 +1,15 @@
 import { WarehouseBack } from "../warehouse/shared";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { Modal } from "../../components/Modal";
-import { MaterialForm } from "../warehouse/MaterialForm";
+import {
+  EditMaterialDimensions,
+  MaterialForm,
+} from "../warehouse/MaterialForm";
 import { useAccountingQuery } from "../accounting/accounting-shared";
 import { useCallback, useId, useRef, useState, type FormEvent } from "react";
 import {
   MATERIAL_CATEGORIES,
+  formatMaterialDimensions,
   type Material,
   type Movement,
 } from "@veca/content";
@@ -117,7 +121,13 @@ export function MaterialMovement({
                 options={materials.map((m) => ({
                   value: m.id,
                   label: m.name,
-                  description: `${m.sku} · Disponible: ${amount(m.available ?? m.balance)} ${unitName(m.unit)}`,
+                  description: [
+                    m.sku,
+                    m.dimensions && formatMaterialDimensions(m.dimensions),
+                    `Disponible: ${amount(m.available ?? m.balance)} ${unitName(m.unit)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
                 }))}
               />
             </Field>
@@ -197,6 +207,7 @@ export function Inventory({
 }) {
   const [importing, setImporting] = useState(false);
   const [count, setCount] = useState<Material>();
+  const [editingDimensions, setEditingDimensions] = useState<Material>();
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -224,7 +235,7 @@ export function Inventory({
     materialId ? (selected.data ? [selected.data] : []) : items
   ).filter(
     (m) =>
-      `${m.name} ${m.sku} ${m.category} ${m.location}`
+      `${m.name} ${m.sku} ${m.category} ${m.location} ${m.dimensions ? formatMaterialDimensions(m.dimensions) : ""}`
         .toLowerCase()
         .includes(search.toLowerCase()) &&
       (!category || m.category === category) &&
@@ -330,6 +341,17 @@ export function Inventory({
           }}
         />
       )}
+      {editingDimensions && (
+        <EditMaterialDimensions
+          material={editingDimensions}
+          close={() => setEditingDimensions(undefined)}
+          done={() => {
+            setEditingDimensions(undefined);
+            setMessage("Medidas actualizadas.");
+            refresh();
+          }}
+        />
+      )}
       {create && (
         <MaterialForm
           close={() => setCreate(false)}
@@ -425,7 +447,13 @@ export function Inventory({
                       <strong>{m.name}</strong>
                     </a>
                     <small>
-                      {m.sku} · {m.description}
+                      {[
+                        m.sku,
+                        m.dimensions && formatMaterialDimensions(m.dimensions),
+                        m.description,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </small>
                   </td>
                   <td>{m.category}</td>
@@ -453,6 +481,15 @@ export function Inventory({
                     </span>
                   </td>
                   <td>
+                    {materialId && canCatalog && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setEditingDimensions(m)}
+                      >
+                        Editar medidas
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"

@@ -122,6 +122,14 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
       assert.equal(data.weightKg, 420);
       assert.equal(data.customer.name, "Cliente de prueba");
       assert.equal(data.items[0].unitCode, "MTK");
+      if (data.arrivalAddress === "Obra de prueba desde Contabilidad") {
+        assert.deepEqual(data.items[1], {
+          code: "DIM-GUIA-QA",
+          description: "Paño de vidrio · 1200 × 850 mm",
+          quantity: 3,
+          unitCode: "NIU",
+        });
+      }
       assert.equal(data.vehiclePlate, "ABC123");
       assert.ok(
         !destinations.has(data.arrivalAddress),

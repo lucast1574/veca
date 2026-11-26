@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Select } from "@veca/ui/src/Select";
-import type { Material } from "@veca/content";
+import { formatMaterialDimensions, type Material } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
 import { api } from "../../lib/api";
@@ -29,7 +29,7 @@ export const useWarehouseWorks = () =>
 export const materialOptions = (materials: Material[]) =>
   materials.map((row) => ({
     value: row.id,
-    label: `${row.sku} · ${row.name}`,
+    label: `${row.sku} · ${row.name}${row.dimensions ? ` · ${formatMaterialDimensions(row.dimensions)}` : ""}`,
   }));
 export const purchaseStatus = {
   requested: "Por completar en Contabilidad",

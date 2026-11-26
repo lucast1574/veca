@@ -6,7 +6,17 @@ import {
 } from "@veca/content";
 import { Field } from "../../components/ui";
 import { post } from "../../lib/api";
-import { WarehouseForm, WarehouseSelect } from "./shared";
+import {
+  WarehouseForm,
+  WarehouseSelect,
+  putWarehouse,
+  warehousePath,
+} from "./shared";
+import {
+  MaterialDimensionsFields,
+  readMaterialDimensions,
+  validMaterialDimensions,
+} from "./MaterialDimensionsFields";
 
 export function MaterialForm({
   close,
@@ -24,12 +34,17 @@ export function MaterialForm({
       title="Nuevo material"
       action="Crear material"
       onClose={close}
+      validateForm={(form) =>
+        validMaterialDimensions(readMaterialDimensions(form))
+      }
       save={async (form) => {
+        const { baseMm, heightMm, ...fields } = Object.fromEntries(form);
         const material = await create({
-          ...Object.fromEntries(form),
+          ...fields,
           unit,
           category,
           minimum: Number(form.get("minimum")),
+          dimensions: readMaterialDimensions(form),
         });
         done(material);
       }}
@@ -52,7 +67,10 @@ export function MaterialForm({
           label="Unidad de medida"
           value={unit}
           onChange={setUnit}
-          options={MATERIAL_UNITS.map((u) => ({ value: u.id, label: u.name }))}
+          options={MATERIAL_UNITS.map((u) => ({
+            value: u.id,
+            label: u.id === "unit" ? "Unidad (pieza)" : u.name,
+          }))}
         />
         <WarehouseSelect
           label="Familia"
@@ -63,14 +81,19 @@ export function MaterialForm({
             label: value,
           }))}
         />
+        <MaterialDimensionsFields />
       </div>
+      <p className="hint">
+        Las medidas son opcionales. Si las indicas, completa la base y la altura
+        del material.
+      </p>
       <details className="material-extra-details">
         <summary>Más detalles (opcional)</summary>
         <div className="warehouse-grid">
           <Field label="Ubicación en almacén">
             <input name="location" maxLength={200} />
           </Field>
-          <Field label="Especificación o medida">
+          <Field label="Otra especificación">
             <input name="description" maxLength={1000} />
           </Field>
           <Field label="Saldo mínimo">
@@ -89,6 +112,45 @@ export function MaterialForm({
       <p className="hint">
         El stock se actualizará cuando Almacén confirme la recepción.
       </p>
+    </WarehouseForm>
+  );
+}
+
+export function EditMaterialDimensions({
+  material,
+  close,
+  done,
+}: {
+  material: Material;
+  close: () => void;
+  done: () => void;
+}) {
+  return (
+    <WarehouseForm
+      title="Editar medidas del material"
+      action="Guardar medidas"
+      onClose={close}
+      validateForm={(form) =>
+        validMaterialDimensions(readMaterialDimensions(form))
+      }
+      save={async (form) => {
+        await putWarehouse(
+          `${warehousePath}/materials/${material.id}/dimensions`,
+          {
+            version: material.version,
+            dimensions: readMaterialDimensions(form) ?? null,
+          },
+        );
+        done();
+      }}
+    >
+      <p className="hint">
+        {material.sku} · {material.name}. Si manejas otro tamaño como una pieza
+        distinta, usa otro código.
+      </p>
+      <div className="warehouse-grid">
+        <MaterialDimensionsFields dimensions={material.dimensions} />
+      </div>
     </WarehouseForm>
   );
 }
