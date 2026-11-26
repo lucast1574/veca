@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Plus, Package, Truck, ChevronDown } from "lucide-react";
+import { Plus, Package, Truck, ChevronDown, ShoppingCart } from "lucide-react";
 import { Select } from "@veca/ui/src/Select";
 import {
   DISPATCH_STATUS,
@@ -26,6 +26,12 @@ const actionPermissions = {
   accept_return: "inventory_receive",
   purchase: "inventory_request",
 } as const;
+function purchaseShortfall(row: SupplyRequest) {
+  return (
+    Math.round((row.quantity - row.delivered - row.reserved) * 1000) / 1000
+  );
+}
+
 function actions(
   row: SupplyRequest,
   user: SessionUser,
@@ -51,11 +57,7 @@ function actions(
     if (!row.cancelled && row.delivered < row.quantity) offered.push("cancel");
     if (!row.cancelled && row.reserved > 0) offered.push("deliver");
     if (row.returnRequested > 0) offered.push("accept_return");
-    if (
-      !row.cancelled &&
-      !row.purchaseId &&
-      row.quantity - row.delivered - row.reserved > 0
-    )
+    if (!row.cancelled && !row.purchaseId && purchaseShortfall(row) > 0)
       offered.push("purchase");
   }
   return offered.filter(
@@ -267,8 +269,15 @@ export function SupplyRequests({
               const primary = nextAction(row, usable, canRequestGuide);
               const canCancel =
                 primary !== "cancel" && usable.includes("cancel");
+              const showPurchase =
+                !workId &&
+                primary !== "purchase" &&
+                usable.includes("purchase");
               const secondary = usable.filter(
-                (action) => action !== primary && action !== "cancel",
+                (action) =>
+                  action !== primary &&
+                  action !== "cancel" &&
+                  !(showPurchase && action === "purchase"),
               );
               const requester =
                 row.requestedByName ||
@@ -360,25 +369,49 @@ export function SupplyRequests({
                           </div>
                         )}
                         <div className="supply-next-action">
-                          {primary ? (
-                            <Button
-                              onClick={() =>
-                                primary === "guide"
-                                  ? setGuide(row)
-                                  : setSelected({ row, action: primary })
-                              }
-                            >
-                              {primary === "guide" ? (
-                                <>
-                                  <Truck size={16} /> Solicitar guía de remisión
-                                </>
-                              ) : (
-                                actionLabel(row, primary)
-                              )}
-                            </Button>
-                          ) : (
-                            <p>{requestStatusMessage(row, guideReady)}</p>
-                          )}
+                          <div className="supply-next-buttons">
+                            {primary ? (
+                              <Button
+                                type="button"
+                                onClick={() =>
+                                  primary === "guide"
+                                    ? setGuide(row)
+                                    : setSelected({ row, action: primary })
+                                }
+                              >
+                                {primary === "guide" ? (
+                                  <>
+                                    <Truck size={16} aria-hidden="true" />{" "}
+                                    Solicitar guía de remisión
+                                  </>
+                                ) : (
+                                  <>
+                                    {primary === "purchase" && (
+                                      <ShoppingCart
+                                        size={16}
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                    {actionLabel(row, primary)}
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <p>{requestStatusMessage(row, guideReady)}</p>
+                            )}
+                            {showPurchase && (
+                              <Button
+                                type="button"
+                                variant={primary ? "ghost" : "primary"}
+                                onClick={() =>
+                                  setSelected({ row, action: "purchase" })
+                                }
+                              >
+                                <ShoppingCart size={16} aria-hidden="true" />{" "}
+                                Solicitar compra del faltante
+                              </Button>
+                            )}
+                          </div>
                           {row.available !== undefined && (
                             <p>
                               Disponible en Almacén{" "}
@@ -648,7 +681,9 @@ function RequestAction({
           ? "Cancelar solicitud"
           : action === "reserve"
             ? "Guardar reserva"
-            : "Confirmar"
+            : action === "purchase"
+              ? "Enviar a Contabilidad"
+              : "Confirmar"
       }
       onClose={close}
       canSubmit={
@@ -711,6 +746,14 @@ function RequestAction({
           </Button>
           {cancelError && <Notice error>{cancelError}</Notice>}
         </>
+      )}
+      {action === "purchase" && (
+        <div className="warehouse-preview">
+          <strong>
+            {amount(purchaseShortfall(row))} {unitName(row.unit)} por comprar
+          </strong>
+          <p>Contabilidad completará el pedido.</p>
+        </div>
       )}
       {action === "cancel" && (
         <p className="hint">

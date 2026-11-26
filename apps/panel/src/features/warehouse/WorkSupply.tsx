@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { ClipboardList, Plus, Trash2, Wrench } from "lucide-react";
+import {
+  ClipboardList,
+  Plus,
+  ShoppingCart,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import {
   workPlanInput,
   type Equipment,
@@ -47,7 +53,7 @@ export function WorkSupply({
             </p>
           )}
         </div>
-        <div className="accounting-tools">
+        <div className="accounting-tools work-supply-actions">
           {row && canManage && (
             <Button
               type="button"
@@ -59,10 +65,10 @@ export function WorkSupply({
           )}
           {row && canRequest && (
             <a
-              className="warehouse-link"
+              className="btn btn-primary"
               href={`#inventory/compras/nueva/${id}`}
             >
-              <Plus size={16} /> Solicitar pedido
+              <ShoppingCart size={16} aria-hidden="true" /> Solicitar compra
             </a>
           )}
         </div>

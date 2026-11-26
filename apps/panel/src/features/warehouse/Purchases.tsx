@@ -347,7 +347,7 @@ function PurchaseRequestForm({
     });
   return (
     <WarehouseForm
-      title="Solicitar pedido para la obra"
+      title="Solicitar compra para la obra"
       action="Enviar solicitud"
       wide
       onClose={close}
