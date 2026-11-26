@@ -239,6 +239,22 @@
   gap: 16px;
 }
 
+.invoice-detail-actions {
+  flex-wrap: wrap;
+}
+
+.invoice-issue-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+@media (max-width: 400px) {
+  .invoice-issue-hint {
+    flex-basis: auto;
+    order: 1;
+  }
+}
+
 .invoice-detail > .notice {
   margin: 0;
 }

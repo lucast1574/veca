@@ -57,6 +57,7 @@ type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   warehouseRoutingPending?: boolean;
 };
 const issued: InvoiceStatus[] = ["accepted", "observed"];
+const issuable: InvoiceStatus[] = ["requested", "draft"];
 const observed = (status: string) =>
   ["accepted_with_observations", "observed"].includes(status);
 
@@ -343,7 +344,7 @@ export class AccountingService {
       );
     const issueDate = limaDate();
     const current = await this.invoiceRecord(id);
-    if (current.status !== "draft" || current.version !== version)
+    if (!issuable.includes(current.status) || current.version !== version)
       throw new ConflictException(
         "La factura cambió. Vuelve a abrirla para continuar.",
       );
@@ -357,7 +358,7 @@ export class AccountingService {
         "El vencimiento debe ser a partir de la fecha de emisión.",
       );
     const attempt = randomUUID();
-    const locked = await this.changeInvoice(id, version, ["draft"], {
+    const locked = await this.changeInvoice(id, version, issuable, {
       status: "sending",
       attempt,
       issueDate,

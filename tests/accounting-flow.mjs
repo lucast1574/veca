@@ -99,7 +99,7 @@ try {
     if (process.env.VECA_GUIDE_QA_MOCK === "1")
       await request(
         `${root}/invoices/${workRequests[0].id}/issue`,
-        409,
+        400,
         "POST",
         { version: workRequests[0].version },
       );
@@ -329,6 +329,26 @@ try {
       assert.equal(rejected.status, "rejected");
       assert.match(rejected.observation, /RUC del receptor no es válido/);
       assert.match(rejected.observation, /Corrige el RUC/);
+
+      const requested = workRequests[0];
+      await db.collection("accounting_invoices").updateOne(
+        { _id: new ObjectId(requested.id) },
+        {
+          $set: {
+            customerRuc: creation.data.customerRuc,
+            items: creation.data.items,
+            netCents: invoice.netCents,
+            taxCents: invoice.taxCents,
+            totalCents: invoice.totalCents,
+          },
+        },
+      );
+      const requestedPath = `${root}/invoices/${requested.id}/issue`;
+      const issuedRequest = await request(requestedPath, 201, "POST", {
+        version: requested.version,
+      });
+      assert.equal(issuedRequest.status, "accepted");
+      await request(requestedPath, 409, "POST", { version: requested.version });
     }
   } finally {
     await users.updateOne({ _id: admin._id }, { $set: { role: admin.role } });
