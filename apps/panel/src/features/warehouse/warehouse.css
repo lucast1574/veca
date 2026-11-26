@@ -823,6 +823,9 @@
 .purchase-remaining strong {
   color: var(--panel-ink);
 }
+.purchase-heading > .btn {
+  margin: 0;
+}
 .purchase-heading .hint {
   margin: 4px 0 0;
 }
@@ -879,6 +882,9 @@
   font-size: 11px;
 }
 @media (max-width: 620px) {
+  .purchase-heading > .btn {
+    width: 100%;
+  }
   .purchase-filters {
     grid-template-columns: minmax(0, 1fr) auto;
   }

@@ -437,6 +437,64 @@ try {
       categorized.costs,
     );
 
+    const generalRequest = {
+      id: String(new ObjectId()),
+      workId: "",
+      reason: "Reposición de almacén general",
+      materials: [{ materialId, quantity: 3 }],
+    };
+    const general = await call(
+      root + "/purchase-requests",
+      201,
+      generalRequest,
+    );
+    assert.equal(general.status, "requested");
+    assert.equal(general.workId, "");
+    assert.equal(general.workName, "");
+    assert.equal(
+      (await call(root + "/purchase-requests", 201, generalRequest)).id,
+      general.id,
+    );
+    await call(root + "/purchase-requests", 409, {
+      ...generalRequest,
+      workId: String(workId),
+    });
+    const balanceBeforeReceipt = (await current()).balance;
+    const generalOrder = await call(
+      buying + "/" + general.id + "/order",
+      200,
+      {
+        id: general.id,
+        workId: "",
+        supplier: "Tableros QA",
+        supplierRuc: "20100066603",
+        reason: general.reason,
+        items: [
+          {
+            materialId,
+            requested: 3,
+            ordered: 3,
+            unitCents: 1250,
+            reason: general.reason,
+          },
+        ],
+      },
+      "PUT",
+    );
+    assert.equal(generalOrder.status, "open");
+    const generalReceipt = await call(
+      buying + "/" + general.id + "/receive",
+      201,
+      {
+        operationId: randomUUID(),
+        materialId,
+        quantity: 3,
+      },
+    );
+    assert.equal(generalReceipt.status, "received");
+    assert.equal(generalReceipt.workId, "");
+    assert.equal((await current()).balance, balanceBeforeReceipt + 3);
+
     await users.updateOne({ _id: admin._id }, { $set: { role: "accounting" } });
     await call(root + "/equipment", 403);
     assert.ok(

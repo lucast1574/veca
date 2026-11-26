@@ -1,10 +1,12 @@
 import { Select } from "@veca/ui/src/Select";
+import { SearchableSelect } from "@veca/ui/src/SearchableSelect";
 import { useId, useRef, useState } from "react";
 import {
   ClipboardList,
   Plus,
   Trash2,
   PackageCheck,
+  ShoppingCart,
   Search,
 } from "lucide-react";
 import { purchaseRequest, type Purchase, type Material } from "@veca/content";
@@ -27,6 +29,7 @@ import {
   stringField,
   useWarehouseMaterials,
   warehousePath,
+  type WorkOption,
   WarehouseForm,
   WarehouseSelect,
 } from "./shared";
@@ -227,6 +230,11 @@ export function Purchases({
               : "Consulta entregas de proveedores y cantidades pendientes."}
           </p>
         </div>
+        {canRequest && (
+          <Button type="button" onClick={() => setRequesting(true)}>
+            <ShoppingCart size={16} aria-hidden="true" /> Solicitar compra
+          </Button>
+        )}
       </header>
       <div className="purchase-filters">
         <label className="search-input">
@@ -303,7 +311,7 @@ export function Purchases({
           }}
         />
       )}
-      {requesting && (
+      {canRequest && requesting && (
         <PurchaseRequestForm
           materials={materials.data || []}
           loadError={materials.error}
@@ -332,13 +340,26 @@ function PurchaseRequestForm({
   close: () => void;
   done: (row: Purchase) => void;
 }) {
+  const destinationId = useId();
+  const [destination, setDestination] = useState(workId);
+  const works = useAccountingQuery<WorkOption[]>(
+    workId ? "" : warehousePath + "/works",
+  );
+  const destinations = [
+    { value: "warehouse", label: "Almacén general" },
+    ...(works.data || [])
+      .filter(
+        (work) => work.stage === "coordination" || work.stage === "execution",
+      )
+      .map((work) => ({ value: work.id, label: work.name })),
+  ];
   const newLine = () => ({ key: crypto.randomUUID(), materialId: "" });
   const [rows, setRows] = useState(() => [newLine()]);
   const id = useRef(recordId());
   const parseDraft = (form: FormData) =>
     purchaseRequest.safeParse({
       id: id.current,
-      workId,
+      workId: destination === "warehouse" ? "" : destination,
       reason: stringField(form, "reason"),
       materials: rows.map((row) => ({
         materialId: row.materialId,
@@ -347,10 +368,16 @@ function PurchaseRequestForm({
     });
   return (
     <WarehouseForm
-      title="Solicitar compra para la obra"
+      title={workId ? "Solicitar compra para la obra" : "Solicitar compra"}
       action="Enviar solicitud"
       wide
       onClose={close}
+      canSubmit={Boolean(destination)}
+      hasChanges={
+        destination !== workId ||
+        rows.length > 1 ||
+        rows.some((row) => Boolean(row.materialId))
+      }
       validateForm={(form) => parseDraft(form).success}
       save={async (form) => {
         const payload = parseDraft(form);
@@ -367,9 +394,35 @@ function PurchaseRequestForm({
       }}
     >
       <p className="hint">
-        Indica qué materiales faltan. Almacén revisará la solicitud y preparará
-        el pedido al proveedor.
+        Contabilidad recibirá la solicitud para preparar el pedido.
       </p>
+      {!workId && (
+        <>
+          <Field label="Destino" htmlFor={destinationId}>
+            <SearchableSelect
+              id={destinationId}
+              label="Destino"
+              value={destination}
+              options={destinations}
+              onChange={setDestination}
+              placeholder="Busca una obra o almacén"
+            />
+          </Field>
+          {works.loading && <small role="status">Cargando obras…</small>}
+          {works.error && (
+            <Notice error>
+              No se pudieron cargar las obras.{" "}
+              <button
+                type="button"
+                className="warehouse-link"
+                onClick={works.refresh}
+              >
+                Reintentar
+              </button>
+            </Notice>
+          )}
+        </>
+      )}
       {loadError && <Notice error>{loadError}</Notice>}
       <Field label="Motivo de la solicitud">
         <input name="reason" maxLength={500} required />

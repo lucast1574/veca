@@ -331,8 +331,8 @@ export class WarehouseService {
   }
   private async requestPurchaseRecord(raw: unknown, actor: string) {
     const input = parse(purchaseRequest, raw);
-    const work = await this.work(input.workId);
-    if (work.stage === "completed")
+    const work = input.workId ? await this.work(input.workId) : null;
+    if (work?.stage === "completed")
       throw new BadRequestException("La obra ya está realizada.");
     const items = await Promise.all(
       input.materials.map(async (item) => {
@@ -359,8 +359,8 @@ export class WarehouseService {
     const at = new Date().toISOString();
     const document: PurchaseRecord = {
       _id: safeId(input.id),
-      workId: String(work._id),
-      workName: work.workName || work.name,
+      workId: work ? String(work._id) : "",
+      workName: work ? work.workName || work.name : "",
       supplier: "",
       supplierRuc: "",
       reason: input.reason,

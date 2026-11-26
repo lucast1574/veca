@@ -54,7 +54,7 @@ export const purchaseInput = z
 export const purchaseRequest = z
   .object({
     id: accountingId,
-    workId: accountingId,
+    workId: accountingId.or(z.literal("")),
     reason: detail(500),
     materials: z
       .array(
