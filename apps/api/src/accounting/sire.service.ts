@@ -21,6 +21,15 @@ type Document = {
   total: number;
   currency: string;
 };
+type SaleSnapshot = {
+  _id: string;
+  issuerRuc: string;
+  items?: SireSalePage["items"];
+  syncedAt?: string;
+  job?: string;
+  failed?: boolean;
+  retryAt?: Date;
+};
 const docKey = (doc: Document) => {
   const match = /^([A-Z0-9]{1,20})\s*-\s*(\d{1,20})$/i.exec(doc.reference);
   if (!match || !/^\d{11}$/.test(doc.taxId)) return "";
@@ -153,22 +162,31 @@ export class SireService {
     return this.provider.connection();
   }
 
+  private salesSyncs() {
+    return this.db.db.collection<SaleSnapshot>("sire_sales_syncs");
+  }
+
   async salesInbox(month: string, page: number): Promise<SireSalePage> {
     const size = 10;
     const offset = (page - 1) * size;
-    const saved = await this.db.db
-      .collection<
-        { _id: string; issuerRuc: string } & SireSalePage
-      >("sire_sales_syncs")
-      .findOne(
-        { _id: month, issuerRuc: fiscalIssuerRuc },
-        { projection: { items: { $slice: [offset, size + 1] }, syncedAt: 1 } },
-      );
+    const saved = await this.salesSyncs().findOne(
+      { _id: month, issuerRuc: fiscalIssuerRuc },
+      {
+        projection: {
+          items: { $slice: [offset, size + 1] },
+          syncedAt: 1,
+          job: 1,
+          failed: 1,
+        },
+      },
+    );
     const items = saved?.items || [];
     return {
       items: items.slice(0, size),
       hasMore: items.length > size,
       syncedAt: saved?.syncedAt,
+      ...(saved?.job && !saved.failed ? { syncing: true } : {}),
+      ...(saved?.failed ? { syncFailed: true } : {}),
     };
   }
 
@@ -191,6 +209,35 @@ export class SireService {
     if (proposal.status === "pending") {
       if (book === "purchases")
         await this.purchases.pending(month, proposal.job);
+      else if (!job)
+        await this.salesSyncs().updateOne(
+          { _id: month },
+          [
+            {
+              $set: {
+                items: {
+                  $cond: [
+                    { $eq: ["$issuerRuc", fiscalIssuerRuc] },
+                    "$items",
+                    "$$REMOVE",
+                  ],
+                },
+                syncedAt: {
+                  $cond: [
+                    { $eq: ["$issuerRuc", fiscalIssuerRuc] },
+                    "$syncedAt",
+                    "$$REMOVE",
+                  ],
+                },
+                issuerRuc: fiscalIssuerRuc,
+                job: { $literal: proposal.job },
+                failed: false,
+                retryAt: "$$REMOVE",
+              },
+            },
+          ],
+          { upsert: true },
+        );
       return { job: proposal.job, status: "pending" };
     }
     if (
@@ -212,19 +259,25 @@ export class SireService {
       );
     const result = await this.compare(month, book, incoming);
     if (book === "sales") {
-      await this.db.db
-        .collection<{ _id: string }>("sire_sales_syncs")
-        .updateOne(
-          { _id: month },
-          {
-            $set: {
-              issuerRuc: fiscalIssuerRuc,
-              items: incoming.map(({ doc, type }) => ({ ...doc, type })),
-              syncedAt: new Date().toISOString(),
-            },
+      const sales = this.salesSyncs();
+      await sales.updateOne(
+        { _id: month },
+        {
+          $set: {
+            issuerRuc: fiscalIssuerRuc,
+            items: incoming.map(({ doc, type }) => ({ ...doc, type })),
+            syncedAt: new Date().toISOString(),
           },
-          { upsert: true },
-        );
+        },
+        { upsert: true },
+      );
+      await sales.updateOne(
+        {
+          _id: month,
+          $or: [{ job: proposal.job }, { job: { $exists: false } }],
+        },
+        { $set: { failed: false }, $unset: { job: "", retryAt: "" } },
+      );
     }
     return {
       job: proposal.job,

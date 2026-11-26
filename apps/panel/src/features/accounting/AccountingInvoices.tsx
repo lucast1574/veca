@@ -12,6 +12,7 @@ import {
   invoiceDraftInput,
   invoiceFields,
   invoiceInput,
+  invoicePayment,
   type AccountingInvoice,
   type AccountingWork,
   type InvoiceInput,
@@ -50,13 +51,15 @@ const label: Record<AccountingInvoice["status"], string> = {
   observed: "Aceptada con observaciones",
   rejected: "Requiere corrección",
 };
+const invoiceFiles = [
+  { type: "pdf", label: "Factura (PDF)" },
+  { type: "xml", label: "Factura electrónica (XML)" },
+  { type: "cdr", label: "Constancia de SUNAT (CDR)" },
+] as const;
 const isIssued = (row: AccountingInvoice) =>
   row.status === "accepted" || row.status === "observed";
-const canEmitInvoice = (data: InvoiceInput) =>
-  invoiceInput.safeParse(invoiceFields(data)).success &&
-  (data.method !== "credit" || data.dueDate >= today());
-function emissionHint(row: AccountingInvoice) {
-  const parsed = invoiceInput.safeParse(invoiceFields(row));
+function fieldsToReview(data: InvoiceInput) {
+  const parsed = invoiceInput.safeParse(invoiceFields(data));
   const fields: Record<string, string> = {
     customer: "cliente",
     customerRuc: "RUC",
@@ -72,10 +75,9 @@ function emissionHint(row: AccountingInvoice) {
             fields[String(issue.path[0] ?? "dueDate")] || "datos de la factura",
         ),
   );
-  if (row.method === "credit" && row.dueDate < today())
+  if (data.method === "credit" && data.dueDate < today())
     invalid.add("vencimiento");
-  const list = new Intl.ListFormat("es-PE").format([...invalid]);
-  return list ? `Revisa ${list} en Editar factura para emitir.` : "";
+  return new Intl.ListFormat("es-PE").format([...invalid]);
 }
 
 type InvoicePage = {
@@ -189,6 +191,11 @@ export function AccountingInvoices({
                 setQueue(filter.value);
               }}
             />
+            {queue && (
+              <p className="hint invoice-filter-hint">
+                Incluye todos los meses.
+              </p>
+            )}
           </Field>
         </header>
         {query.data && !query.data.enabled && (
@@ -233,11 +240,13 @@ export function AccountingInvoices({
                         )}
                         {queue === "collect" ? (
                           <small>Saldo por cobrar</small>
-                        ) : isIssued(row) && balance > 0 ? (
+                        ) : isIssued(row) ? (
                           <small>
-                            {row.paidCents
-                              ? `Por cobrar ${amount(balance)}`
-                              : "Por cobrar"}
+                            {balance === 0
+                              ? "Cobro completo"
+                              : row.paidCents
+                                ? `Por cobrar ${amount(balance)}`
+                                : "Por cobrar"}
                           </small>
                         ) : null}
                       </div>
@@ -299,7 +308,27 @@ export function AccountingInvoices({
   );
 }
 
-function InvoiceFiscalNotice({ row }: { row: AccountingInvoice }) {
+function InvoiceFiscalNotice({
+  row,
+  canCheck = false,
+}: {
+  row: AccountingInvoice;
+  canCheck?: boolean;
+}) {
+  if (
+    row.status === "pending" &&
+    (!row.observation ||
+      row.observation ===
+        "Envío sin confirmar. Requiere verificación antes de repetirlo.")
+  ) {
+    return (
+      <Notice>
+        {canCheck
+          ? "SUNAT aún no confirma el envío. Usa Consultar estado en SUNAT para ver si ya respondió."
+          : "El envío sigue sin confirmarse. Verifica si la factura figura en SUNAT antes de crear otra."}
+      </Notice>
+    );
+  }
   if (row.status !== "observed" && row.status !== "rejected")
     return row.observation ? <Notice>{row.observation}</Notice> : null;
 
@@ -390,14 +419,15 @@ function InvoiceForm({
   )
     workOptions.push({ value: current.workId, label: current.workName });
 
-  const parsed = invoiceDraftInput.safeParse({
+  const data: InvoiceInput = {
     workId: work,
     customer,
     customerRuc: ruc,
     method,
     dueDate: method === "credit" ? due : "",
     items,
-  });
+  };
+  const parsed = invoiceDraftInput.safeParse(data);
   const hasDraftContent = Boolean(
     current ||
     work ||
@@ -414,7 +444,8 @@ function InvoiceForm({
     ),
   );
   const canSave = parsed.success && hasDraftContent;
-  const canSend = canIssue && parsed.success && canEmitInvoice(parsed.data);
+  const missingFields = canIssue ? fieldsToReview(data) : "";
+  const canSend = canIssue && parsed.success && !missingFields;
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -513,7 +544,12 @@ function InvoiceForm({
       busy={busy}
       onClose={close}
       footer={
-        <footer className="ve-modal-actions">
+        <footer className="ve-modal-actions invoice-modal-actions">
+          {hasDraftContent && missingFields && (
+            <p className="hint invoice-issue-hint">
+              Revisa {missingFields} para emitir.
+            </p>
+          )}
           <Button type="button" variant="ghost" onClick={close} disabled={busy}>
             Cancelar
           </Button>
@@ -749,6 +785,7 @@ function InvoiceDetail({
   const row = override || query.data?.invoice;
   const [edit, setEdit] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const paymentFormId = useId();
   const [cash, setCash] = useState("");
   const [date, setDate] = useState(today);
   const [reference, setReference] = useState("");
@@ -791,8 +828,6 @@ function InvoiceDetail({
       );
       setOverride(result);
       onChanged();
-      setCash("");
-      setReference("");
       setPaymentOpen(false);
     } catch (e) {
       setError((e as Error).message);
@@ -810,16 +845,41 @@ function InvoiceDetail({
     canWrite && row && ["requested", "draft", "rejected"].includes(row.status);
   const showEmit =
     canIssue && row && (row.status === "requested" || row.status === "draft");
+  const missingFields = showEmit ? fieldsToReview(row) : "";
   const sendHint = showEmit
-    ? query.data?.enabled
-      ? emissionHint(row)
-      : "La emisión electrónica está pendiente de configuración."
+    ? !query.data?.enabled
+      ? "La emisión electrónica está pendiente de configuración."
+      : missingFields &&
+        `Revisa ${missingFields} en Editar factura para emitir.`
     : "";
   const canSend = showEmit && !sendHint && !query.loading && !query.error;
   const canCheck = canIssue && row?.canCheck;
   const issued = row && isIssued(row);
   const balance = row ? row.totalCents - row.paidCents : 0;
   const canCollect = canWrite && issued && balance > 0;
+  const todayDate = today();
+  const paymentCents = decimal(cash);
+  const amountError = !cash.trim()
+    ? ""
+    : !invoicePayment.shape.cents.safeParse(paymentCents).success
+      ? "Ingresa un importe válido mayor que cero."
+      : paymentCents > balance
+        ? "El importe supera el saldo por cobrar."
+        : "";
+  const dateError =
+    date > todayDate
+      ? "La fecha del cobro debe ser hoy o anterior."
+      : date && row?.issueDate && date < row.issueDate
+        ? "La fecha del cobro debe ser igual o posterior a la emisión."
+        : "";
+  const canSavePayment = Boolean(
+    cash.trim() && date && !amountError && !dateError,
+  );
+
+  function closePayment() {
+    setError("");
+    setPaymentOpen(false);
+  }
 
   return (
     <>
@@ -838,7 +898,7 @@ function InvoiceDetail({
         onClose={onClose}
         footer={
           (canEdit || showEmit || canCheck || canCollect) && (
-            <footer className="ve-modal-actions invoice-detail-actions">
+            <footer className="ve-modal-actions invoice-modal-actions">
               {sendHint && (
                 <p className="hint invoice-issue-hint">{sendHint}</p>
               )}
@@ -865,7 +925,7 @@ function InvoiceDetail({
                   disabled={busy}
                   onClick={() => void run("check")}
                 >
-                  Consultar estado
+                  Consultar estado en SUNAT
                 </Button>
               )}
               {canCollect && (
@@ -873,6 +933,9 @@ function InvoiceDetail({
                   disabled={busy}
                   onClick={() => {
                     setError("");
+                    setCash("");
+                    setDate(todayDate);
+                    setReference("");
                     setPaymentOpen(true);
                   }}
                 >
@@ -889,7 +952,7 @@ function InvoiceDetail({
               <div className="invoice-detail-status">
                 <InvoiceStatus row={row} />
               </div>
-              <InvoiceFiscalNotice row={row} />
+              <InvoiceFiscalNotice row={row} canCheck={canCheck} />
               {error && !paymentOpen && <Notice error>{error}</Notice>}
               <dl className="accounting-record-facts">
                 {(row.status !== "requested" || row.items.length > 0) && (
@@ -976,20 +1039,24 @@ function InvoiceDetail({
                   <h3>Archivos</h3>
                   <div className="invoice-detail-links">
                     {issued &&
-                      (["pdf", "xml", "cdr"] as const).map((type) => (
+                      invoiceFiles.map(({ type, label }) => (
                         <a
                           className="accounting-inline"
                           key={type}
                           href={`${API_BASE}${path}/file/${type}`}
-                          aria-label={`Descargar ${type.toUpperCase()}`}
+                          aria-label={`Descargar ${label}`}
+                          target="_blank"
+                          rel="noreferrer"
                         >
-                          {type.toUpperCase()}
+                          {label}
                         </a>
                       ))}
                     {row.proof && (
                       <a
                         className="accounting-inline"
                         href={`${API_BASE}${path}/proof`}
+                        target="_blank"
+                        rel="noreferrer"
                       >
                         <Download size={15} aria-hidden="true" /> Descargar
                         sustento
@@ -1028,59 +1095,89 @@ function InvoiceDetail({
       {paymentOpen && row && (
         <Modal
           title="Registrar cobro"
+          description={[row.customer, row.number].filter(Boolean).join(" · ")}
           busy={busy}
-          onClose={() => setPaymentOpen(false)}
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run("payment");
-            }}
-          >
-            <Field label="Importe del cobro">
-              <input
-                inputMode="decimal"
-                required
-                value={cash}
-                onChange={(e) => setCash(e.target.value)}
-              />
-            </Field>
-            <Field label="Fecha del cobro">
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </Field>
-            <Field label="Referencia">
-              <input
-                maxLength={120}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </Field>
-            {error && <Notice error>{error}</Notice>}
-            <div className="accounting-form-actions">
+          onClose={closePayment}
+          footer={
+            <footer className="ve-modal-actions">
               <Button
-                variant="ghost"
                 type="button"
+                variant="ghost"
                 disabled={busy}
-                onClick={() => setPaymentOpen(false)}
+                onClick={closePayment}
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
-                disabled={
-                  busy ||
-                  !date ||
-                  !(decimal(cash) > 0 && decimal(cash) <= balance)
-                }
+                form={paymentFormId}
+                disabled={busy || !canSavePayment}
               >
-                {busy ? "Procesando…" : "Guardar cobro"}
+                {busy ? "Guardando…" : "Guardar cobro"}
               </Button>
+            </footer>
+          }
+        >
+          <div className="invoice-payment-balance">
+            <div>
+              <small>Saldo por cobrar</small>
+              <strong>{amount(balance)}</strong>
             </div>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={
+                busy ||
+                paymentCents === balance ||
+                !invoicePayment.shape.cents.safeParse(balance).success
+              }
+              onClick={() => setCash(String(balance / 100))}
+            >
+              Usar saldo completo
+            </Button>
+          </div>
+          <form
+            id={paymentFormId}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canSavePayment) void run("payment");
+            }}
+          >
+            <Field label="Importe del cobro" hint={amountError || undefined}>
+              <input
+                inputMode="decimal"
+                required
+                aria-invalid={Boolean(amountError)}
+                disabled={busy}
+                value={cash}
+                onChange={(e) => setCash(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Fecha del cobro"
+              hint={dateError || (date ? displayDate(date) : undefined)}
+            >
+              <input
+                type="date"
+                lang="es-PE"
+                required
+                min={row.issueDate || undefined}
+                max={todayDate}
+                aria-invalid={Boolean(dateError)}
+                disabled={busy}
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </Field>
+            <Field label="Referencia (opcional)">
+              <input
+                maxLength={120}
+                disabled={busy}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+            </Field>
+            {error && <Notice error>{error}</Notice>}
           </form>
         </Modal>
       )}

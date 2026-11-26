@@ -166,6 +166,9 @@ try {
         version: invoice.version,
       });
       assert.equal(issued.status, "accepted");
+      assert.match(await request(path + "/file/pdf"), /^%PDF/);
+      assert.match(await request(path + "/file/xml"), /<Invoice\/>/);
+      assert.match(await request(path + "/file/cdr"), /^PK/);
       const acceptedPeriod = await request(periodPath);
       assert.equal(acceptedPeriod.salesCount, beforeDraft.salesCount + 1);
       assert.equal(acceptedPeriod.salesNet, beforeDraft.salesNet + 10000);
@@ -175,6 +178,13 @@ try {
         beforeDraft.pendingInvoices.toIssue,
       );
       await request(path + "/issue", 409, "POST", { version: invoice.version });
+      for (const invalidDate of ["2099-01-01", "2000-01-01"]) {
+        await request(path + "/payment", 400, "POST", {
+          version: issued.version,
+          date: invalidDate,
+          cents: 100,
+        });
+      }
       const collected = await request(path + "/payment", 201, "POST", {
         version: issued.version,
         date,
@@ -349,6 +359,32 @@ try {
       });
       assert.equal(issuedRequest.status, "accepted");
       await request(requestedPath, 409, "POST", { version: requested.version });
+
+      const waiting = await request(root + "/invoices", 201, "POST", {
+        id: requestId(),
+        data: { ...creation.data, customer: "Cliente QA pendiente" },
+      });
+      const waitingPath = `${root}/invoices/${waiting.id}`;
+      const pending = await request(waitingPath + "/issue", 201, "POST", {
+        version: waiting.version,
+      });
+      assert.equal(pending.status, "pending");
+      assert.equal(pending.canCheck, true);
+      const confirmed = await request(waitingPath + "/check", 201, "POST", {
+        version: pending.version,
+      });
+      assert.equal(confirmed.status, "accepted");
+      assert.equal(confirmed.canCheck, false);
+
+      const beforeFullPayment = (await request(path)).invoice;
+      const fullPayment = await request(path + "/payment", 201, "POST", {
+        version: beforeFullPayment.version,
+        date,
+        cents: beforeFullPayment.totalCents - beforeFullPayment.paidCents,
+      });
+      assert.equal(fullPayment.paidCents, fullPayment.totalCents);
+      const receivables = await request(root + "/invoices?queue=collect");
+      assert.ok(!receivables.items.some((row) => row.id === invoice.id));
     }
   } finally {
     await users.updateOne({ _id: admin._id }, { $set: { role: admin.role } });

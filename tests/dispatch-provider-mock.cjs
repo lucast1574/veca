@@ -109,7 +109,9 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
             ? "accepted_with_observations"
             : payload.customer.name === "Cliente QA rechazado"
               ? "rejected"
-              : "accepted",
+              : payload.customer.name === "Cliente QA pendiente"
+                ? "processing"
+                : "accepted",
         fullNumber: "F001-" + (90 + invoices.size),
         total: 118,
       };
@@ -128,7 +130,23 @@ if (process.env.NODE_ENV === "test" && process.env.VECA_GUIDE_QA_MOCK === "1") {
     const invoice = [...invoices.values()].find(
       (entry) => path === `/documents/${entry.id}`,
     );
-    if (invoice && !options.method) return Response.json(invoice);
+    if (invoice && !options.method)
+      return Response.json({
+        ...invoice,
+        status: invoice.status === "processing" ? "accepted" : invoice.status,
+      });
+    const attachment = /^\/documents\/([^/]+)\/(pdf|xml|cdr)$/.exec(path);
+    if (
+      attachment &&
+      [...invoices.values()].some((row) => row.id === attachment[1])
+    )
+      return new Response(
+        {
+          pdf: "%PDF-1.4 DEMO",
+          xml: "<Invoice/>",
+          cdr: "PK DEMO CDR",
+        }[attachment[2]],
+      );
     if (path === "/guides" && options.method === "POST") {
       assert.ok(
         issuerEnabled,

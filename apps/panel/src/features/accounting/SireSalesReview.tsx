@@ -30,6 +30,11 @@ import "./sire.css";
 import "./accounting-records.css";
 
 type SunatSale = SireSalePage["items"][number];
+const consultationTime = new Intl.DateTimeFormat("es-PE", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "America/Lima",
+});
 const saleTotal = ({ currency, total }: SunatSale) =>
   currency === "PEN"
     ? amount(total)
@@ -60,6 +65,10 @@ export function SireSalesReview({
   );
   const [result, setResult] = useState<SireReconciliation>();
   const busy = refreshing || report.loading;
+  const lastConsultation = sales.data?.syncedAt
+    ? new Date(sales.data.syncedAt)
+    : undefined;
+  const waiting = Boolean(sales.data?.syncing);
   const lastRevision = useRef(revision);
   useEffect(() => {
     if (lastRevision.current === revision) return;
@@ -145,13 +154,33 @@ export function SireSalesReview({
           className="invoice-records"
           aria-labelledby="sunat-sales-heading"
         >
-          <h3 id="sunat-sales-heading">Ventas en SUNAT</h3>
+          <header className="invoice-records-header">
+            <h3 id="sunat-sales-heading">Ventas en SUNAT</h3>
+            {lastConsultation &&
+              Number.isFinite(lastConsultation.getTime()) && (
+                <p className="hint invoice-filter-hint">
+                  Última consulta · {consultationTime.format(lastConsultation)}
+                </p>
+              )}
+          </header>
+          {waiting && (
+            <p className="hint" role="status">
+              Buscando comprobantes en SUNAT…
+            </p>
+          )}
+          {sales.data?.syncFailed && (
+            <p className="hint" role="status">
+              La última consulta falló. Usa Comparar con SUNAT para reintentar.
+            </p>
+          )}
           <QueryState
             {...sales}
             empty={
-              sales.data?.syncedAt
-                ? "No hay comprobantes de SUNAT en este periodo."
-                : "Consulta SUNAT para ver los comprobantes de este periodo."
+              waiting || sales.data?.syncFailed
+                ? undefined
+                : sales.data?.syncedAt
+                  ? "No hay comprobantes de SUNAT en este periodo."
+                  : "Usa Comparar con SUNAT para consultar este mes."
             }
           >
             {!!sales.data?.items.length && (

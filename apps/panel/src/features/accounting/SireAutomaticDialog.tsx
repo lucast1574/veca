@@ -191,8 +191,9 @@ export function SireAutomaticDialog({
                   : "Conectando con SUNAT"}
               </strong>
               <p>
-                Los resultados quedarán en tu bandeja cuando termine la consulta
-                automática. Puedes cerrar esta ventana.
+                {job
+                  ? "Puedes cerrar esta ventana. Verás los comprobantes cuando termine la consulta."
+                  : "Espera a que se inicie la consulta."}
               </p>
             </div>
           </div>

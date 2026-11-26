@@ -14,6 +14,7 @@ import { SireService } from "./sire.service";
 
 type Sync = {
   _id: string;
+  issuerRuc?: string;
   syncedAt?: string;
   job?: string;
   lease?: string;
@@ -118,10 +119,16 @@ export class SireSyncService
       throw error;
     }
     if (!state) return;
+    const locked = { _id: period, lease };
+    const release = { lease: "", lockUntil: "" } as const;
     try {
       const result = await this.sire.automatic(period, book, state.job);
+      if (book === "sales") {
+        await records.updateOne(locked, { $unset: release });
+        return;
+      }
       await records.updateOne(
-        { _id: period, lease },
+        locked,
         result.status === "pending"
           ? {
               $set: { job: result.job, failed: false },
@@ -135,13 +142,35 @@ export class SireSyncService
     } catch (error) {
       // An expired sealed job cannot be resumed; transient outages retain it.
       const invalidJob = error instanceof BadRequestException;
-      await records.updateOne(
-        { _id: period, lease },
-        {
-          $set: { failed: true, retryAt: new Date(Date.now() + 5 * 60_000) },
-          $unset: { lease: "", lockUntil: "", ...(invalidJob && { job: "" }) },
-        },
-      );
+      const failed = {
+        failed: true,
+        retryAt: new Date(Date.now() + 5 * 60_000),
+      };
+      if (book === "sales") {
+        await records.updateOne(
+          {
+            ...locked,
+            job: state.job ?? { $exists: false },
+            $or: [
+              { issuerRuc: fiscalIssuerRuc },
+              { issuerRuc: { $exists: false } },
+            ],
+          },
+          {
+            $set: { ...failed, issuerRuc: fiscalIssuerRuc },
+            ...(invalidJob && { $unset: { job: "" } }),
+          },
+        );
+        await records.updateOne(locked, { $unset: release });
+        this.logger.warn(
+          "Falló la sincronización fiscal de ventas. Se reintentará automáticamente.",
+        );
+        return;
+      }
+      await records.updateOne(locked, {
+        $set: failed,
+        $unset: { ...release, ...(invalidJob && { job: "" }) },
+      });
       this.logger.warn(
         `Falló la sincronización fiscal de ${book}. Se reintentará automáticamente.`,
       );

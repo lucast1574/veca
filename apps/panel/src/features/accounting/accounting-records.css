@@ -239,8 +239,38 @@
   gap: 16px;
 }
 
-.invoice-detail-actions {
+.invoice-modal-actions {
   flex-wrap: wrap;
+}
+
+.invoice-filter-hint {
+  margin: 4px 0 0;
+}
+
+.invoice-payment-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.invoice-payment-balance > div {
+  display: grid;
+  gap: 4px;
+}
+
+.invoice-payment-balance small {
+  color: var(--panel-secondary);
+}
+
+.invoice-payment-balance strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 .invoice-issue-hint {

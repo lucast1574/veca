@@ -240,6 +240,8 @@ export type SireSalePage = {
   }[];
   hasMore: boolean;
   syncedAt?: string;
+  syncing?: boolean;
+  syncFailed?: boolean;
 };
 export type SireReconciliation = {
   book?: SireBook;

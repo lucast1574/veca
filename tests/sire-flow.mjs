@@ -93,6 +93,16 @@ try {
       const started = await request(startPath(book), "POST");
       assert.equal(started.status, 201);
       assert.equal(started.data.status, "pending");
+      if (book === "sales") {
+        const inbox = (await request(salesInbox)).data;
+        assert.equal(inbox.syncing, true);
+        assert.equal("job" in inbox, false);
+        assert.equal(
+          (await db.collection("sire_sales_syncs").findOne({ _id: period }))
+            .job,
+          started.data.job,
+        );
+      }
       const path = startPath(book) + "/" + started.data.job;
       assert.equal((await request(path, "GET", false)).status, 401);
       assert.equal((await request(path)).data.status, "pending");
@@ -118,6 +128,7 @@ try {
     }
     const syncedSales = (await request(salesInbox)).data;
     assert.ok(syncedSales.syncedAt);
+    assert.equal(syncedSales.syncing, undefined);
     assert.deepEqual(
       syncedSales.items.map(({ reference, total }) => [reference, total]),
       [
@@ -137,6 +148,35 @@ try {
       1,
       "consulting SUNAT does not create invoices in VECA",
     );
+    const fields = Array(27).fill("");
+    Object.assign(fields, {
+      0: "20616656156",
+      2: period.replace("-", ""),
+      6: "01",
+      7: "FQA",
+      8: "1",
+      11: "20100066603",
+      25: "118.00",
+      26: "PEN",
+    });
+    const txt = new FormData();
+    txt.append(
+      "file",
+      new Blob([fields.join("|")], { type: "text/plain" }),
+      "propuesta-ventas.txt",
+    );
+    const manual = await fetch(base + root + period + "/reconcile/sales", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:3300",
+        Cookie: cookie,
+        "X-Veca-Csrf": session.csrf,
+      },
+      body: txt,
+    });
+    assert.equal(manual.status, 201);
+    assert.equal((await manual.json()).matches, 1);
+    assert.deepEqual((await request(salesInbox)).data.items, syncedSales.items);
     const mismatchPath = root + "2026-01/reconcile/purchases/automatic";
     const mismatch = await request(mismatchPath, "POST");
     assert.equal(
