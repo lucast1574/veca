@@ -371,11 +371,19 @@
 .purchase-source .hint span {
   display: block;
 }
-.warehouse-line .purchase-catalogue-create {
-  min-height: 32px;
-  margin: 0 0 0 auto;
-  padding: 4px 8px;
-  font-size: 12px;
+.purchase-line-header {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.purchase-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.purchase-line-actions .btn {
+  margin: 0;
+  padding: 8px 12px;
 }
 .material-extra-details > summary {
   width: fit-content;

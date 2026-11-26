@@ -211,33 +211,34 @@ export function PurchaseOrderDialog({
         <div className="warehouse-lines">
           {lines.map((line, index) => (
             <div className="warehouse-line" key={line.key}>
-              <header>
+              <header className="purchase-line-header">
                 <strong>
                   {!editableLines ? line.label : `Material ${index + 1}`}
                 </strong>
                 {editableLines && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="btn btn-ghost purchase-catalogue-create"
-                    onClick={() => setCreatingFor(line.key)}
-                  >
-                    <Plus size={14} aria-hidden="true" /> Registrar nuevo
-                  </Button>
-                )}
-                {editableLines && lines.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label={`Quitar material ${index + 1}`}
-                    onClick={() =>
-                      setLines((current) =>
-                        current.filter((row) => row.key !== line.key),
-                      )
-                    }
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <div className="purchase-line-actions">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setCreatingFor(line.key)}
+                    >
+                      <Plus size={14} aria-hidden="true" /> Registrar nuevo
+                    </Button>
+                    {lines.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        aria-label={`Quitar material ${index + 1}`}
+                        onClick={() =>
+                          setLines((current) =>
+                            current.filter((row) => row.key !== line.key),
+                          )
+                        }
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
                 )}
               </header>
               {editableLines && (
