@@ -1,0 +1,153 @@
+.employee-grid {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.employee-grid-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 22rem) minmax(0, 12rem);
+  gap: 10px;
+}
+.employee-grid-tools .search-input {
+  min-width: 0;
+  margin: 0;
+}
+.employee-grid-tools .search-input:focus-within {
+  background: var(--panel-accent-soft);
+  color: var(--panel-ink);
+}
+.employee-grid-tools .search-input input {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+.employee-grid-tools .search-input input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.employee-grid-table {
+  --employee-header: #283b32;
+  --employee-divider: #c2cfc3;
+  --employee-row: #edf2eb;
+  --employee-row-alt: #e5ede4;
+  border: 1px solid var(--employee-divider);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.employee-grid-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.employee-grid-table th,
+.employee-grid-table td {
+  padding: 14px 16px;
+}
+.employee-grid-table thead {
+  background: var(--employee-header);
+  color: #fff;
+}
+.employee-grid-table thead th {
+  padding-block: 8px;
+  font-size: 12px;
+  font-weight: 750;
+}
+.employee-grid-table thead button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.employee-grid-table thead button:is(:hover, :focus-visible) {
+  outline: none;
+  color: #e1f0dc;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.employee-grid-table thead button svg {
+  flex-shrink: 0;
+}
+.employee-grid-table tbody tr {
+  background: var(--employee-row);
+}
+.employee-grid-table tbody tr:nth-child(even) {
+  background: var(--employee-row-alt);
+}
+.employee-grid-table tbody tr + tr {
+  border-top: 1px solid var(--employee-divider);
+}
+.employee-grid-table tbody tr:is(:hover, :focus-within) {
+  background: #dce9dd;
+}
+.employee-grid-person {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.employee-grid-person small {
+  color: var(--panel-secondary);
+  font-weight: 500;
+}
+.employee-grid-salary {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.employee-grid-actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+.employee-grid-table .btn {
+  background: var(--panel-surface);
+}
+.employee-grid-table .btn:is(:hover, :focus-visible) {
+  background: var(--panel-accent-soft);
+}
+.employee-grid-mobile-status,
+.employee-grid-mobile-action {
+  display: none;
+}
+.employee-grid-empty {
+  margin: 0;
+  padding: 16px;
+  background: var(--employee-row);
+  color: var(--panel-secondary);
+}
+
+@container (max-width: 480px) {
+  .employee-grid-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .employee-grid-table th,
+  .employee-grid-table td {
+    padding-inline: 12px;
+  }
+  .employee-grid-table tbody th,
+  .employee-grid-table tbody td {
+    vertical-align: top;
+  }
+  .employee-grid-table .employee-grid-status,
+  .employee-grid-table .employee-grid-actions,
+  .employee-grid-mobile-action svg {
+    display: none;
+  }
+  .employee-grid-mobile-status,
+  .employee-grid-mobile-action {
+    display: block;
+    margin-top: 6px;
+  }
+  .employee-grid-salary {
+    width: 1%;
+  }
+  .employee-grid-mobile-action .btn {
+    padding-inline: 8px;
+  }
+}
