@@ -17,6 +17,7 @@ import { Select } from "@veca/ui/src/Select";
 import {
   Plus,
   Package,
+  PackagePlus,
   Search,
   RefreshCw,
   History,
@@ -523,19 +524,16 @@ export function Inventory({
                 <th role="columnheader">Disponible</th>
                 <th role="columnheader">Mínimo</th>
                 <th role="columnheader">Estado</th>
-                <th role="columnheader">Acciones</th>
+                {(canAdjust || canReceive) && (
+                  <th role="columnheader">Acciones</th>
+                )}
               </tr>
             </thead>
             <tbody role="rowgroup">
               {rows.map((m) => (
                 <tr key={m.id} role="row">
                   <td role="cell">
-                    <a
-                      className="warehouse-link"
-                      href={`#inventory/materiales/${m.id}`}
-                    >
-                      <strong>{m.name}</strong>
-                    </a>
+                    <strong className="material-catalog-name">{m.name}</strong>
                     <small>
                       {[
                         m.sku,
@@ -545,6 +543,13 @@ export function Inventory({
                         .filter(Boolean)
                         .join(" · ")}
                     </small>
+                    <a
+                      className="warehouse-link material-catalog-history"
+                      aria-label={`Ver historial de ${m.name}`}
+                      href={`#inventory/materiales/${m.id}`}
+                    >
+                      <History size={15} aria-hidden="true" /> Ver historial
+                    </a>
                   </td>
                   <td role="cell" data-label="Familia">
                     {m.category}
@@ -573,50 +578,45 @@ export function Inventory({
                           : "Disponible"}
                     </span>
                   </td>
-                  <td role="cell">
-                    <div className="material-catalog-actions">
-                      {(canAdjust || canReceive) && (
-                        <div className="material-actions">
-                          {canAdjust && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => setCount(m)}
-                              aria-label={`Hacer conteo físico de ${m.name}`}
-                            >
-                              Conteo físico
-                            </Button>
-                          )}
-                          {canReceive && (
-                            <Button
-                              type="button"
-                              variant={m.needsRestock ? "primary" : "ghost"}
-                              aria-label={
-                                m.needsRestock
-                                  ? `Reponer ${m.name}`
-                                  : `Registrar entrada de ${m.name}`
-                              }
-                              onClick={() =>
-                                setMovement({
-                                  materialId: m.id,
-                                  quantity: m.suggestedQuantity,
-                                })
-                              }
-                            >
-                              {m.needsRestock ? "Reponer" : "Registrar entrada"}
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                      <a
-                        className="warehouse-link"
-                        aria-label={`Ver historial de ${m.name}`}
-                        href={`#inventory/materiales/${m.id}`}
-                      >
-                        <History size={16} aria-hidden="true" /> Ver historial
-                      </a>
-                    </div>
-                  </td>
+                  {(canAdjust || canReceive) && (
+                    <td role="cell" className="material-catalog-action-cell">
+                      <div className="material-catalog-actions">
+                        {canReceive && (
+                          <Button
+                            type="button"
+                            data-action="entry"
+                            variant={m.needsRestock ? "primary" : "ghost"}
+                            aria-label={
+                              m.needsRestock
+                                ? `Reponer ${m.name}`
+                                : `Registrar entrada de ${m.name}`
+                            }
+                            onClick={() =>
+                              setMovement({
+                                materialId: m.id,
+                                quantity: m.suggestedQuantity,
+                              })
+                            }
+                          >
+                            <PackagePlus size={16} aria-hidden="true" />
+                            {m.needsRestock ? "Reponer" : "Registrar entrada"}
+                          </Button>
+                        )}
+                        {canAdjust && (
+                          <Button
+                            type="button"
+                            data-action="count"
+                            variant="ghost"
+                            onClick={() => setCount(m)}
+                            aria-label={`Hacer conteo físico de ${m.name}`}
+                          >
+                            <ClipboardCheck size={16} aria-hidden="true" />{" "}
+                            Contar
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

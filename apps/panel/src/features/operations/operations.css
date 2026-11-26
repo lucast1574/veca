@@ -929,22 +929,55 @@
 .material-actions .btn {
   margin: 0;
 }
-.material-catalog-actions {
-  display: grid;
-  gap: 6px;
-  justify-items: start;
+.material-catalog {
+  container: material-catalog / inline-size;
 }
-@media (min-width: 1280px) {
-  .material-catalog-actions {
-    min-width: 248px;
-  }
+.material-catalog th,
+.material-catalog td {
+  padding-inline: 16px;
 }
-.material-catalog .material-actions .btn {
-  min-height: 36px;
-  padding: 6px 10px;
-}
-.material-catalog .warehouse-link {
+.material-catalog td[data-label="Mínimo"] {
   white-space: nowrap;
+}
+.material-catalog-name {
+  color: var(--panel-ink);
+}
+.material-catalog .material-catalog-history {
+  min-height: 32px;
+  color: var(--panel-secondary);
+}
+.material-catalog .material-catalog-history:hover,
+.material-catalog .material-catalog-history:focus-visible {
+  color: var(--panel-accent);
+}
+.material-catalog .material-catalog-action-cell {
+  width: 1%;
+}
+.material-catalog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.material-catalog-actions .btn {
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+}
+.material-catalog-actions .btn svg {
+  flex: none;
+}
+.material-catalog-actions .btn[data-action="entry"] {
+  min-inline-size: 10rem;
+}
+.material-catalog-actions .btn[data-action="count"] {
+  padding-inline: 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--panel-secondary);
+}
+.material-catalog-actions .btn[data-action="count"]:is(:hover, :focus-visible) {
+  background: var(--panel-raised);
+  color: var(--panel-ink);
 }
 .material-detail {
   display: grid;
@@ -1013,7 +1046,7 @@
   }
 }
 
-@media (max-width: 760px) {
+@container material-catalog (max-width: 800px) {
   .material-catalog .ops-material-table {
     display: block;
     min-width: 0;
@@ -1044,7 +1077,7 @@
     overflow-wrap: anywhere;
   }
   .material-catalog td:first-child,
-  .material-catalog td:last-child {
+  .material-catalog .material-catalog-action-cell {
     grid-column: 1 / -1;
     max-width: none;
   }
@@ -1054,8 +1087,21 @@
     color: var(--panel-secondary);
     font-size: 11px;
   }
-  .material-catalog td:last-child {
+  .material-catalog .material-catalog-action-cell {
+    width: auto;
     border-top: 1px solid var(--panel-edge);
-    padding-top: 10px;
+    padding-top: 12px;
+  }
+  .material-catalog-actions {
+    align-items: stretch;
+  }
+  .material-catalog-actions .btn[data-action="entry"] {
+    flex: 1;
+    min-inline-size: 0;
+    white-space: normal;
+  }
+  .material-catalog-actions .btn,
+  .material-catalog .material-catalog-history {
+    min-height: 44px;
   }
 }
