@@ -21,7 +21,6 @@ import {
   type Dialog,
 } from "./LaborRecords";
 import { incidentState } from "./PersonnelDialogs";
-import "./employees.css";
 
 const employeeStates = [
   { value: "", label: "Todos los estados" },

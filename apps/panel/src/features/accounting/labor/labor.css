@@ -114,7 +114,8 @@
 .labor-detail > .notice {
   margin: 0;
 }
-.labor-detail .labor-notice-pending {
+.labor-run-content > .labor-notice-pending {
+  margin: 0;
   background: #fbebdf;
   border-color: #ead3bd;
   color: #754728;
@@ -154,10 +155,48 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
-.labor-lines .labor-line-detail,
-.labor-lines li > .btn {
-  grid-column: 1 / -1;
-  justify-self: start;
+.labor-run-content {
+  display: grid;
+  gap: 14px;
+}
+.labor-run-label,
+.labor-run-actions,
+.labor-void-run > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.labor-run-actions:empty {
+  display: none;
+}
+.labor-run-content > .hint {
+  margin: 0;
+}
+.labor-void-run {
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.labor-void-run > summary {
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+.labor-void-run > summary::-webkit-details-marker {
+  display: none;
+}
+.labor-void-run > summary:focus-visible {
+  outline: none;
+  background: var(--panel-soft);
+  text-decoration: underline;
+}
+.labor-void-run[open] > summary {
+  margin-bottom: 14px;
+}
+.labor-void-run[open] > summary svg {
+  transform: rotate(180deg);
 }
 .labor-empty {
   padding: 16px;

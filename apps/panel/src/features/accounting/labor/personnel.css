@@ -180,10 +180,6 @@
   color: var(--panel-secondary);
   margin-top: 4px;
 }
-.labor-line-detail {
-  flex-basis: 100%;
-  width: 100%;
-}
 @media (max-width: 620px) {
   .payroll-profile-hero {
     flex-direction: column;

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { ChevronRight } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   payrollLineCost,
   type LaborAllocation,
@@ -14,6 +14,7 @@ import { Button, Notice } from "../../../components/ui";
 import { amount, displayDate } from "../accounting-shared";
 import type { AllocationTarget } from "./LaborAllocationForm";
 import "../accounting-records.css";
+import "./employees.css";
 
 export type Dialog =
   | { kind: "employee"; record?: LaborEmployee }
@@ -98,7 +99,6 @@ export function LaborRow({
   title,
   subtitle,
   total,
-  totalLabel,
   state,
   status,
   onOpen,
@@ -106,7 +106,6 @@ export function LaborRow({
   title: string;
   subtitle: string;
   total: number;
-  totalLabel?: string;
   state: string;
   status: string;
   onOpen: () => void;
@@ -120,7 +119,6 @@ export function LaborRow({
       <div className="accounting-record-meta">
         <div className="accounting-record-amount invoice-row-amount">
           <strong>{amount(total)}</strong>
-          {totalLabel && <small>{totalLabel}</small>}
         </div>
         <LaborStatus state={state}>{status}</LaborStatus>
       </div>
@@ -139,12 +137,15 @@ export function PayrollRecords({
   runs,
   emptyWorkers,
   showEmployees,
-  onOpen,
-}: {
+  pendingDiscounts,
+  reviewDiscounts,
+  ...actions
+}: RecordActions & {
   runs: PayrollRun[];
   emptyWorkers: boolean;
   showEmployees: () => void;
-  onOpen: (id: string) => void;
+  pendingDiscounts: WorkPayrollIncident[];
+  reviewDiscounts: () => void;
 }) {
   if (!runs.length)
     return (
@@ -157,42 +158,56 @@ export function PayrollRecords({
         )}
       </div>
     );
-  return (
-    <ul className="accounting-record-list labor-record-list">
-      {runs.map((run) => (
-        <LaborRow
-          key={run.id}
-          title={`Planilla de ${laborPeriod(run.period)}`}
-          subtitle={`${run.lines.length} ${run.lines.length === 1 ? "trabajador" : "trabajadores"}`}
-          total={run.netCents}
-          totalLabel={
-            run.status === "paid" ? "Neto pagado" : "Neto de planilla"
-          }
-          state={run.status}
-          status={payrollStatus(run)}
-          onOpen={() => onOpen(run.id)}
-        />
-      ))}
-    </ul>
-  );
+  return runs.map((run) => {
+    const hasPendingDiscounts =
+      Boolean(run.deductionPending) ||
+      pendingDiscounts.some(
+        (incident) =>
+          incident.period === run.period &&
+          run.lines.some((line) => line.employeeId === incident.employeeId),
+      );
+    const table = (
+      <PayrollRunTable
+        {...actions}
+        run={run}
+        hasPendingDiscounts={hasPendingDiscounts}
+        reviewDiscounts={reviewDiscounts}
+      />
+    );
+    return run.status === "void" ? (
+      <details className="labor-void-run" key={run.id}>
+        <summary>
+          Planilla anulada · {laborPeriod(run.period)}
+          <ChevronDown size={16} aria-hidden="true" />
+        </summary>
+        {table}
+      </details>
+    ) : (
+      <section
+        className="labor-run"
+        key={run.id}
+        aria-label={`Planilla de ${laborPeriod(run.period)}`}
+      >
+        {table}
+      </section>
+    );
+  });
 }
 
-export function PayrollDetail({
+function PayrollRunTable({
   run,
   allocation,
   canWrite,
   open,
-  close,
   hasPendingDiscounts,
   reviewDiscounts,
-  feedback,
 }: RecordActions & {
   run: PayrollRun;
-  close: () => void;
   hasPendingDiscounts: boolean;
   reviewDiscounts: () => void;
-  feedback: string;
 }) {
+  const tableId = useId();
+  const [expanded, setExpanded] = useState("");
   const actions = (
     <>
       {(run.status === "draft" || run.status === "approved") && (
@@ -235,23 +250,17 @@ export function PayrollDetail({
           Registrar pago
         </Button>
       )}
-      {run.status === "paid" || run.status === "void" ? (
-        <Button variant="ghost" onClick={close}>
-          Cerrar
-        </Button>
-      ) : null}
     </>
   );
   return (
-    <LaborDetail
-      title="Detalle de planilla"
-      description={`Periodo de ${laborPeriod(run.period)}`}
-      close={close}
-      state={run.status}
-      status={payrollStatus(run)}
-      actions={actions}
-      feedback={feedback}
-    >
+    <div className="labor-run-content">
+      <header className="labor-toolbar">
+        <div className="labor-run-label">
+          <strong>{laborPeriod(run.period)}</strong>
+          <LaborStatus state={run.status}>{payrollStatus(run)}</LaborStatus>
+        </div>
+        <div className="labor-run-actions">{actions}</div>
+      </header>
       {run.status === "draft" && hasPendingDiscounts && (
         <p className="notice labor-notice-pending" role="status">
           Revisa los descuentos pendientes antes de aprobar la planilla.
@@ -273,9 +282,20 @@ export function PayrollDetail({
           Pago registrado el {displayDate(run.paidAt)} · {run.paymentReference}
         </p>
       )}
-      <section className="labor-detail-section">
-        <h3>Trabajadores en la planilla</h3>
-        <ul className="labor-lines" aria-label="Trabajadores en la planilla">
+      <div className="employee-grid-table payroll-table">
+        <table aria-label="Trabajadores en la planilla">
+          <thead>
+            <tr>
+              <th scope="col">Trabajador</th>
+              <th scope="col">Neto</th>
+              <th scope="col" className="payroll-table-wide">
+                Costo del trabajador
+              </th>
+              <th scope="col" className="payroll-table-wide">
+                Acciones
+              </th>
+            </tr>
+          </thead>
           {run.lines.map((line) => {
             const source: LaborSource = {
               kind: "payroll",
@@ -283,48 +303,18 @@ export function PayrollDetail({
               employeeId: line.employeeId,
             };
             const cost = payrollLineCost(line);
-            return (
-              <li key={line.employeeId}>
-                <div>
-                  <strong>{line.employeeName}</strong>
-                  <small>
-                    {line.days} días · Neto {amount(line.netCents)}
-                    {line.taxableExtraCents + line.nonTaxableCents > 0 &&
-                      ` · Bonos y extras ${amount(line.taxableExtraCents + line.nonTaxableCents)}`}
-                    {line.otherDeductionCents > 0 &&
-                      ` · Otros descuentos ${amount(line.otherDeductionCents)}`}
-                  </small>
-                </div>
-                <div>
-                  <strong>{amount(cost)}</strong>
-                  <small>Costo del trabajador</small>
-                </div>
-                <details className="personnel-detail labor-line-detail">
-                  <summary>Ver bonos, beneficios y descuentos</summary>
-                  <dl className="personnel-breakdown">
-                    {[
-                      ["Bonos y extras afectos", line.taxableExtraCents],
-                      ["Bonos e ingresos no afectos", line.nonTaxableCents],
-                      ["Gratificación o aguinaldo", line.gratuityCents],
-                      ["CTS", line.ctsCents],
-                      ["Vacaciones", line.vacationCents],
-                      ["Quinta categoría", line.fifthCategoryCents],
-                      ["Otros descuentos", line.otherDeductionCents],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <dt>{label}</dt>
-                        <dd>{amount(Number(value))}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {run.workDeductions
-                    ?.filter((i) => i.employeeId === line.employeeId)
-                    .map((i) => (
-                      <p className="hint" key={i.id}>
-                        {i.workName} · {i.item} · {amount(i.cents)}
-                      </p>
-                    ))}
-                </details>
+            const openLine = expanded === line.employeeId;
+            const breakdownId = tableId + "-" + line.employeeId;
+            const lineActions = (
+              <div className="payroll-table-actions">
+                <Button
+                  variant="ghost"
+                  aria-expanded={openLine}
+                  aria-controls={breakdownId}
+                  onClick={() => setExpanded(openLine ? "" : line.employeeId)}
+                >
+                  {openLine ? "Ocultar desglose" : "Ver desglose"}
+                </Button>
                 {payrollEffective(run) && (
                   <AllocationButton
                     target={{
@@ -338,12 +328,79 @@ export function PayrollDetail({
                     open={open}
                   />
                 )}
-              </li>
+              </div>
+            );
+            return (
+              <tbody key={line.employeeId}>
+                <tr>
+                  <th scope="row">
+                    <div className="employee-grid-person">
+                      <strong>{line.employeeName}</strong>
+                      <small>
+                        {line.days} {line.days === 1 ? "día" : "días"}
+                      </small>
+                      <div className="payroll-table-mobile">{lineActions}</div>
+                    </div>
+                  </th>
+                  <td className="employee-grid-salary">
+                    {amount(line.netCents)}
+                    <small className="payroll-table-mobile">
+                      Costo {amount(cost)}
+                    </small>
+                  </td>
+                  <td className="payroll-table-wide employee-grid-salary">
+                    {amount(cost)}
+                  </td>
+                  <td className="payroll-table-wide">{lineActions}</td>
+                </tr>
+                <tr
+                  id={breakdownId}
+                  hidden={!openLine}
+                  className="payroll-table-breakdown"
+                >
+                  {openLine && (
+                    <td colSpan={4}>
+                      <strong>Bonos, beneficios y descuentos</strong>
+                      <dl className="personnel-breakdown">
+                        {[
+                          ["Bonos y extras afectos", line.taxableExtraCents],
+                          ["Bonos e ingresos no afectos", line.nonTaxableCents],
+                          ["Gratificación o aguinaldo", line.gratuityCents],
+                          ["CTS", line.ctsCents],
+                          ["Vacaciones", line.vacationCents],
+                          ["Quinta categoría", line.fifthCategoryCents],
+                          ["Otros descuentos", line.otherDeductionCents],
+                        ].map(([label, value]) => (
+                          <div key={label}>
+                            <dt>{label}</dt>
+                            <dd>{amount(Number(value))}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      {run.workDeductions
+                        ?.filter(
+                          (incident) => incident.employeeId === line.employeeId,
+                        )
+                        .map((incident) => (
+                          <p className="hint" key={incident.id}>
+                            {incident.workName} · {incident.item} ·{" "}
+                            {amount(incident.cents)}
+                          </p>
+                        ))}
+                    </td>
+                  )}
+                </tr>
+              </tbody>
             );
           })}
-        </ul>
-      </section>
-    </LaborDetail>
+        </table>
+        {!run.lines.length && (
+          <p className="employee-grid-empty">
+            Esta planilla no tiene trabajadores.
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

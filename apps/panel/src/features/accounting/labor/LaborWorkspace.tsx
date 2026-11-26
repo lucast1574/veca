@@ -30,7 +30,6 @@ import { LaborAllocationForm } from "./LaborAllocationForm";
 import {
   Metrics,
   payrollEffective,
-  PayrollDetail,
   ReceiptDetail,
   PayrollRecords,
   ReceiptRecords,
@@ -162,8 +161,6 @@ export function LaborWorkspace({
     close: closeDetail,
     feedback,
   };
-  const selectedRun =
-    section === "runs" && data?.runs.find((row) => row.id === selectedId);
   const selectedReceipt =
     section === "receipts" &&
     data?.receipts.find((row) => row.id === selectedId);
@@ -265,7 +262,11 @@ export function LaborWorkspace({
             {section === "runs" && (
               <PayrollRecords
                 runs={data.runs}
-                onOpen={showDetail}
+                allocation={allocation}
+                canWrite={canWrite}
+                open={open}
+                pendingDiscounts={pendingDiscounts}
+                reviewDiscounts={() => changeSection("incidents")}
                 emptyWorkers={!data.employees.length}
                 showEmployees={() => changeSection("employees")}
               />
@@ -305,23 +306,6 @@ export function LaborWorkspace({
             ]}
           />
         </section>
-      )}
-      {selectedRun && (
-        <PayrollDetail
-          {...detailActions}
-          run={selectedRun}
-          hasPendingDiscounts={
-            Boolean(selectedRun.deductionPending) ||
-            pendingDiscounts.some(
-              (incident) =>
-                incident.period === selectedRun.period &&
-                selectedRun.lines.some(
-                  (line) => line.employeeId === incident.employeeId,
-                ),
-            )
-          }
-          reviewDiscounts={() => changeSection("incidents")}
-        />
       )}
       {selectedReceipt && (
         <ReceiptDetail {...detailActions} receipt={selectedReceipt} />
