@@ -150,7 +150,77 @@
   .lead-document-file-list li {
     grid-template-columns: auto minmax(0, 1fr);
   }
-  .lead-document-file-list .warehouse-link {
+  .lead-document-file-list .lead-document-file-actions {
     grid-column: 2;
   }
+}
+
+.lead-document-thumbnail {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 176px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 8px;
+  overflow: hidden;
+  background: var(--panel-raised);
+}
+.lead-document-thumbnail:is(:hover, :focus-visible) {
+  background: var(--panel-accent-soft);
+}
+.lead-document-thumbnail .lead-document-preview-image {
+  max-height: 176px;
+}
+.lead-document-preview-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+.lead-document-preview-image[hidden] {
+  display: none;
+}
+.lead-document-expand {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: var(--panel-ink);
+  background: var(--panel-surface);
+}
+.lead-document-preview-status {
+  display: block;
+  padding: 16px;
+  color: var(--panel-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+.lead-document-viewer .lead-document-preview-image {
+  margin: 0 auto;
+  max-height: 65dvh;
+}
+.lead-document-viewer .ve-modal h2 {
+  overflow-wrap: anywhere;
+}
+.lead-document-page-nav,
+.lead-document-file-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.lead-document-page-nav {
+  justify-content: center;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.lead-document-page-nav .btn,
+.lead-document-file-actions .btn {
+  margin: 0;
 }

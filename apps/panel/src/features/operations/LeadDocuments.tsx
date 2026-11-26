@@ -11,6 +11,10 @@ import {
 } from "../warehouse/shared";
 import { amount } from "../accounting/accounting-shared";
 import { date } from "./shared";
+import {
+  LeadDocumentPreview,
+  LeadDocumentThumbnail,
+} from "./LeadDocumentPreview";
 import "./lead-documents.css";
 
 type Purpose = "plan" | "quotation";
@@ -22,6 +26,7 @@ export function LeadDocumentFiles({
 }: {
   documents: LeadAttachment[];
 }) {
+  const [preview, setPreview] = useState<LeadAttachment>();
   if (!documents.length) return null;
   const latestPlan = documents.find((file) => file.type === "plan")?.id;
   const latestQuotation = documents.find(
@@ -50,19 +55,35 @@ export function LeadDocumentFiles({
                   {isLatest && " · Última versión"}
                 </small>
               </div>
-              <a
-                className="warehouse-link"
-                href={API_BASE + file.url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Descargar ${file.name}`}
-              >
-                <Download size={15} aria-hidden="true" /> Descargar
-              </a>
+              <div className="lead-document-file-actions">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={`Ver vista previa de ${file.name}`}
+                  onClick={() => setPreview(file)}
+                >
+                  Ver
+                </Button>
+                <a
+                  className="warehouse-link"
+                  href={API_BASE + file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Descargar ${file.name}`}
+                >
+                  <Download size={15} aria-hidden="true" /> Descargar
+                </a>
+              </div>
             </li>
           );
         })}
       </ul>
+      {preview && (
+        <LeadDocumentPreview
+          file={preview}
+          onClose={() => setPreview(undefined)}
+        />
+      )}
     </section>
   );
 }
@@ -83,6 +104,7 @@ export function LeadDocuments({
   saved: (type: Purpose) => Promise<void>;
 }) {
   const [purpose, setPurpose] = useState<Purpose>();
+  const [preview, setPreview] = useState<LeadAttachment>();
   return (
     <section
       className="ops-card lead-documents"
@@ -117,6 +139,11 @@ export function LeadDocuments({
               </div>
               {file ? (
                 <>
+                  <LeadDocumentThumbnail
+                    key={file.id}
+                    file={file}
+                    onOpen={() => setPreview(file)}
+                  />
                   <strong className="lead-document-name">
                     {file.quotation?.reference || file.name}
                   </strong>
@@ -164,6 +191,12 @@ export function LeadDocuments({
           );
         })}
       </div>
+      {preview && (
+        <LeadDocumentPreview
+          file={preview}
+          onClose={() => setPreview(undefined)}
+        />
+      )}
       {purpose && (
         <UploadDocument
           type={purpose}
