@@ -2,14 +2,14 @@ import type { SessionUser } from "@veca/content";
 import { SupplyRequests } from "./SupplyRequests";
 import { Inventory } from "../operations/Inventory";
 import { EquipmentList } from "./Equipment";
-import { Purchases } from "./Purchases";
+import { Purchases, PURCHASES_TITLE } from "./Purchases";
 import "../accounting/accounting.css";
 import "./warehouse.css";
 
 const sections = [
   ["solicitudes", "Solicitudes"],
   ["materiales", "Materiales"],
-  ["compras", "Pedidos y recepciones"],
+  ["compras", PURCHASES_TITLE],
   ["equipos", "Equipos"],
 ] as const;
 
@@ -59,7 +59,7 @@ export function InventoryWorkspace({
       )}
       {active === "compras" && (
         <Purchases
-          key={selected || "list"}
+          key={selected === "nueva" ? `nueva/${workId}` : "compras"}
           accountingAccess={accountingAccess}
           accountingWrite={Boolean(
             accountingAccess && user?.permissions.includes("accounting_write"),

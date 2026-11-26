@@ -185,6 +185,30 @@ export const orders: Purchase[] = [
     ],
   },
 ];
+export function filterWarehouseOrders(
+  rows: Purchase[],
+  params: URLSearchParams,
+) {
+  const status = params.get("status");
+  const search = (params.get("search") || "").toLowerCase();
+  return rows.filter((row) => {
+    if (status === "pending_receipt") {
+      if (row.status !== "open" && row.status !== "partial") return false;
+    } else if (status && row.status !== status) return false;
+    return [
+      row.supplier,
+      row.supplierRuc,
+      row.reason,
+      row.workName,
+      row.invoiceSource?.reference,
+      ...row.items.flatMap((item) => [item.name, item.sku]),
+      ...row.receipts.map((receipt) => receipt.reference),
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(search);
+  });
+}
 export const closeout: WorkCloseout = {
   stage: "execution",
   ready: false,
@@ -426,18 +450,12 @@ export const warehouseHandlers = [
       ],
     }),
   ),
-  http.get(`${base}/admin/warehouse/purchases`, ({ request }) => {
-    const params = new URL(request.url).searchParams;
-    const search = (params.get("search") || "").toLowerCase();
-    return HttpResponse.json({
-      items: orders.filter(
-        (o) =>
-          (!params.get("status") || o.status === params.get("status")) &&
-          `${o.supplier} ${o.workName}`.toLowerCase().includes(search),
-      ),
+  http.get(`${base}/admin/warehouse/purchases`, ({ request }) =>
+    HttpResponse.json({
+      items: filterWarehouseOrders(orders, new URL(request.url).searchParams),
       hasMore: false,
-    });
-  }),
+    }),
+  ),
   http.get(`${base}/admin/warehouse/purchases/:id`, ({ params }) => {
     const row = orders.find((o) => o.id === params.id);
     return row

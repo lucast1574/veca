@@ -1,11 +1,11 @@
 import { Select } from "@veca/ui/src/Select";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   ClipboardList,
   Plus,
   Trash2,
   PackageCheck,
-  ChevronDown,
+  Search,
 } from "lucide-react";
 import { purchaseRequest, type Purchase, type Material } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
@@ -31,6 +31,7 @@ import {
   WarehouseSelect,
 } from "./shared";
 
+export const PURCHASES_TITLE = "Recepción de compras";
 const path = warehousePath + "/purchases";
 type Item = Purchase["items"][number];
 type Receipt = Purchase["receipts"][number];
@@ -72,7 +73,7 @@ function PurchaseCard({
   const receiving = targets.length > 0;
   const resuming = targets.some((target) => target.pending);
   return (
-    <li className="purchase-card">
+    <li className="purchase-card" data-status={row.status}>
       <header>
         <h3>
           <ClipboardList size={17} aria-hidden="true" />
@@ -104,27 +105,18 @@ function PurchaseCard({
       <div className="purchase-step">
         <div>
           {waiting ? (
-            <>
-              <strong>Siguiente paso · Contabilidad</strong>
-              <p>
-                Debe completar el pedido con materiales, cantidades y precios.
-              </p>
-            </>
+            <strong>Contabilidad prepara el pedido</strong>
           ) : receiving ? (
             <>
-              <strong>Siguiente paso · Almacén</strong>
-              <p>
-                {resuming
-                  ? "Hay una recepción por terminar."
-                  : "Cuando llegue el material, registra la cantidad que recibiste."}
-              </p>
+              <strong>
+                {resuming ? "Recepción por confirmar" : "Pendiente de recibir"}
+              </strong>
               <ul
                 className="purchase-pending"
                 aria-label="Materiales por recibir"
               >
                 {targets.slice(0, 2).map(({ item }) => (
                   <li key={item.materialId}>
-                    Por recibir{" "}
                     <b>
                       {amount(remainingQuantity(item))} {unitName(item.unit)}
                     </b>{" "}
@@ -198,7 +190,7 @@ export function Purchases({
   const [receivedMessage, setReceivedMessage] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(canReceive ? "pending_receipt" : "");
   const params = new URLSearchParams({ page: String(page) });
   if (search.trim()) params.set("search", search.trim());
   if (status) params.set("status", status);
@@ -214,6 +206,7 @@ export function Purchases({
       <QueryState {...query}>
         {query.data && (
           <PurchaseDetail
+            key={query.data.id}
             row={query.data}
             refresh={query.refresh}
             accountingAccess={accountingAccess}
@@ -225,20 +218,21 @@ export function Purchases({
     );
   return (
     <section className="warehouse-section" aria-labelledby="purchase-heading">
-      <header className="accounting-section-head">
-        <h2 id="purchase-heading">Pedidos y recepciones</h2>
-        <div className="accounting-tools">
-          <Refresh loading={list.loading} onClick={list.refresh} />
+      <header className="accounting-section-head purchase-heading">
+        <div>
+          <h2 id="purchase-heading">{PURCHASES_TITLE}</h2>
+          <p className="hint">
+            {canReceive
+              ? "Registra los materiales que llegan del proveedor."
+              : "Consulta entregas de proveedores y cantidades pendientes."}
+          </p>
         </div>
       </header>
-      <p className="hint">
-        {canReceive
-          ? "Cuando llegue un pedido del proveedor, registra lo recibido para actualizar el stock."
-          : "Consulta qué pedidos prepara Contabilidad y qué materiales recibió Almacén."}
-      </p>
-      <div className="warehouse-filters is-two">
-        <Field label="Buscar pedidos">
+      <div className="purchase-filters">
+        <label className="search-input">
+          <Search size={17} aria-hidden="true" />
           <input
+            aria-label="Buscar compras"
             type="search"
             placeholder="Proveedor, factura, obra o material"
             maxLength={100}
@@ -248,30 +242,33 @@ export function Purchases({
               setSearch(event.target.value);
             }}
           />
-        </Field>
+        </label>
         <Select
-          label="Estado del pedido"
+          label="Estado de la compra"
           value={status}
           onChange={(value) => {
             setPage(1);
             setStatus(value);
           }}
           options={[
-            { value: "", label: "Todos los estados" },
-            ...Object.entries(purchaseStatus).map(([value, label]) => ({
-              value,
-              label,
-            })),
+            { value: "pending_receipt", label: "Por recibir" },
+            { value: "", label: "Todas las compras" },
+            { value: "requested", label: "En Contabilidad" },
+            { value: "received", label: "Recibidas" },
+            { value: "cancelled", label: "Canceladas" },
           ]}
         />
+        <Refresh loading={list.loading} onClick={list.refresh} />
       </div>
       {receivedMessage && <Notice>{receivedMessage}</Notice>}
       <QueryState
         {...list}
         empty={
-          search || status
-            ? "No hay pedidos con estos filtros. Prueba otro estado o proveedor."
-            : "Aún no hay pedidos. Aquí aparecerán los materiales solicitados por las obras o derivados desde Contabilidad."
+          !search && status === "pending_receipt"
+            ? "No hay compras por recibir."
+            : search || status
+              ? "No hay compras con estos filtros."
+              : "Aún no hay compras registradas."
         }
       >
         {Boolean(list.data?.items.length) && (
@@ -428,6 +425,12 @@ function PurchaseRequestForm({
   );
 }
 
+const detailTabs = [
+  { id: "materials", label: "Materiales" },
+  { id: "receipts", label: "Recepciones" },
+  { id: "details", label: "Pedido" },
+] as const;
+
 function PurchaseDetail({
   row,
   refresh,
@@ -441,6 +444,15 @@ function PurchaseDetail({
   accountingWrite: boolean;
   canReceive: boolean;
 }) {
+  const tabId = useId();
+  const [activeTab, setActiveTab] = useState<(typeof detailTabs)[number]["id"]>(
+    row.status === "received"
+      ? "receipts"
+      : row.items.length
+        ? "materials"
+        : "details",
+  );
+  const appliedReceipts = row.receipts.filter((receipt) => receipt.applied);
   const [receiving, setReceiving] = useState<ReceiptTarget>();
   const targets = new Map(
     receiptTargets(row).map((target) => [target.item.materialId, target]),
@@ -456,7 +468,7 @@ function PurchaseDetail({
   return (
     <section className="warehouse-section">
       <WarehouseBack href="#inventory/compras">
-        Volver a pedidos y recepciones
+        Volver a recepción de compras
       </WarehouseBack>
       <header className="accounting-section-head">
         <div>
@@ -481,70 +493,126 @@ function PurchaseDetail({
           purchaseId={row.id}
         />
       )}
-      {row.items.length > 0 && (
-        <section className="warehouse-panel purchase-materials">
-          <div>
-            <h3>Materiales del pedido</h3>
-            {targets.size > 0 && (
-              <p className="hint">
-                {canReceive
-                  ? "Almacén · Elige el material que llegó y registra su cantidad. Si falta algo, quedará pendiente."
-                  : "Almacén registrará las cantidades cuando llegue el material."}
-              </p>
+      <div
+        className="purchase-tabs"
+        role="tablist"
+        aria-label="Detalle de la compra"
+      >
+        {detailTabs.map(({ id, label }, index) => (
+          <button
+            type="button"
+            key={id}
+            id={`${tabId}-tab-${id}`}
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`${tabId}-panel-${id}`}
+            tabIndex={activeTab === id ? 0 : -1}
+            onClick={() => setActiveTab(id)}
+            onKeyDown={(event) => {
+              const last = detailTabs.length - 1;
+              const destinations: Partial<Record<string, number>> = {
+                ArrowRight: (index + 1) % detailTabs.length,
+                ArrowLeft: (index + last) % detailTabs.length,
+                Home: 0,
+                End: last,
+              };
+              const next = destinations[event.key];
+              if (next === undefined) return;
+              event.preventDefault();
+              const nextId = detailTabs[next].id;
+              setActiveTab(nextId);
+              document.getElementById(`${tabId}-tab-${nextId}`)?.focus();
+            }}
+          >
+            {label}
+            {id === "receipts" && appliedReceipts.length > 0 && (
+              <span aria-hidden="true">{appliedReceipts.length}</span>
             )}
-          </div>
-          <ul className="warehouse-list warehouse-detail-list">
-            {items.map((item) => {
-              const target = targets.get(item.materialId);
-              return (
-                <li key={item.materialId}>
-                  <div>
-                    <strong>
-                      {item.sku} · {item.name}
-                    </strong>
-                    {target && (
-                      <p className="purchase-remaining">
-                        Por recibir{" "}
-                        <strong>
-                          {amount(remainingQuantity(item))}{" "}
-                          {unitName(item.unit)}
-                        </strong>
-                      </p>
-                    )}
-                    <small>{item.reason}</small>
-                    <small>
-                      Solicitado {amount(item.requested)} {unitName(item.unit)}
-                      {row.supplier && (
-                        <>
-                          {" "}
-                          · Pedido {amount(item.ordered)} · Recibido{" "}
-                          {amount(item.received)} {unitName(item.unit)} ·{" "}
-                          {money(item.unitCents)} por unidad
-                        </>
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabId}-panel-materials`}
+        aria-labelledby={`${tabId}-tab-materials`}
+        hidden={activeTab !== "materials"}
+      >
+        {row.items.length > 0 && (
+          <section className="warehouse-panel purchase-materials">
+            <div>
+              <h3>Materiales del pedido</h3>
+              {targets.size > 0 && (
+                <p className="hint">
+                  {canReceive
+                    ? "Selecciona el material que llegó."
+                    : "Pendiente de recepción en Almacén."}
+                </p>
+              )}
+            </div>
+            <ul className="warehouse-list warehouse-detail-list">
+              {items.map((item) => {
+                const target = targets.get(item.materialId);
+                return (
+                  <li key={item.materialId}>
+                    <div>
+                      <strong>
+                        {item.sku} · {item.name}
+                      </strong>
+                      {target && (
+                        <p className="purchase-remaining">
+                          Por recibir{" "}
+                          <strong>
+                            {amount(remainingQuantity(item))}{" "}
+                            {unitName(item.unit)}
+                          </strong>
+                        </p>
                       )}
-                    </small>
-                  </div>
-                  {canReceive && target && (
-                    <Button type="button" onClick={() => setReceiving(target)}>
-                      <PackageCheck size={16} aria-hidden="true" />
-                      {target.pending
-                        ? "Continuar recepción"
-                        : "Confirmar recepción"}
-                    </Button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-      {row.receipts.some((receipt) => receipt.applied) && (
+                      <small>{item.reason}</small>
+                      <small>
+                        Solicitado {amount(item.requested)}{" "}
+                        {unitName(item.unit)}
+                        {row.supplier && (
+                          <>
+                            {" "}
+                            · Pedido {amount(item.ordered)} · Recibido{" "}
+                            {amount(item.received)} {unitName(item.unit)} ·{" "}
+                            {money(item.unitCents)} por unidad
+                          </>
+                        )}
+                      </small>
+                    </div>
+                    {canReceive && target && (
+                      <Button
+                        type="button"
+                        onClick={() => setReceiving(target)}
+                      >
+                        <PackageCheck size={16} aria-hidden="true" />
+                        {target.pending
+                          ? "Continuar recepción"
+                          : "Confirmar recepción"}
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        {row.items.length === 0 && (
+          <p className="hint">Contabilidad aún debe indicar los materiales.</p>
+        )}
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabId}-panel-receipts`}
+        aria-labelledby={`${tabId}-tab-receipts`}
+        hidden={activeTab !== "receipts"}
+      >
         <section className="warehouse-panel">
           <h3>Materiales recibidos</h3>
-          <ul className="warehouse-list">
-            {row.receipts
-              .filter((receipt) => receipt.applied)
-              .map((receipt) => (
+          {appliedReceipts.length > 0 ? (
+            <ul className="warehouse-list">
+              {appliedReceipts.map((receipt) => (
                 <li key={receipt.operationId}>
                   <div>
                     <strong>
@@ -567,13 +635,18 @@ function PurchaseDetail({
                   </div>
                 </li>
               ))}
-          </ul>
+            </ul>
+          ) : (
+            <p className="hint">Aún no hay recepciones registradas.</p>
+          )}
         </section>
-      )}
-      <details className="supply-tracking purchase-details">
-        <summary>
-          Datos del pedido <ChevronDown size={15} aria-hidden="true" />
-        </summary>
+      </div>
+      <div
+        role="tabpanel"
+        id={`${tabId}-panel-details`}
+        aria-labelledby={`${tabId}-tab-details`}
+        hidden={activeTab !== "details"}
+      >
         <div className="warehouse-preview">
           {row.invoiceSource ? (
             <>
@@ -608,7 +681,7 @@ function PurchaseDetail({
               </p>
             ))}
         </div>
-      </details>
+      </div>
       {canReceive && receiving && (
         <ReceiveForm
           row={row}
@@ -616,7 +689,11 @@ function PurchaseDetail({
           close={() => setReceiving(undefined)}
           done={() => {
             setReceiving(undefined);
+            setActiveTab("receipts");
             refresh();
+            requestAnimationFrame(() =>
+              document.getElementById(`${tabId}-tab-receipts`)?.focus(),
+            );
           }}
         />
       )}
@@ -664,10 +741,7 @@ function ReceiveForm({
           Por recibir: {amount(remaining)} {unitName(item.unit)}
         </p>
       </div>
-      <p className="hint">
-        Registra solo la cantidad que llegó físicamente. Al confirmar, se sumará
-        al stock. Si falta material, el pedido seguirá pendiente.
-      </p>
+      <p className="hint">El stock aumenta con la cantidad que confirmes.</p>
       <Field label="Cantidad recibida">
         <input
           name="quantity"
@@ -680,10 +754,7 @@ function ReceiveForm({
           readOnly={Boolean(pending)}
         />
       </Field>
-      <Field
-        label="Número de guía o documento de entrega (opcional)"
-        hint="Si el proveedor no entregó un documento, puedes dejarlo vacío."
-      >
+      <Field label="Guía o documento de entrega (opcional)">
         <input
           name="reference"
           maxLength={100}

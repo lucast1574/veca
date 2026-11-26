@@ -113,6 +113,7 @@ try {
       (await call(crm + "/materials?search=AGL-QA-18"))[0];
     const { id: materialId } = await current();
     const buying = root + "/purchases";
+    const receivable = buying + "?status=pending_receipt&search=AGL-QA-18";
     const requested = await call(root + "/purchase-requests", 201, {
       id: new ObjectId().toHexString(),
       workId: String(workId),
@@ -120,6 +121,9 @@ try {
       materials: [{ materialId, quantity: 8 }],
     });
     assert.equal(requested.status, "requested");
+    assert.ok(
+      !(await call(receivable)).items.some((row) => row.id === requested.id),
+    );
     await call(buying + "/" + requested.id + "/receive", 400, {
       operationId: randomUUID(),
       materialId,
@@ -148,6 +152,10 @@ try {
       "PUT",
     );
     assert.equal(order.status, "open");
+    assert.equal(
+      (await call(receivable)).items.find((row) => row.id === order.id)?.status,
+      "open",
+    );
     const receive = buying + "/" + order.id + "/receive";
     const first = {
       operationId: randomUUID(),
@@ -156,6 +164,10 @@ try {
     };
     const withoutDocument = await call(receive, 201, first);
     assert.equal(withoutDocument.status, "partial");
+    assert.equal(
+      (await call(receivable)).items.find((row) => row.id === order.id)?.status,
+      "partial",
+    );
     assert.equal(withoutDocument.receipts[0].reference, "");
     assert.equal((await call(receive, 201, first)).items[0].received, 6);
     assert.equal(
@@ -179,6 +191,9 @@ try {
         })
       ).status,
       "received",
+    );
+    assert.ok(
+      !(await call(receivable)).items.some((row) => row.id === order.id),
     );
     await call(buying + "/" + order.id + "/cancel", 409, {});
     assert.equal((await current()).balance, 10);

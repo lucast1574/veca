@@ -793,13 +793,73 @@
 .purchase-remaining strong {
   color: var(--panel-ink);
 }
-.purchase-details {
-  margin-top: 0;
+.purchase-heading .hint {
+  margin: 4px 0 0;
 }
-.purchase-details .warehouse-preview {
-  margin-top: 8px;
+.purchase-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 260px) auto;
+  gap: 12px;
+  align-items: stretch;
+}
+.purchase-filters .search-input {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+}
+.purchase-filters .search-input input {
+  max-width: none;
+  min-height: 44px;
+}
+.purchase-filters .accounting-refresh {
+  align-self: stretch;
+  height: auto;
+}
+.purchase-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--panel-raised);
+}
+.purchase-tabs button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--panel-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+.purchase-tabs button[aria-selected="true"] {
+  background: var(--panel-surface);
+  color: var(--panel-ink);
+}
+.purchase-tabs button:is(:hover, :focus-visible) {
+  color: var(--panel-accent);
+}
+.purchase-tabs button span {
+  color: var(--panel-secondary);
+  font-size: 11px;
 }
 @media (max-width: 620px) {
+  .purchase-filters {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .purchase-filters .search-input {
+    grid-column: 1 / -1;
+  }
+  .purchase-tabs button {
+    flex: 1;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
   .purchase-card {
     padding: 16px;
   }

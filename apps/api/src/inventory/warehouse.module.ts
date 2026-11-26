@@ -86,7 +86,14 @@ class WarehouseController {
       parse(z.string(), search),
       status
         ? parse(
-            z.enum(["requested", "open", "partial", "received", "cancelled"]),
+            z.enum([
+              "pending_receipt",
+              "requested",
+              "open",
+              "partial",
+              "received",
+              "cancelled",
+            ]),
             status,
           )
         : undefined,

@@ -77,7 +77,7 @@ export const HistorialDeMaterial: Story = {
   render: () => <MaterialesStory materialId={materials[0].id} />,
 };
 export const PedidosPorRecibir: Story = {
-  name: "02 · Pedidos y recepciones de proveedores",
+  name: "02 · Recepción de compras",
   render: screen("compras"),
 };
 export const FacturaEnviadaPorContabilidad: Story = {

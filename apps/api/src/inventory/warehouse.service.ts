@@ -129,7 +129,11 @@ export class WarehouseService {
     }));
   }
 
-  async listPurchases(page: number, search = "", status?: Purchase["status"]) {
+  async listPurchases(
+    page: number,
+    search = "",
+    status?: Purchase["status"] | "pending_receipt",
+  ) {
     const safe = literalSearch(search);
     const query: Filter<PurchaseRecord> = safe
       ? {
@@ -152,7 +156,12 @@ export class WarehouseService {
       query.cancelled = { $ne: true };
       query.requestedOnly = true;
     }
-    if (status === "open" || status === "partial" || status === "received") {
+    if (
+      status === "pending_receipt" ||
+      status === "open" ||
+      status === "partial" ||
+      status === "received"
+    ) {
       query.cancelled = { $ne: true };
       query.requestedOnly = { $ne: true };
       const everyReceived = {
@@ -185,12 +194,14 @@ export class WarehouseService {
       query.$expr =
         status === "received"
           ? everyReceived
-          : {
-              $and: [
-                { $not: [everyReceived] },
-                status === "partial" ? anyReceived : { $not: [anyReceived] },
-              ],
-            };
+          : status === "pending_receipt"
+            ? { $not: [everyReceived] }
+            : {
+                $and: [
+                  { $not: [everyReceived] },
+                  status === "partial" ? anyReceived : { $not: [anyReceived] },
+                ],
+              };
     }
     const rows = await this.orders
       .find(query)
