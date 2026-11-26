@@ -15,9 +15,7 @@ export function PurchasePreparation({
         <span className="warehouse-step-label">
           <Clock3 size={14} aria-hidden="true" /> Pendiente de Contabilidad
         </span>
-        <h3 id="purchase-preparation-heading">
-          Falta el detalle de materiales
-        </h3>
+        <h3 id="purchase-preparation-heading">Completar datos de la compra</h3>
         <p>
           Contabilidad completará los materiales, cantidades y precios. Después
           podrás confirmar aquí lo que llegó.

@@ -1,6 +1,12 @@
 import { Select } from "@veca/ui/src/Select";
 import { useRef, useState } from "react";
-import { ClipboardList, Plus, Trash2, ChevronRight } from "lucide-react";
+import {
+  ClipboardList,
+  Plus,
+  Trash2,
+  PackageCheck,
+  ChevronDown,
+} from "lucide-react";
 import { purchaseRequest, type Purchase, type Material } from "@veca/content";
 import { Button, Field, Notice } from "../../components/ui";
 import { PurchasePreparation } from "./PurchasePreparation";
@@ -29,6 +35,147 @@ const path = warehousePath + "/purchases";
 type Item = Purchase["items"][number];
 type Receipt = Purchase["receipts"][number];
 
+type ReceiptTarget = { item: Item; pending?: Receipt };
+
+function remainingQuantity(item: Item) {
+  return Math.max(0, Math.round((item.ordered - item.received) * 1000) / 1000);
+}
+
+function receiptTargets(row: Purchase): ReceiptTarget[] {
+  if (row.status !== "open" && row.status !== "partial") return [];
+  return row.items
+    .filter((item) => remainingQuantity(item) > 0)
+    .map((item) => ({
+      item,
+      pending: row.receipts.find(
+        (receipt) => receipt.materialId === item.materialId && !receipt.applied,
+      ),
+    }));
+}
+
+function PurchaseCard({
+  row,
+  accountingWrite,
+  canReceive,
+  onReceive,
+}: {
+  row: Purchase;
+  accountingWrite: boolean;
+  canReceive: boolean;
+  onReceive: (target: ReceiptTarget) => void;
+}) {
+  const detail = `#inventory/compras/${row.id}`;
+  const targets = receiptTargets(row);
+  const direct = canReceive && targets.length === 1 ? targets[0] : undefined;
+  const prepare = row.status === "requested" && accountingWrite;
+  const waiting = row.status === "requested";
+  const receiving = targets.length > 0;
+  const resuming = targets.some((target) => target.pending);
+  return (
+    <li className="purchase-card">
+      <header>
+        <h3>
+          <ClipboardList size={17} aria-hidden="true" />
+          {row.supplier || "Pedido sin proveedor asignado"}
+        </h3>
+        <span
+          className="ops-stock-status warehouse-order-status"
+          data-state={row.status}
+        >
+          {purchaseStatus[row.status]}
+        </span>
+      </header>
+      <dl className="purchase-meta">
+        <div>
+          <dt>Destino</dt>
+          <dd>{row.workName || "Almacén general"}</dd>
+        </div>
+        {row.invoiceSource?.reference && (
+          <div>
+            <dt>Factura</dt>
+            <dd>{row.invoiceSource.reference}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Registrado</dt>
+          <dd>{date(row.createdAt)}</dd>
+        </div>
+      </dl>
+      <div className="purchase-step">
+        <div>
+          {waiting ? (
+            <>
+              <strong>Siguiente paso · Contabilidad</strong>
+              <p>
+                Debe completar el pedido con materiales, cantidades y precios.
+              </p>
+            </>
+          ) : receiving ? (
+            <>
+              <strong>Siguiente paso · Almacén</strong>
+              <p>
+                {resuming
+                  ? "Hay una recepción por terminar."
+                  : "Cuando llegue el material, registra la cantidad que recibiste."}
+              </p>
+              <ul
+                className="purchase-pending"
+                aria-label="Materiales por recibir"
+              >
+                {targets.slice(0, 2).map(({ item }) => (
+                  <li key={item.materialId}>
+                    Por recibir{" "}
+                    <b>
+                      {amount(remainingQuantity(item))} {unitName(item.unit)}
+                    </b>{" "}
+                    · {item.name}
+                  </li>
+                ))}
+                {targets.length > 2 && <li>Y {targets.length - 2} más</li>}
+              </ul>
+            </>
+          ) : (
+            <strong>
+              {row.status === "cancelled"
+                ? "Pedido cerrado por cancelación"
+                : "Recepción completa"}
+            </strong>
+          )}
+        </div>
+        {direct ? (
+          <Button type="button" onClick={() => onReceive(direct)}>
+            <PackageCheck size={16} aria-hidden="true" />
+            {direct.pending ? "Continuar recepción" : "Registrar recepción"}
+          </Button>
+        ) : prepare ? (
+          <a
+            className="btn btn-primary"
+            href={`#accounting/gastos/${row.id}/preparar`}
+          >
+            Completar en Contabilidad
+          </a>
+        ) : (
+          <a
+            className={`btn ${receiving && canReceive ? "btn-primary" : "btn-ghost"}`}
+            href={detail}
+          >
+            {receiving && canReceive
+              ? "Elegir material"
+              : row.status === "received"
+                ? "Ver recepciones"
+                : "Ver pedido"}
+          </a>
+        )}
+      </div>
+      {(direct || prepare) && (
+        <a className="warehouse-link purchase-detail-link" href={detail}>
+          Ver pedido
+        </a>
+      )}
+    </li>
+  );
+}
+
 export function Purchases({
   selected,
   workId = "",
@@ -45,6 +192,10 @@ export function Purchases({
   canReceive?: boolean;
 }) {
   const [requesting, setRequesting] = useState(Boolean(workId) && canRequest);
+  const [receiving, setReceiving] = useState<
+    ReceiptTarget & { row: Purchase }
+  >();
+  const [receivedMessage, setReceivedMessage] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -81,9 +232,9 @@ export function Purchases({
         </div>
       </header>
       <p className="hint">
-        Contabilidad registra lo comprado, las cantidades y los precios. Aquí
-        confirma qué materiales llegaron y su cantidad real para actualizar el
-        stock.
+        {canReceive
+          ? "Cuando llegue un pedido del proveedor, registra lo recibido para actualizar el stock."
+          : "Consulta qué pedidos prepara Contabilidad y qué materiales recibió Almacén."}
       </p>
       <div className="warehouse-filters is-two">
         <Field label="Buscar pedidos">
@@ -114,6 +265,7 @@ export function Purchases({
           ]}
         />
       </div>
+      {receivedMessage && <Notice>{receivedMessage}</Notice>}
       <QueryState
         {...list}
         empty={
@@ -125,59 +277,13 @@ export function Purchases({
         {Boolean(list.data?.items.length) && (
           <ul className="warehouse-records">
             {list.data?.items.map((row) => (
-              <li key={row.id}>
-                <a
-                  href={`#inventory/compras/${row.id}`}
-                  className="warehouse-record"
-                >
-                  <div className="warehouse-record-head">
-                    <ClipboardList size={20} aria-hidden="true" />
-                    <div>
-                      <strong>{row.supplier || "Pedido por preparar"}</strong>
-                      <small>
-                        {row.invoiceSource?.reference
-                          ? `Factura ${row.invoiceSource.reference} · `
-                          : ""}
-                        {row.workName || "Almacén general"}
-                      </small>
-                    </div>
-                    <span
-                      className="ops-stock-status warehouse-order-status"
-                      data-state={row.status}
-                    >
-                      {purchaseStatus[row.status]}
-                    </span>
-                    <ChevronRight size={18} aria-hidden="true" />
-                  </div>
-                  <p>
-                    {row.items.length
-                      ? row.items
-                          .slice(0, 3)
-                          .map(
-                            (item) =>
-                              `${item.name} · ${amount(item.received)} de ${amount(item.ordered || item.requested)} ${unitName(item.unit)} recibidos`,
-                          )
-                          .join(" / ")
-                      : "Contabilidad debe completar los materiales y cantidades."}
-                    {row.items.length > 3
-                      ? ` · +${row.items.length - 3} materiales`
-                      : ""}
-                  </p>
-                  <small>{row.reason}</small>
-                  <footer>
-                    <small>{date(row.createdAt)}</small>
-                    <span>
-                      {row.status === "requested"
-                        ? "Ver qué falta completar"
-                        : row.status === "received"
-                          ? "Ver recepciones"
-                          : row.status === "cancelled"
-                            ? "Ver detalle"
-                            : "Revisar y recibir materiales"}
-                    </span>
-                  </footer>
-                </a>
-              </li>
+              <PurchaseCard
+                key={row.id}
+                row={row}
+                accountingWrite={accountingWrite}
+                canReceive={canReceive}
+                onReceive={(target) => setReceiving({ row, ...target })}
+              />
             ))}
           </ul>
         )}
@@ -187,6 +293,19 @@ export function Purchases({
         hasMore={Boolean(list.data?.hasMore)}
         change={setPage}
       />
+      {canReceive && receiving && (
+        <ReceiveForm
+          {...receiving}
+          close={() => setReceiving(undefined)}
+          done={() => {
+            setReceiving(undefined);
+            setReceivedMessage(
+              `Recepción registrada para ${receiving.item.name}. Se actualizó el stock.`,
+            );
+            list.refresh();
+          }}
+        />
+      )}
       {requesting && (
         <PurchaseRequestForm
           materials={materials.data || []}
@@ -322,10 +441,14 @@ function PurchaseDetail({
   accountingWrite: boolean;
   canReceive: boolean;
 }) {
-  const [receiving, setReceiving] = useState<{
-    item: Item;
-    pending?: Receipt;
-  }>();
+  const [receiving, setReceiving] = useState<ReceiptTarget>();
+  const targets = new Map(
+    receiptTargets(row).map((target) => [target.item.materialId, target]),
+  );
+  const items = [...row.items].sort(
+    (a, b) =>
+      Number(targets.has(b.materialId)) - Number(targets.has(a.materialId)),
+  );
   const total = row.items.reduce(
     (sum, line) => sum + Math.round(line.ordered * line.unitCents),
     0,
@@ -348,9 +471,7 @@ function PurchaseDetail({
             className="ops-stock-status warehouse-order-status"
             data-state={row.status}
           >
-            {row.invoiceSource && row.status === "requested"
-              ? "Por completar en Contabilidad"
-              : purchaseStatus[row.status]}
+            {purchaseStatus[row.status]}
           </span>
         </div>
       </header>
@@ -360,66 +481,36 @@ function PurchaseDetail({
           purchaseId={row.id}
         />
       )}
-      <div className="warehouse-preview">
-        {row.invoiceSource ? (
-          <>
-            <strong>
-              Factura {row.invoiceSource.reference || "por identificar"} ·{" "}
-              {money(row.invoiceSource.netCents)} sin IGV
-            </strong>
-            <p>
-              Factura enviada por Contabilidad para este pedido de materiales.
-            </p>
-          </>
-        ) : (
-          <>
-            {row.supplier && <strong>{money(total)} sin IGV</strong>}
-            <p>
-              Revisa los materiales del pedido y registra las cantidades que
-              llegan. Cada recepción confirmada aumenta el stock disponible.
-            </p>
-          </>
-        )}
-        {row.supplier && row.requestedAt && (
-          <small>
-            Solicitado el {date(row.requestedAt)} por {row.requestedBy}
-          </small>
-        )}
-        <p>{row.reason}</p>
-        {["open", "partial", "received"].includes(row.status) &&
-          (accountingAccess ? (
-            <a className="warehouse-link" href={`#accounting/gastos/${row.id}`}>
-              Ver o registrar factura en Contabilidad
-            </a>
-          ) : (
-            <p className="hint">
-              La factura de este pedido se registra y revisa en Contabilidad.
-            </p>
-          ))}
-      </div>
       {row.items.length > 0 && (
-        <section className="warehouse-panel">
+        <section className="warehouse-panel purchase-materials">
           <div>
             <h3>Materiales del pedido</h3>
-            {canReceive && ["open", "partial"].includes(row.status) && (
+            {targets.size > 0 && (
               <p className="hint">
-                Usa Confirmar recepción en el material que llegó. Puedes
-                confirmar entregas parciales.
+                {canReceive
+                  ? "Almacén · Elige el material que llegó y registra su cantidad. Si falta algo, quedará pendiente."
+                  : "Almacén registrará las cantidades cuando llegue el material."}
               </p>
             )}
           </div>
           <ul className="warehouse-list warehouse-detail-list">
-            {row.items.map((item) => {
-              const pending = row.receipts.find(
-                (receipt) =>
-                  receipt.materialId === item.materialId && !receipt.applied,
-              );
+            {items.map((item) => {
+              const target = targets.get(item.materialId);
               return (
                 <li key={item.materialId}>
                   <div>
                     <strong>
                       {item.sku} · {item.name}
                     </strong>
+                    {target && (
+                      <p className="purchase-remaining">
+                        Por recibir{" "}
+                        <strong>
+                          {amount(remainingQuantity(item))}{" "}
+                          {unitName(item.unit)}
+                        </strong>
+                      </p>
+                    )}
                     <small>{item.reason}</small>
                     <small>
                       Solicitado {amount(item.requested)} {unitName(item.unit)}
@@ -433,19 +524,14 @@ function PurchaseDetail({
                       )}
                     </small>
                   </div>
-                  {canReceive &&
-                    row.status !== "cancelled" &&
-                    item.received + 0.0001 < item.ordered && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => setReceiving({ item, pending })}
-                      >
-                        {pending
-                          ? "Continuar recepción"
-                          : "Confirmar recepción"}
-                      </Button>
-                    )}
+                  {canReceive && target && (
+                    <Button type="button" onClick={() => setReceiving(target)}>
+                      <PackageCheck size={16} aria-hidden="true" />
+                      {target.pending
+                        ? "Continuar recepción"
+                        : "Confirmar recepción"}
+                    </Button>
+                  )}
                 </li>
               );
             })}
@@ -484,7 +570,46 @@ function PurchaseDetail({
           </ul>
         </section>
       )}
-      {receiving && (
+      <details className="supply-tracking purchase-details">
+        <summary>
+          Datos del pedido <ChevronDown size={15} aria-hidden="true" />
+        </summary>
+        <div className="warehouse-preview">
+          {row.invoiceSource ? (
+            <>
+              <strong>
+                Factura {row.invoiceSource.reference || "por identificar"} ·{" "}
+                {money(row.invoiceSource.netCents)} sin IGV
+              </strong>
+              <p>
+                Factura enviada por Contabilidad para este pedido de materiales.
+              </p>
+            </>
+          ) : (
+            <>{row.supplier && <strong>{money(total)} sin IGV</strong>}</>
+          )}
+          {row.requestedAt && row.requestedBy && (
+            <small>
+              Solicitado el {date(row.requestedAt)} por {row.requestedBy}
+            </small>
+          )}
+          <p>{row.reason}</p>
+          {["open", "partial", "received"].includes(row.status) &&
+            (accountingAccess ? (
+              <a
+                className="warehouse-link"
+                href={`#accounting/gastos/${row.id}`}
+              >
+                Ver o registrar factura en Contabilidad
+              </a>
+            ) : (
+              <p className="hint">
+                La factura de este pedido se registra y revisa en Contabilidad.
+              </p>
+            ))}
+        </div>
+      </details>
+      {canReceive && receiving && (
         <ReceiveForm
           row={row}
           {...receiving}
@@ -513,7 +638,7 @@ function ReceiveForm({
   done: () => void;
 }) {
   const operation = useRef(pending?.operationId || crypto.randomUUID());
-  const remaining = Math.round((item.ordered - item.received) * 1000) / 1000;
+  const remaining = remainingQuantity(item);
   return (
     <WarehouseForm
       title={
