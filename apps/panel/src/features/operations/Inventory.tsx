@@ -42,18 +42,21 @@ export function MaterialMovement({
   onSaved,
   onCancel,
   initialMaterial = "",
+  initialQuantity,
   canReturn = false,
 }: {
   materials: Material[];
   leadId: string | null;
   onSaved: (movement: Movement) => void;
   initialMaterial?: string;
+  initialQuantity?: number;
   canReturn?: boolean;
   onCancel: () => void;
 }) {
   const [material, setMaterial] = useState(initialMaterial),
     [kind, setKind] = useState(leadId ? "consumption" : "receipt"),
     [busy, setBusy] = useState(false);
+  const [quantity, setQuantity] = useState(initialQuantity?.toString() ?? "");
   const operation = useRef(crypto.randomUUID());
   const [dirty, setDirty] = useState(false);
   const clearGuard = useUnsavedChanges(dirty, busy);
@@ -123,6 +126,8 @@ export function MaterialMovement({
                 placeholder="Selecciona un material"
                 onChange={(value) => {
                   setMaterial(value);
+                  if (initialQuantity !== undefined && value !== material)
+                    setQuantity("");
                   setDirty(true);
                 }}
                 options={materials.map((m) => ({
@@ -171,6 +176,8 @@ export function MaterialMovement({
               <input
                 name="quantity"
                 type="number"
+                value={quantity}
+                onChange={(event) => setQuantity(event.target.value)}
                 required
                 min="0.001"
                 step="0.001"
@@ -192,9 +199,15 @@ export function MaterialMovement({
             </Field>
           </div>
           <p className="hint">
-            Disponible: {amount(selected?.balance || 0)}{" "}
-            {unitName(selected?.unit || "")}. El movimiento queda en el
-            historial; cerrar la obra no vuelve a descontarlo.
+            {selected && (
+              <>
+                Disponible: {amount(selected.available ?? selected.balance)}{" "}
+                {unitName(selected.unit)}.{" "}
+              </>
+            )}
+            {leadId
+              ? "El movimiento queda en el historial. Cerrar la obra no vuelve a descontarlo."
+              : "La entrada quedará registrada en el historial."}
           </p>
         </fieldset>
       </form>
@@ -220,7 +233,10 @@ export function Inventory({
   const [category, setCategory] = useState("");
   const [stock, setStock] = useState("");
   const [create, setCreate] = useState(false);
-  const [movement, setMovement] = useState<string | null>(null);
+  const [movement, setMovement] = useState<{
+    materialId: string;
+    quantity?: number;
+  }>();
   const catalog = useAccountingQuery<Material[]>("/admin/crm/materials");
   const selected = useAccountingQuery<Material>(
     materialId ? `/admin/crm/materials/${encodeURIComponent(materialId)}` : "",
@@ -249,6 +265,16 @@ export function Inventory({
           ? (m.available ?? m.balance) === 0
           : (m.available ?? m.balance) <= m.minimum)),
   );
+  const rows = filtered.map((material) => {
+    const available = material.available ?? material.balance;
+    const shortage = Math.round((material.minimum - available) * 1000) / 1000;
+    return {
+      ...material,
+      available,
+      needsRestock: available <= material.minimum,
+      suggestedQuantity: shortage > 0 ? shortage : undefined,
+    };
+  });
   return (
     <main className="ops-page">
       <div className="ops-heading">
@@ -273,7 +299,7 @@ export function Inventory({
             disabled={
               !canReceive || (materialId ? !selected.data : !items.length)
             }
-            onClick={() => setMovement(materialId || "")}
+            onClick={() => setMovement({ materialId: materialId || "" })}
           >
             <Package size={17} />
             Registrar entrada
@@ -366,9 +392,8 @@ export function Inventory({
           }}
         />
       )}
-      {movement !== null && (
+      {movement && (
         <MaterialMovement
-          key={movement}
           materials={
             selected.data &&
             !items.some((item) => item.id === selected.data?.id)
@@ -376,10 +401,11 @@ export function Inventory({
               : items
           }
           leadId={null}
-          initialMaterial={movement}
-          onCancel={() => setMovement(null)}
+          initialMaterial={movement.materialId}
+          initialQuantity={movement.quantity}
+          onCancel={() => setMovement(undefined)}
           onSaved={(entry) => {
-            setMovement(null);
+            setMovement(undefined);
             setMessage(
               `Entrada registrada para ${entry.materialName}: ${amount(entry.quantity)} ${unitName(entry.unit)}. Saldo: ${amount(entry.balanceAfter)} ${unitName(entry.unit)}.`,
             );
@@ -501,7 +527,7 @@ export function Inventory({
               </tr>
             </thead>
             <tbody role="rowgroup">
-              {filtered.map((m) => (
+              {rows.map((m) => (
                 <tr key={m.id} role="row">
                   <td role="cell">
                     <a
@@ -527,8 +553,7 @@ export function Inventory({
                     {m.location || "Sin ubicación"}
                   </td>
                   <td role="cell" data-label="Disponible">
-                    <strong>{amount(m.available ?? m.balance)}</strong>{" "}
-                    {unitName(m.unit)}
+                    <strong>{amount(m.available)}</strong> {unitName(m.unit)}
                     <small>
                       En almacén {amount(m.balance)} {unitName(m.unit)} ·
                       Reservado {amount(m.reserved || 0)} {unitName(m.unit)}
@@ -539,12 +564,12 @@ export function Inventory({
                   </td>
                   <td role="cell">
                     <span
-                      className={`ops-stock-status ${(m.available ?? m.balance) <= m.minimum ? "low" : ""}`}
+                      className={`ops-stock-status ${m.needsRestock ? "low" : ""}`}
                     >
-                      {(m.available ?? m.balance) === 0
+                      {m.available === 0
                         ? "Sin stock"
-                        : (m.available ?? m.balance) <= m.minimum
-                          ? "Reponer"
+                        : m.needsRestock
+                          ? "Por reponer"
                           : "Disponible"}
                     </span>
                   </td>
@@ -565,11 +590,20 @@ export function Inventory({
                           {canReceive && (
                             <Button
                               type="button"
-                              variant="ghost"
-                              aria-label={`Registrar entrada de ${m.name}`}
-                              onClick={() => setMovement(m.id)}
+                              variant={m.needsRestock ? "primary" : "ghost"}
+                              aria-label={
+                                m.needsRestock
+                                  ? `Reponer ${m.name}`
+                                  : `Registrar entrada de ${m.name}`
+                              }
+                              onClick={() =>
+                                setMovement({
+                                  materialId: m.id,
+                                  quantity: m.suggestedQuantity,
+                                })
+                              }
                             >
-                              Registrar entrada
+                              {m.needsRestock ? "Reponer" : "Registrar entrada"}
                             </Button>
                           )}
                         </div>
