@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Package } from "lucide-react";
+import { ArrowRight, ClipboardList } from "lucide-react";
 import type { Material, Purchase } from "@veca/content";
 import { Button, Notice } from "../../components/ui";
 import { Modal } from "../../components/Modal";
@@ -95,49 +95,61 @@ export function AccountingPurchaseOrders({
 
       {items.length > 0 && (
         <section
-          className="sire-inbox accounting-purchase-orders"
+          className="accounting-purchase-orders accounting-purchase-queue warehouse-panel"
           aria-labelledby="accounting-purchase-orders-heading"
         >
           <header className="accounting-section-head">
-            <div>
-              <h3 id="accounting-purchase-orders-heading">
-                Materiales por completar
-              </h3>
-            </div>
-            <span className="ops-stock-status">
-              {items.length} por completar
+            <h3 id="accounting-purchase-orders-heading">
+              Compras por preparar
+            </h3>
+            <span
+              className="ops-stock-status warehouse-order-status"
+              data-state="requested"
+            >
+              {items.length} {items.length === 1 ? "pendiente" : "pendientes"}
             </span>
           </header>
-          <ul className="warehouse-list">
+          <ul className="warehouse-records">
             {items.map((row) => (
-              <li key={row.id}>
-                <Package size={18} aria-hidden="true" />
-                <div>
-                  <strong>{row.supplier || "Solicitud de compra"}</strong>
+              <li key={row.id} className="purchase-card">
+                <header>
+                  <h4>
+                    <ClipboardList size={17} aria-hidden="true" />
+                    {row.supplier || "Solicitud de compra"}
+                  </h4>
                   <span className="purchase-destination">
                     Destino · {row.workName || "Almacén general"}
                   </span>
+                </header>
+                <div className="accounting-purchase-context">
                   {row.invoiceSource && (
                     <small>
-                      Factura {row.invoiceSource.reference} ya guardada
+                      Factura {row.invoiceSource.reference || "sin número"}
                     </small>
                   )}
-                  <small>{row.reason}</small>
+                  {row.reason && <small>{row.reason}</small>}
                 </div>
-                {canWrite && (
-                  <div className="supply-actions">
+                <div className="purchase-step">
+                  <strong>
+                    {canWrite
+                      ? "Registra materiales, cantidades y precios."
+                      : "Pendiente de Contabilidad"}
+                  </strong>
+                  {canWrite && (
                     <Button type="button" onClick={() => onSelect(row.id)}>
                       Completar compra{" "}
                       <ArrowRight size={16} aria-hidden="true" />
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setCancelling(row)}
-                    >
-                      Cancelar pedido
-                    </Button>
-                  </div>
+                  )}
+                </div>
+                {canWrite && (
+                  <button
+                    type="button"
+                    className="warehouse-link accounting-purchase-cancel"
+                    onClick={() => setCancelling(row)}
+                  >
+                    Cancelar pedido
+                  </button>
                 )}
               </li>
             ))}
@@ -168,8 +180,9 @@ export function AccountingPurchaseOrders({
           }}
         >
           <p>
-            El pedido quedará cancelado y se conservará en el historial. La
-            factura guardada en Contabilidad se conserva.
+            El pedido quedará cancelado en el historial.
+            {cancelling.invoiceSource &&
+              " La factura seguirá guardada en Contabilidad."}
           </p>
         </WarehouseForm>
       )}
