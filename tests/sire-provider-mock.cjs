@@ -9,7 +9,7 @@ const response = (data, status = 200) =>
     status,
     headers: { "Content-Type": "application/json" },
   });
-const text = (period, book) => {
+const text = (period, book, changed) => {
   const header = Array(40).fill("");
   header[0] = "RUC";
   header[2] = "Periodo";
@@ -18,18 +18,36 @@ const text = (period, book) => {
     Object.assign(cells, {
       0: ruc,
       2: period.replace("-", ""),
-      4: `05/${period.slice(5,7)}/${period.slice(0,4)}`,
+      4: `05/${period.slice(5, 7)}/${period.slice(0, 4)}`,
       6: "01",
       7: "FQA",
     });
     cells[book === "sales" ? 8 : 9] = String(number);
     cells[book === "sales" ? 11 : 12] = "20100066603";
-    if (book === "purchases") { cells[13] = "Proveedor QA local"; cells[14] = "100.00"; cells[15] = "18.00"; }
-    cells[book === "sales" ? 25 : 24] = "118.00";
+    if (book === "purchases") {
+      cells[13] = "Proveedor QA local";
+      cells[14] = "100.00";
+      cells[15] = "18.00";
+    } else {
+      cells[12] = "Cliente QA local";
+      cells[14] = "100.00";
+      cells[16] = number === 4 ? (changed ? "11.00" : "10.00") : "18.00";
+    }
+    cells[book === "sales" ? 25 : 24] =
+      number === 3
+        ? "117.00"
+        : number === 4
+          ? changed
+            ? "111.00"
+            : "110.00"
+          : "118.00";
     cells[book === "sales" ? 26 : 25] = "PEN";
     return cells.join("|");
   };
-  return header.join("|") + "\n" + make(1) + "\n" + make(2) + "\n";
+  return [
+    header.join("|"),
+    ...[1, 2, ...(book === "sales" ? [3, 4] : [])].map(make),
+  ].join("\n");
 };
 globalThis.fetch = async (input, options = {}) => {
   const url = new URL(String(input));
@@ -46,7 +64,12 @@ globalThis.fetch = async (input, options = {}) => {
         headers: { "Content-Type": "text/html" },
       });
     const job = `v1.qa.${String(jobs.size)}.sire`;
-    jobs.set(job, { period, book, polls: 0 });
+    const changed =
+      book === "sales" &&
+      [...jobs.values()].some(
+        (previous) => previous.period === period && previous.book === book,
+      );
+    jobs.set(job, { period, book, polls: 0, changed });
     return response({ job, ruc, period, book, status: "pending" }, 201);
   }
   const job = decodeURIComponent(url.pathname.split("/").at(-1));
@@ -66,6 +89,11 @@ globalThis.fetch = async (input, options = {}) => {
     files:
       state.period === "2026-04"
         ? []
-        : [{ name: "propuesta.txt", text: text(state.period, state.book) }],
+        : [
+            {
+              name: "propuesta.txt",
+              text: text(state.period, state.book, state.changed),
+            },
+          ],
   });
 };

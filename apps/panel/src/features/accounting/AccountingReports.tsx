@@ -80,8 +80,8 @@ export function TaxPeriod({ initialMonth }: { initialMonth?: string }) {
               />
               <SalesPending report={report} />
               <p className="hint">
-                Las ventas se suman cuando SUNAT acepta la factura. Los
-                borradores y envíos sin confirmar quedan como pendientes.
+                Se suman las facturas aceptadas y las registradas desde SUNAT.
+                Los borradores y envíos sin confirmar quedan pendientes.
               </p>
               <footer className="accounting-tax-actions">
                 <a

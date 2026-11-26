@@ -8,7 +8,13 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { ObjectId, MongoServerError, type Filter } from "mongodb";
+import {
+  ObjectId,
+  MongoBulkWriteError,
+  MongoServerError,
+  type AnyBulkWriteOperation,
+  type Filter,
+} from "mongodb";
 import {
   matchingPurchaseCosts,
   purchaseDocumentKey,
@@ -27,6 +33,7 @@ import {
   type CostInput,
   type InvoiceInput,
   type InvoiceStatus,
+  type SireSale,
 } from "@veca/content";
 import { Database } from "../database/database.module";
 import { PurchaseRoutingService } from "./purchase-routing.service";
@@ -36,11 +43,13 @@ import { CrmRepository } from "../crm/crm.repository";
 import { StorageService } from "../media/storage.service";
 import { limaDate } from "../dispatch/guide-provider";
 import { LaborCostsService } from "./labor-costs.service";
+import { fiscalIssuerRuc } from "../common/fiscal-config";
 import { InvoiceProvider, type FiscalInvoice } from "./invoice-provider";
 
 type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck" | "proof"> & {
   _id: ObjectId;
   externalId?: string;
+  fiscalNumberKey?: string;
   attempt?: string;
   creationHash?: string;
   updatedAt: string;
@@ -57,6 +66,13 @@ type CostRecord = Omit<AccountingCost, "id" | "proof"> & {
   warehouseRoutingPending?: boolean;
 };
 const issued: InvoiceStatus[] = ["accepted", "observed"];
+function fiscalNumberKey(number: string) {
+  const match = /^([A-Z0-9]{1,20})\s*-\s*(\d{1,20})$/i.exec(number.trim());
+  if (!match) return "";
+  const series = match[1].toUpperCase().replace(/^0+(?=.)/, "");
+  const serial = match[2].replace(/^0+(?=\d)/, "");
+  return `${fiscalIssuerRuc}:${series}-${serial}`;
+}
 const issuable: InvoiceStatus[] = ["requested", "draft"];
 const observed = (status: string) =>
   ["accepted_with_observations", "observed"].includes(status);
@@ -84,6 +100,7 @@ const fingerprint = (data: object) =>
 function invoiceView({
   _id,
   externalId,
+  fiscalNumberKey: _fiscalNumberKey,
   attempt,
   creationHash,
   actor,
@@ -191,6 +208,157 @@ export class AccountingService {
         "Elige una obra operativa para esta operación contable.",
       );
     return work;
+  }
+
+  async importSunatSales(rows: SireSale[]): Promise<SireSale[]> {
+    const candidates = new Map<string, SireSale>();
+    const conflicting = new Set<string>();
+    for (const row of rows) {
+      if (row.type !== "01") continue;
+      const key = fiscalNumberKey(row.reference);
+      if (!key) continue;
+      const previous = candidates.get(key);
+      if (previous && fingerprint(previous) !== fingerprint(row))
+        conflicting.add(key);
+      candidates.set(key, row);
+    }
+    if (!candidates.size) return rows;
+
+    // Include legacy records created before fiscalNumberKey existed.
+    const local = new Map<
+      string,
+      Pick<
+        InvoiceRecord,
+        | "_id"
+        | "customerRuc"
+        | "totalCents"
+        | "netCents"
+        | "taxCents"
+        | "status"
+      >
+    >();
+    const existing = this.invoices
+      .find({
+        status: { $in: [...issued, "pending", "sending"] },
+        number: { $exists: true, $ne: "" },
+      })
+      .project<
+        Pick<
+          InvoiceRecord,
+          | "_id"
+          | "number"
+          | "customerRuc"
+          | "totalCents"
+          | "netCents"
+          | "taxCents"
+          | "status"
+        >
+      >({
+        number: 1,
+        customerRuc: 1,
+        totalCents: 1,
+        netCents: 1,
+        taxCents: 1,
+        status: 1,
+      });
+    for await (const invoice of existing) {
+      const key = fiscalNumberKey(invoice.number || "");
+      if (
+        candidates.has(key) &&
+        (!local.has(key) || issued.includes(invoice.status))
+      )
+        local.set(key, invoice);
+    }
+
+    const operations: AnyBulkWriteOperation<InvoiceRecord>[] = [];
+    const now = new Date().toISOString();
+    for (const [key, row] of candidates) {
+      if (!row.details || row.review || local.has(key) || conflicting.has(key))
+        continue;
+      const { issueDate, dueDate, customer, netCents, taxCents } = row.details;
+      const record: InvoiceRecord = {
+        _id: new ObjectId(),
+        fiscalNumberKey: key,
+        source: "sunat",
+        customer: customer || row.taxId,
+        customerRuc: row.taxId,
+        issueDate,
+        dueDate,
+        method: dueDate ? "credit" : "cash",
+        number: row.reference,
+        netCents,
+        taxCents,
+        totalCents: row.total,
+        paidCents: 0,
+        payments: [],
+        workName: "",
+        workId: "",
+        items: [],
+        status: "accepted",
+        observation: "",
+        version: 1,
+        actor: "SUNAT",
+        createdAt: now,
+        updatedAt: now,
+      };
+      operations.push({
+        updateOne: {
+          filter: { fiscalNumberKey: key },
+          update: { $setOnInsert: record },
+          upsert: true,
+        },
+      });
+    }
+    if (operations.length) {
+      try {
+        await this.invoices.bulkWrite(operations, { ordered: false });
+      } catch (error) {
+        if (!(error instanceof MongoBulkWriteError)) throw error;
+        const writes = Array.isArray(error.writeErrors)
+          ? error.writeErrors
+          : [error.writeErrors];
+        if (
+          !writes.length ||
+          writes.some((entry) => entry.code !== 11000) ||
+          error.writeConcernError
+        )
+          throw error;
+      }
+      for await (const invoice of this.invoices.find({
+        fiscalNumberKey: { $in: [...candidates.keys()] },
+      })) {
+        local.set(invoice.fiscalNumberKey!, invoice);
+      }
+    }
+
+    return rows.map((row) => {
+      if (row.type !== "01") return row;
+      const key = fiscalNumberKey(row.reference);
+      const invoice = local.get(key);
+      if (conflicting.has(key))
+        return {
+          ...row,
+          review: "SUNAT devolvió datos distintos para el mismo comprobante.",
+        };
+      if (!invoice) return row;
+      if (!issued.includes(invoice.status))
+        return {
+          ...row,
+          review: "La factura ya tiene un envío pendiente en VECA.",
+        };
+      if (
+        invoice.customerRuc !== row.taxId ||
+        invoice.totalCents !== row.total ||
+        (row.details &&
+          (invoice.netCents !== row.details.netCents ||
+            invoice.taxCents !== row.details.taxCents))
+      )
+        return {
+          ...row,
+          review: "El número ya existe en VECA con otros datos.",
+        };
+      return { ...row, invoiceId: invoice._id.toHexString() };
+    });
   }
 
   async listInvoices(
@@ -402,7 +570,7 @@ export class AccountingService {
     );
   }
 
-  private fiscalResult(
+  private async fiscalResult(
     invoice: AccountingInvoice,
     result: FiscalInvoice,
     from: InvoiceStatus,
@@ -421,14 +589,30 @@ export class AccountingService {
       issued.includes(status) &&
       (providerTotal !== invoice.totalCents ||
         !(result.fullNumber || invoice.number));
-    return this.changeInvoice(invoice.id, invoice.version, [from], {
-      status: mismatched ? "pending" : status,
-      externalId: result.id,
-      number: result.fullNumber || invoice.number,
-      observation: mismatched
-        ? "El total fiscal difiere del cálculo local. Requiere revisión."
-        : fiscalObservation(result),
-    });
+    const number = result.fullNumber || invoice.number;
+    const key =
+      !mismatched && issued.includes(status) ? fiscalNumberKey(number) : "";
+    try {
+      return await this.changeInvoice(invoice.id, invoice.version, [from], {
+        status: mismatched ? "pending" : status,
+        externalId: result.id,
+        number,
+        ...(key && { fiscalNumberKey: key }),
+        observation: mismatched
+          ? "El total fiscal difiere del cálculo local. Requiere revisión."
+          : fiscalObservation(result),
+      });
+    } catch (error) {
+      if (!(error instanceof MongoServerError) || error.code !== 11000 || !key)
+        throw error;
+      return this.changeInvoice(invoice.id, invoice.version, [from], {
+        status: "pending",
+        externalId: result.id,
+        number,
+        observation:
+          "El número fiscal ya está registrado en VECA. Revisa ambos registros antes de continuar.",
+      });
+    }
   }
 
   async payment(

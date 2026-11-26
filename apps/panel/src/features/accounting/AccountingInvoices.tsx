@@ -169,6 +169,8 @@ export function AccountingInvoices({
           refreshing={query.loading}
           revision={revision}
           onRefresh={refreshInvoices}
+          onSynced={query.refresh}
+          onOpenInvoice={(id) => setOpenInvoice({ id })}
         />
       )}
       <section
@@ -889,7 +891,13 @@ function InvoiceDetail({
         }
         description={
           row
-            ? [row.number, row.workName || "Venta directa"]
+            ? [
+                row.number,
+                row.workName ||
+                  (row.source === "sunat"
+                    ? "Sin obra asignada"
+                    : "Venta directa"),
+              ]
                 .filter(Boolean)
                 .join(" · ")
             : undefined
@@ -953,6 +961,9 @@ function InvoiceDetail({
                 <InvoiceStatus row={row} />
               </div>
               <InvoiceFiscalNotice row={row} canCheck={canCheck} />
+              {row.source === "sunat" && (
+                <p className="hint">Registrada desde SUNAT.</p>
+              )}
               {error && !paymentOpen && <Notice error>{error}</Notice>}
               <dl className="accounting-record-facts">
                 {(row.status !== "requested" || row.items.length > 0) && (
@@ -960,6 +971,18 @@ function InvoiceDetail({
                     <dt>Total</dt>
                     <dd>{amount(row.totalCents)}</dd>
                   </div>
+                )}
+                {row.source === "sunat" && (
+                  <>
+                    <div>
+                      <dt>Venta neta</dt>
+                      <dd>{amount(row.netCents)}</dd>
+                    </div>
+                    <div>
+                      <dt>IGV</dt>
+                      <dd>{amount(row.taxCents)}</dd>
+                    </div>
+                  </>
                 )}
                 {issued && (
                   <>
@@ -1034,11 +1057,14 @@ function InvoiceDetail({
                   </ul>
                 </section>
               )}
-              {(issued || row.proof || canWrite) && (
+              {((issued && row.source !== "sunat") ||
+                row.proof ||
+                canWrite) && (
                 <section className="invoice-detail-section">
                   <h3>Archivos</h3>
                   <div className="invoice-detail-links">
                     {issued &&
+                      row.source !== "sunat" &&
                       invoiceFiles.map(({ type, label }) => (
                         <a
                           className="accounting-inline"

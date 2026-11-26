@@ -390,6 +390,72 @@ export const FacturasYVentas: Story = {
     history.replaceState(null, "", "#accounting/facturas");
   },
 };
+export const VentaSunatRegistrada: Story = {
+  name: "Ventas de SUNAT registradas en VECA",
+  beforeEach({ msw }) {
+    history.replaceState(null, "", "#accounting/facturas?month=2026-11");
+    const invoice: AccountingInvoice = {
+      ...invoices[0],
+      id: "555555555555555555555550",
+      customer: "Cliente de SUNAT · Ejemplo",
+      customerRuc: "20100000005",
+      number: "F001-1250",
+      issueDate: "2026-11-25",
+      workId: "",
+      workName: "",
+      source: "sunat",
+      netCents: 300000,
+      taxCents: 54000,
+      totalCents: 354000,
+    };
+    msw.use(
+      http.get("*/admin/accounting/invoices", () =>
+        HttpResponse.json({
+          items: [invoice, ...invoices],
+          hasMore: false,
+          enabled: true,
+        }),
+      ),
+      http.get("*/admin/accounting/invoices/:id", ({ params }) =>
+        HttpResponse.json({
+          invoice: [invoice, ...invoices].find((row) => row.id === params.id),
+          enabled: true,
+        }),
+      ),
+      http.get("*/admin/accounting/period/:month", () =>
+        HttpResponse.json({
+          ...report,
+          salesCount: report.salesCount + 1,
+          salesNet: report.salesNet + invoice.netCents,
+          salesTax: report.salesTax + invoice.taxCents,
+        }),
+      ),
+      http.get("*/admin/accounting/sire/sales", () =>
+        HttpResponse.json({
+          items: [
+            {
+              reference: invoice.number,
+              taxId: invoice.customerRuc,
+              total: invoice.totalCents,
+              currency: "PEN",
+              type: "01",
+              invoiceId: invoice.id,
+              details: {
+                issueDate: invoice.issueDate,
+                dueDate: invoice.dueDate,
+                customer: invoice.customer,
+                netCents: invoice.netCents,
+                taxCents: invoice.taxCents,
+              },
+            },
+          ],
+          hasMore: false,
+          syncedAt: "2026-11-25T14:00:00Z",
+        }),
+      ),
+    );
+  },
+};
 export const RevisionVentas: Story = {
   name: "Todas: diferencias en modal y regreso al listado",
   beforeEach() {

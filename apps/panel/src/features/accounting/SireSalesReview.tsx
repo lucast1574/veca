@@ -20,6 +20,7 @@ import { SireComparisonResult } from "./SireComparisonResult";
 import {
   accountingPath,
   amount,
+  displayDate,
   Pagination,
   QueryState,
   sireDocumentLabel,
@@ -45,11 +46,15 @@ export function SireSalesReview({
   refreshing = false,
   revision = 0,
   onRefresh,
+  onSynced,
+  onOpenInvoice,
 }: {
   month: string;
   refreshing?: boolean;
   revision?: number;
   onRefresh?: () => void;
+  onSynced?: () => void;
+  onOpenInvoice?: (id: string) => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const report = useAccountingQuery<AccountingPeriod>(
@@ -69,6 +74,9 @@ export function SireSalesReview({
     ? new Date(sales.data.syncedAt)
     : undefined;
   const waiting = Boolean(sales.data?.syncing);
+  const linkedInvoice = selected?.invoiceId;
+  const canConsult =
+    canWrite && !selected?.details && !selected?.review && !linkedInvoice;
   const lastRevision = useRef(revision);
   useEffect(() => {
     if (lastRevision.current === revision) return;
@@ -79,6 +87,14 @@ export function SireSalesReview({
     const timer = setInterval(sales.refresh, 30_000);
     return () => clearInterval(timer);
   }, [sales.refresh]);
+  const lastSync = useRef<string | undefined>(undefined);
+  const syncedAt = sales.data?.syncedAt;
+  useEffect(() => {
+    if (!syncedAt || lastSync.current === syncedAt) return;
+    lastSync.current = syncedAt;
+    report.refresh();
+    onSynced?.();
+  }, [syncedAt, onSynced, report.refresh]);
   function refresh() {
     report.refresh();
     sales.refresh();
@@ -193,6 +209,23 @@ export function SireSalesReview({
                         {sireDocumentLabel(sale.type)}
                         {sale.taxId && ` · ${sale.taxId}`}
                       </small>
+                      {sale.invoiceId ? (
+                        <span
+                          className="accounting-record-status"
+                          data-state="accepted"
+                        >
+                          Registrada en VECA
+                        </span>
+                      ) : (
+                        sale.review && (
+                          <span
+                            className="accounting-record-status"
+                            data-state="pending"
+                          >
+                            Por revisar
+                          </span>
+                        )
+                      )}
                     </div>
                     <strong className="accounting-record-amount">
                       {saleTotal(sale)}
@@ -217,12 +250,59 @@ export function SireSalesReview({
           title={selected.reference || "Comprobante de SUNAT"}
           description={`${sireDocumentLabel(selected.type)} · SUNAT`}
           onClose={() => setSelected(undefined)}
+          footer={
+            (linkedInvoice && onOpenInvoice) || canConsult ? (
+              <footer className="ve-modal-actions">
+                {linkedInvoice && onOpenInvoice ? (
+                  <Button
+                    onClick={() => {
+                      setSelected(undefined);
+                      onOpenInvoice(linkedInvoice);
+                    }}
+                  >
+                    Ver factura en VECA
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      setSelected(undefined);
+                      setOpen("automatic");
+                    }}
+                  >
+                    Consultar datos en SUNAT
+                  </Button>
+                )}
+              </footer>
+            ) : undefined
+          }
         >
           <dl className="accounting-record-facts">
             <div className="accounting-record-total">
               <dt>Total</dt>
               <dd>{saleTotal(selected)}</dd>
             </div>
+            {selected.details && (
+              <>
+                <div>
+                  <dt>Venta neta</dt>
+                  <dd>{amount(selected.details.netCents)}</dd>
+                </div>
+                <div>
+                  <dt>IGV</dt>
+                  <dd>{amount(selected.details.taxCents)}</dd>
+                </div>
+                <div>
+                  <dt>Fecha de emisión</dt>
+                  <dd>{displayDate(selected.details.issueDate)}</dd>
+                </div>
+                {selected.details.customer && (
+                  <div>
+                    <dt>Cliente</dt>
+                    <dd>{selected.details.customer}</dd>
+                  </div>
+                )}
+              </>
+            )}
             {selected.taxId && (
               <div>
                 <dt>Documento del cliente</dt>
@@ -230,6 +310,17 @@ export function SireSalesReview({
               </div>
             )}
           </dl>
+          {selected.review && (
+            <p className="hint" role="status">
+              {selected.review}
+            </p>
+          )}
+          {!selected.invoiceId && !selected.details && !selected.review && (
+            <p className="hint">
+              Consulta SUNAT para obtener el desglose y registrar la factura
+              automáticamente si corresponde.
+            </p>
+          )}
         </Modal>
       )}
       {open === "automatic" && (

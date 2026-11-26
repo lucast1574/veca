@@ -88,6 +88,9 @@ export class Database implements OnModuleInit, OnModuleDestroy {
       this.db
         .collection("crm_leads")
         .createIndex({ submissionId: 1 }, { unique: true }),
+      this.db
+        .collection("accounting_invoices")
+        .createIndex({ fiscalNumberKey: 1 }, { unique: true, sparse: true }),
       this.db.collection("accounting_invoices").createIndex({ createdAt: -1 }),
       this.db.collection("accounting_invoices").createIndex(
         { workId: 1 },

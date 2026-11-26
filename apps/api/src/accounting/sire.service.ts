@@ -4,7 +4,9 @@ import type {
   SireComparison,
   SireReconciliation,
   SireSalePage,
+  SireSale,
 } from "@veca/content";
+import { AccountingService } from "./accounting.service";
 import { purchaseDocumentKey } from "./purchase-document";
 import {
   SirePurchasesService,
@@ -26,6 +28,7 @@ type SaleSnapshot = {
   issuerRuc: string;
   items?: SireSalePage["items"];
   syncedAt?: string;
+  importedSales?: boolean;
   job?: string;
   failed?: boolean;
   retryAt?: Date;
@@ -96,9 +99,75 @@ function sunatRows(file: Buffer, month: string, book: SireBook) {
         type: data[6],
         purchase:
           book === "purchases" ? purchaseDetails(data, doc, month) : undefined,
+        sale: book === "sales" ? saleDetails(data, doc) : undefined,
       },
     ];
   });
+}
+
+function sireDate(value = "") {
+  const parts = /^(\d{2})\/(\d{2})\/(20\d{2})$/.exec(value);
+  if (!parts) return "";
+  const date = `${parts[3]}-${parts[2]}-${parts[1]}`;
+  const parsed = new Date(date);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === date
+    ? date
+    : "";
+}
+
+function saleDetails(data: string[], doc: Document): SireSale {
+  const type = data[6];
+  const row = { ...doc, type };
+  const issueDate = sireDate(data[4]);
+  const dueDate = sireDate(data[5]);
+  // RVIE fields 14–25 include the net components, IGV/IPM, and other taxes.
+  const amounts = Array.from({ length: 12 }, (_, index) => {
+    const value = data[index + 13] || "0";
+    return /^-?\d{1,12}(?:\.\d{1,2})?$/.test(value)
+      ? Math.round(Number(value) * 100)
+      : NaN;
+  });
+  const [
+    exports,
+    taxableBase,
+    baseDiscount,
+    igv,
+    igvDiscount,
+    exempt,
+    unaffected,
+    ...otherAmounts
+  ] = amounts;
+  const taxCents = igv + igvDiscount;
+  const netCents = exports + taxableBase + baseDiscount + exempt + unaffected;
+  const amountsMatch =
+    amounts.every(Number.isSafeInteger) &&
+    otherAmounts.every((value) => value === 0) &&
+    (taxableBase <= 0 || Boolean(data[16])) &&
+    taxCents >= 0 &&
+    netCents > 0 &&
+    netCents + taxCents === doc.total;
+  const review =
+    type !== "01"
+      ? "Este tipo de comprobante requiere revisión de Contabilidad."
+      : doc.currency !== "PEN"
+        ? "El comprobante está en otra moneda."
+        : !docKey(doc) || !issueDate
+          ? "Faltan datos del comprobante para registrarlo."
+          : !amountsMatch
+            ? "El desglose de SUNAT requiere revisión."
+            : "";
+  if (review) return { ...row, review };
+  return {
+    ...row,
+    details: {
+      issueDate,
+      dueDate: dueDate >= issueDate ? dueDate : "",
+      customer: (data[12] || "").slice(0, 150),
+      netCents,
+      taxCents,
+    },
+  };
 }
 
 function purchaseDetails(
@@ -156,6 +225,7 @@ export class SireService {
     private readonly db: Database,
     private readonly provider: SireProvider,
     private readonly purchases: SirePurchasesService,
+    private readonly accounts: AccountingService,
   ) {}
 
   connection() {
@@ -257,15 +327,18 @@ export class SireService {
       throw new BadRequestException(
         "El periodo supera el límite de 10 000 comprobantes.",
       );
-    const result = await this.compare(month, book, incoming);
     if (book === "sales") {
+      const items = await this.accounts.importSunatSales(
+        incoming.flatMap(({ sale }) => (sale ? [sale] : [])),
+      );
       const sales = this.salesSyncs();
       await sales.updateOne(
         { _id: month },
         {
           $set: {
             issuerRuc: fiscalIssuerRuc,
-            items: incoming.map(({ doc, type }) => ({ ...doc, type })),
+            items,
+            importedSales: true,
             syncedAt: new Date().toISOString(),
           },
         },
@@ -282,7 +355,7 @@ export class SireService {
     return {
       job: proposal.job,
       status: "ready",
-      result,
+      result: await this.compare(month, book, incoming),
     };
   }
 

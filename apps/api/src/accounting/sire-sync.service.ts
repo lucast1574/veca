@@ -16,6 +16,7 @@ type Sync = {
   _id: string;
   issuerRuc?: string;
   syncedAt?: string;
+  importedSales?: boolean;
   job?: string;
   lease?: string;
   lockUntil?: Date;
@@ -93,12 +94,13 @@ export class SireSyncService
     const records = this.records(book);
     const previous = await records.findOne(
       { _id: period },
-      { projection: { job: 1, syncedAt: 1, retryAt: 1 } },
+      { projection: { job: 1, syncedAt: 1, retryAt: 1, importedSales: 1 } },
     );
     const now = new Date();
     if (previous?.retryAt && previous.retryAt > now) return;
     if (
       !previous?.job &&
+      (book !== "sales" || previous?.importedSales) &&
       previous?.syncedAt &&
       now.getTime() - Date.parse(previous.syncedAt) < 15 * 60_000
     )

@@ -140,7 +140,7 @@ export function SireAutomaticDialog({
             <p>
               {book === "purchases"
                 ? "Verás qué comprobantes coinciden, cuáles tienen un importe distinto y cuáles aparecen solo en SUNAT o solo en VECA. Las compras nuevas también llegarán a tu bandeja, sin duplicar las ya guardadas."
-                : "Verás si las facturas de venta de VECA coinciden con lo que aparece en SUNAT y cuáles necesitan revisión."}
+                : "Las facturas nuevas con datos completos se registran en VECA. También verás cuáles necesitan revisión."}
             </p>
           </div>
         </div>

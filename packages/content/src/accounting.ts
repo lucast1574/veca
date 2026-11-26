@@ -80,6 +80,7 @@ export type AccountingInvoice = InvoiceInput & {
   observation: string;
   canCheck: boolean;
   proof?: boolean;
+  source?: "sunat";
   netCents: number;
   taxCents: number;
   totalCents: number;
@@ -230,14 +231,24 @@ export const accountingTotals = (items: InvoiceInput["items"]) => {
 };
 
 export type SireBook = "purchases" | "sales";
+export type SireSale = {
+  reference: string;
+  taxId: string;
+  total: number;
+  currency: string;
+  type: string;
+  details?: {
+    issueDate: string;
+    dueDate: string;
+    customer: string;
+    netCents: number;
+    taxCents: number;
+  };
+  invoiceId?: string;
+  review?: string;
+};
 export type SireSalePage = {
-  items: {
-    reference: string;
-    taxId: string;
-    total: number;
-    currency: string;
-    type: string;
-  }[];
+  items: SireSale[];
   hasMore: boolean;
   syncedAt?: string;
   syncing?: boolean;
