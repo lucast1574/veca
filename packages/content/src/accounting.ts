@@ -203,6 +203,17 @@ export const accountingTotals = (items: InvoiceInput["items"]) => {
 };
 
 export type SireBook = "purchases" | "sales";
+export type SireSalePage = {
+  items: {
+    reference: string;
+    taxId: string;
+    total: number;
+    currency: string;
+    type: string;
+  }[];
+  hasMore: boolean;
+  syncedAt?: string;
+};
 export type SireReconciliation = {
   book?: SireBook;
   period?: string;

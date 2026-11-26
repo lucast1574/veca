@@ -6,7 +6,7 @@ import {
 } from "./AccountingProof";
 import { confirmDiscard, useUnsavedChanges } from "../../lib/unsaved";
 import { useId, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Download, Plus, Trash2 } from "lucide-react";
 import {
   accountingTotals,
   invoiceInput,
@@ -25,6 +25,7 @@ import {
   accountingPath,
   amount,
   decimal,
+  displayDate,
   Pagination,
   QueryState,
   recordId,
@@ -33,6 +34,8 @@ import {
   useAccountingQuery,
   Summary,
 } from "./accounting-shared";
+
+import "./accounting-records.css";
 
 const root = accountingPath + "/invoices";
 const baseHash = "#accounting/facturas";
@@ -53,28 +56,50 @@ type InvoicePage = {
   enabled: boolean;
 };
 
+const invoiceFilters = [
+  { value: "", label: "Todas" },
+  { value: "requested", label: "Solicitadas" },
+  { value: "collect", label: "Por cobrar" },
+] as const;
+type InvoiceQueue = (typeof invoiceFilters)[number]["value"];
+
+function InvoiceStatus({ row }: { row: AccountingInvoice }) {
+  return (
+    <span className="accounting-record-status" data-state={row.status}>
+      {label[row.status]}
+    </span>
+  );
+}
+
 export function AccountingInvoices({
   selected,
-  queue = "",
+  initialQueue = "",
   initialMonth,
 }: {
   selected: string;
-  queue?: "" | "requested" | "collect";
+  initialQueue?: InvoiceQueue;
   initialMonth?: string;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const [page, setPage] = useState(1);
+  const [queue, setQueue] = useState(initialQueue);
   const [month, setMonth] = useState(initialMonth || today().slice(0, 7));
+  const [openInvoice, setOpenInvoice] = useState<string>();
+  const [creating, setCreating] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const filterId = useId();
+  const detailId = openInvoice || (selected !== "nueva" ? selected : "");
+  const listHash = baseHash + (month ? `?month=${month}` : "");
   const query = useAccountingQuery<InvoicePage>(
-    selected && selected !== "nueva"
-      ? ""
-      : `${root}?page=${page}${queue ? `&queue=${queue}` : month ? `&month=${month}` : ""}`,
+    `${root}?page=${page}${queue ? `&queue=${queue}` : month ? `&month=${month}` : ""}`,
   );
-  if (selected && selected !== "nueva")
-    return <InvoiceDetail id={selected} returnMonth={initialMonth} />;
   const rows = query.data?.items || [];
   function refreshInvoices() {
     setPage(1);
+    query.refresh();
+  }
+  function invoiceChanged() {
+    setRevision((value) => value + 1);
     query.refresh();
   }
   return (
@@ -82,131 +107,159 @@ export function AccountingInvoices({
       <header className="accounting-section-head">
         <h2 id="accounting-invoices">Facturas y cobros</h2>
         <div className="accounting-tools">
-          {(queue || !month) && (
+          {!month && (
             <Refresh loading={query.loading} onClick={query.refresh} />
           )}
           {canWrite && (
-            <a
-              className="btn btn-primary accounting-inline"
-              href={`${baseHash}/nueva${!queue && month ? `?month=${month}` : ""}`}
-            >
-              <Plus size={16} /> Nueva factura
-            </a>
+            <Button onClick={() => setCreating(true)}>
+              <Plus size={16} aria-hidden="true" /> Nueva factura
+            </Button>
           )}
         </div>
       </header>
-      <nav className="accounting-tabs" aria-label="Filtrar facturas">
-        <a
-          className="accounting-inline"
-          href={`${baseHash}${!queue && month ? `?month=${month}` : ""}`}
-          aria-current={!queue ? "page" : undefined}
-        >
-          Todas
-        </a>
-        <a
-          className="accounting-inline"
-          href={baseHash + "/solicitadas"}
-          aria-current={queue === "requested" ? "page" : undefined}
-        >
-          Solicitadas
-        </a>
-        <a
-          className="accounting-inline"
-          href={baseHash + "/por-cobrar"}
-          aria-current={queue === "collect" ? "page" : undefined}
-        >
-          Por cobrar
-        </a>
-      </nav>
-      {!queue && (
-        <div className="accounting-filters">
-          <Field
-            label="Periodo de ventas"
-            hint="Sin periodo se muestran todas las fechas."
-          >
-            <input
-              type="month"
-              value={month}
-              onChange={(event) => {
-                setPage(1);
-                setMonth(event.target.value);
-              }}
-            />
-          </Field>
-        </div>
-      )}
-      {!queue && month && (
+      <div className="accounting-filters">
+        <Field label="Periodo de ventas">
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => {
+              if (!queue) setPage(1);
+              setMonth(event.target.value);
+            }}
+          />
+        </Field>
+      </div>
+      {month && (
         <SireSalesReview
           key={`sales-summary:${month}`}
           month={month}
           refreshing={query.loading}
+          revision={revision}
           onRefresh={refreshInvoices}
         />
       )}
-      {!queue && (
-        <h3 className="sire-saved-title">
-          {month ? "Facturas del periodo" : "Facturas registradas"}
-        </h3>
-      )}
-      {query.data && !query.data.enabled && (
-        <Notice>
-          Emisión electrónica pendiente de configuración. Puedes preparar
-          borradores.
-        </Notice>
-      )}
-      <QueryState
-        {...query}
-        empty={
-          queue
-            ? "No hay facturas en esta bandeja."
-            : month
-              ? "No hay facturas en este periodo."
-              : "Todavía no hay facturas registradas."
-        }
+      <section
+        className="invoice-records"
+        aria-labelledby="invoice-records-heading"
       >
-        {rows.length > 0 && (
-          <ul className="dispatch-list dispatch-queue">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <div>
-                  <strong>{row.customer}</strong>
-                  <small>{row.number || row.workName || "Venta directa"}</small>
-                </div>
-                <div className="accounting-value">
-                  {row.status === "requested" ? "—" : amount(row.totalCents)}
-                  {isIssued(row) && (
-                    <small>
-                      Por cobrar {amount(row.totalCents - row.paidCents)}
-                    </small>
-                  )}
-                </div>
-                <span className="dispatch-pill" data-state={row.status}>
-                  {label[row.status]}
-                </span>
-                <a
-                  className="accounting-inline"
-                  href={`${baseHash}/${row.id}${!queue && month ? `?month=${month}` : ""}`}
-                >
-                  Abrir <ChevronRight size={16} />
-                </a>
-              </li>
-            ))}
-          </ul>
+        <header className="invoice-records-header">
+          <h3 id="invoice-records-heading">Facturas en VECA</h3>
+          <Field label="Ver facturas" htmlFor={filterId}>
+            <Select
+              id={filterId}
+              value={queue}
+              options={invoiceFilters}
+              onChange={(value) => {
+                const filter = invoiceFilters.find(
+                  (option) => option.value === value,
+                );
+                if (!filter) return;
+                setPage(1);
+                setQueue(filter.value);
+              }}
+            />
+          </Field>
+        </header>
+        {query.data && !query.data.enabled && (
+          <Notice>
+            Emisión electrónica pendiente de configuración. Puedes preparar
+            borradores.
+          </Notice>
         )}
-      </QueryState>
-      {selected === "nueva" && canWrite && (
+        <QueryState
+          {...query}
+          empty={
+            queue === "requested"
+              ? "No hay facturas solicitadas."
+              : queue === "collect"
+                ? "No hay facturas por cobrar."
+                : month
+                  ? "No hay facturas en este periodo."
+                  : "Todavía no hay facturas registradas."
+          }
+        >
+          {rows.length > 0 && (
+            <ul className="accounting-record-list">
+              {rows.map((row) => {
+                const balance = row.totalCents - row.paidCents;
+                return (
+                  <li key={row.id}>
+                    <div className="accounting-record-label">
+                      <strong>{row.customer}</strong>
+                      <small>
+                        {row.number || row.workName || "Venta directa"}
+                        {row.issueDate && ` · ${displayDate(row.issueDate)}`}
+                      </small>
+                    </div>
+                    <div className="accounting-record-meta">
+                      <div className="accounting-record-amount invoice-row-amount">
+                        {row.status !== "requested" && (
+                          <strong>
+                            {amount(
+                              queue === "collect" ? balance : row.totalCents,
+                            )}
+                          </strong>
+                        )}
+                        {queue === "collect" ? (
+                          <small>Saldo por cobrar</small>
+                        ) : isIssued(row) && balance > 0 ? (
+                          <small>
+                            {row.paidCents
+                              ? `Por cobrar ${amount(balance)}`
+                              : "Por cobrar"}
+                          </small>
+                        ) : null}
+                      </div>
+                      <InvoiceStatus row={row} />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setOpenInvoice(row.id)}
+                    >
+                      Ver detalle <ChevronRight size={14} aria-hidden="true" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </QueryState>
+        <Pagination
+          page={page}
+          hasMore={Boolean(query.data?.hasMore)}
+          change={setPage}
+        />
+      </section>
+      {canWrite && (creating || selected === "nueva") && (
         <InvoiceForm
           onClose={() => {
-            location.hash = baseHash + (month ? `?month=${month}` : "");
+            if (selected === "nueva") location.hash = listHash;
+            else setCreating(false);
+          }}
+          onSaved={(saved) => {
+            setPage(1);
+            invoiceChanged();
+            if (selected === "nueva") {
+              location.hash = `${baseHash}/${saved.id}${month ? `?month=${month}` : ""}`;
+            } else {
+              setCreating(false);
+              setOpenInvoice(saved.id);
+            }
           }}
         />
       )}
-      <Pagination
-        page={page}
-        hasMore={Boolean(query.data?.hasMore)}
-        change={setPage}
-      />
-      {!queue && month && (
+      {detailId && (
+        <InvoiceDetail
+          key={detailId}
+          id={detailId}
+          onChanged={invoiceChanged}
+          onClose={() => {
+            if (openInvoice) setOpenInvoice(undefined);
+            else location.hash = listHash;
+          }}
+        />
+      )}
+      {month && (
         <SireClosingGuide
           key={`sales-closing:${month}`}
           month={month}
@@ -224,7 +277,7 @@ function InvoiceForm({
 }: {
   onClose: () => void;
   current?: AccountingInvoice;
-  onSaved?: (invoice: AccountingInvoice) => void;
+  onSaved: (invoice: AccountingInvoice) => void;
 }) {
   const formId = useId();
   const works = useAccountingQuery<AccountingWork[]>(accountingPath + "/works");
@@ -259,8 +312,7 @@ function InvoiceForm({
   function finish(saved: AccountingInvoice) {
     clearGuard();
     setDirty(false);
-    if (onSaved) onSaved(saved);
-    else location.hash = `${baseHash}/${saved.id}`;
+    onSaved(saved);
   }
   function close() {
     if (confirmDiscard(dirty, busy)) {
@@ -553,10 +605,12 @@ function InvoiceForm({
 
 function InvoiceDetail({
   id,
-  returnMonth,
+  onClose,
+  onChanged,
 }: {
   id: string;
-  returnMonth?: string;
+  onClose: () => void;
+  onChanged: () => void;
 }) {
   const canWrite = useAccountingPermission("accounting_write");
   const canIssue = useAccountingPermission("accounting_issue");
@@ -582,6 +636,7 @@ function InvoiceDetail({
     setError("");
     try {
       setOverride(await uploadAccountingProof<AccountingInvoice>(path, file));
+      onChanged();
     } catch (error) {
       setError((error as Error).message);
     } finally {
@@ -606,6 +661,7 @@ function InvoiceDetail({
         },
       );
       setOverride(result);
+      onChanged();
       setCash("");
       setReference("");
       setAction(null);
@@ -617,114 +673,40 @@ function InvoiceDetail({
     }
   }
 
+  const canEdit =
+    canWrite && row && ["requested", "draft", "rejected"].includes(row.status);
+  const canSend = canIssue && row?.status === "draft" && query.data?.enabled;
+  const canCheck = canIssue && row?.canCheck;
+  const issued = row && isIssued(row);
+  const balance = row ? row.totalCents - row.paidCents : 0;
+  const canCollect = canWrite && issued && balance > 0;
+
   return (
-    <section className="dispatch-review">
-      {edit && row && (
-        <InvoiceForm
-          current={row}
-          onClose={() => setEdit(false)}
-          onSaved={(saved) => {
-            setOverride(saved);
-            setEdit(false);
-          }}
-        />
-      )}
-      <a
-        className="accounting-inline"
-        href={baseHash + (returnMonth ? `?month=${returnMonth}` : "")}
-      >
-        <ArrowLeft size={16} /> Facturas y cobros
-      </a>
-      <QueryState {...query}>
-        {row && (
-          <div className="accounting-group">
-            <div className="accounting-section-head">
-              <div>
-                <h2>{row.customer}</h2>
-                <small>
-                  {row.number || row.workName || "Venta directa"} ·{" "}
-                  {row.customerRuc}
-                </small>
-              </div>
-              <span className="dispatch-pill" data-state={row.status}>
-                {label[row.status]}
-              </span>
-            </div>
-            {row.observation && <Notice>{row.observation}</Notice>}
-            <Summary
-              entries={[
-                ["Total", row.totalCents],
-                ["Cobrado", row.paidCents],
-                ["Saldo", row.totalCents - row.paidCents],
-              ]}
-            />
-            <div className="ops-card">
-              <h3>Conceptos</h3>
-              <ul className="dispatch-list">
-                {row.items.map((item, index) => (
-                  <li key={index}>
-                    <span>
-                      {item.description} · {item.quantityMilli / 1000}
-                    </span>
-                    <strong>
-                      {amount(
-                        Math.round(
-                          (item.quantityMilli * item.unitCents) / 1000,
-                        ),
-                      )}
-                    </strong>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {row.payments.length > 0 && (
-              <div className="accounting-group">
-                <h3>Cobros</h3>
-                <ul className="dispatch-list">
-                  {row.payments.map((payment, index) => (
-                    <li key={index}>
-                      <span>
-                        {payment.date}
-                        {payment.reference && ` · ${payment.reference}`}
-                      </span>
-                      <strong>{amount(payment.cents)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {row.proof ? (
-              <a
-                className="accounting-inline"
-                href={`${API_BASE}${path}/proof`}
-              >
-                Descargar sustento
-              </a>
-            ) : (
-              canWrite && (
-                <AccountingProofField
-                  file={null}
+    <>
+      <Modal
+        title={row?.customer || "Detalle de factura"}
+        description={
+          row
+            ? [row.number, row.workName || "Venta directa"]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+        }
+        busy={busy}
+        onClose={onClose}
+        footer={
+          (canEdit || canSend || canCheck || canCollect) && (
+            <footer className="ve-modal-actions">
+              {canEdit && (
+                <Button
+                  variant="ghost"
                   disabled={busy}
-                  onSelect={(file) => void attachProof(file)}
-                />
-              )
-            )}
-            {error && !action && <Notice error>{error}</Notice>}
-            {row.status === "draft" && !query.data?.enabled && (
-              <Notice>Emisión electrónica pendiente de configuración.</Notice>
-            )}
-            <div className="accounting-form-actions">
-              {canWrite &&
-                ["requested", "draft", "rejected"].includes(row.status) && (
-                  <Button
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => setEdit(true)}
-                  >
-                    Editar
-                  </Button>
-                )}
-              {canIssue && row.status === "draft" && query.data?.enabled && (
+                  onClick={() => setEdit(true)}
+                >
+                  Editar factura
+                </Button>
+              )}
+              {canSend && (
                 <Button
                   disabled={busy}
                   onClick={() => {
@@ -735,7 +717,7 @@ function InvoiceDetail({
                   Revisar y emitir
                 </Button>
               )}
-              {canIssue && row.canCheck && (
+              {canCheck && (
                 <Button
                   variant="ghost"
                   disabled={busy}
@@ -744,34 +726,161 @@ function InvoiceDetail({
                   Consultar estado
                 </Button>
               )}
-              {isIssued(row) && (
-                <>
-                  {(["pdf", "xml", "cdr"] as const).map((type) => (
-                    <a
-                      className="accounting-inline"
-                      key={type}
-                      href={`${API_BASE}${path}/file/${type}`}
-                    >
-                      {type.toUpperCase()}
-                    </a>
-                  ))}
-                  {canWrite && row.paidCents < row.totalCents && (
-                    <Button
+              {canCollect && (
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    setError("");
+                    setAction("payment");
+                  }}
+                >
+                  Registrar cobro
+                </Button>
+              )}
+            </footer>
+          )
+        }
+      >
+        <QueryState {...query}>
+          {row && (
+            <div className="invoice-detail">
+              <div className="invoice-detail-status">
+                <InvoiceStatus row={row} />
+              </div>
+              <dl className="accounting-record-facts">
+                {row.status !== "requested" && (
+                  <div className="accounting-record-total">
+                    <dt>Total</dt>
+                    <dd>{amount(row.totalCents)}</dd>
+                  </div>
+                )}
+                {issued && (
+                  <>
+                    <div>
+                      <dt>Saldo por cobrar</dt>
+                      <dd>{amount(balance)}</dd>
+                    </div>
+                    <div>
+                      <dt>Cobrado</dt>
+                      <dd>{amount(row.paidCents)}</dd>
+                    </div>
+                  </>
+                )}
+                {row.customerRuc && (
+                  <div>
+                    <dt>RUC</dt>
+                    <dd>{row.customerRuc}</dd>
+                  </div>
+                )}
+                {row.issueDate && (
+                  <div>
+                    <dt>Fecha de emisión</dt>
+                    <dd>{displayDate(row.issueDate)}</dd>
+                  </div>
+                )}
+                {row.dueDate && (
+                  <div>
+                    <dt>Vencimiento</dt>
+                    <dd>{displayDate(row.dueDate)}</dd>
+                  </div>
+                )}
+              </dl>
+              {row.observation && <Notice>{row.observation}</Notice>}
+              {row.items.length > 0 && (
+                <section className="invoice-detail-section">
+                  <h3>Conceptos</h3>
+                  <ul className="invoice-detail-lines">
+                    {row.items.map((item, index) => (
+                      <li key={index}>
+                        <div>
+                          <strong>{item.description}</strong>
+                          <small>Cantidad · {item.quantityMilli / 1000}</small>
+                        </div>
+                        <strong>
+                          {amount(
+                            Math.round(
+                              (item.quantityMilli * item.unitCents) / 1000,
+                            ),
+                          )}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {row.payments.length > 0 && (
+                <section className="invoice-detail-section">
+                  <h3>Cobros registrados</h3>
+                  <ul className="invoice-detail-lines">
+                    {row.payments.map((payment, index) => (
+                      <li key={index}>
+                        <div>
+                          <strong>{displayDate(payment.date)}</strong>
+                          {payment.reference && (
+                            <small>{payment.reference}</small>
+                          )}
+                        </div>
+                        <strong>{amount(payment.cents)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {(issued || row.proof || canWrite) && (
+                <section className="invoice-detail-section">
+                  <h3>Archivos</h3>
+                  <div className="invoice-detail-links">
+                    {issued &&
+                      (["pdf", "xml", "cdr"] as const).map((type) => (
+                        <a
+                          className="accounting-inline"
+                          key={type}
+                          href={`${API_BASE}${path}/file/${type}`}
+                          aria-label={`Descargar ${type.toUpperCase()}`}
+                        >
+                          {type.toUpperCase()}
+                        </a>
+                      ))}
+                    {row.proof && (
+                      <a
+                        className="accounting-inline"
+                        href={`${API_BASE}${path}/proof`}
+                      >
+                        <Download size={15} aria-hidden="true" /> Descargar
+                        sustento
+                      </a>
+                    )}
+                  </div>
+                  {!row.proof && canWrite && (
+                    <AccountingProofField
+                      file={null}
+                      optionalAtSave={false}
+                      hint="Adjunto opcional. Foto o PDF de hasta 8 MB."
                       disabled={busy}
-                      onClick={() => {
-                        setError("");
-                        setAction("payment");
-                      }}
-                    >
-                      Registrar cobro
-                    </Button>
+                      onSelect={(file) => void attachProof(file)}
+                    />
                   )}
-                </>
+                </section>
+              )}
+              {error && !action && <Notice error>{error}</Notice>}
+              {row.status === "draft" && !query.data?.enabled && (
+                <Notice>Emisión electrónica pendiente de configuración.</Notice>
               )}
             </div>
-          </div>
-        )}
-      </QueryState>
+          )}
+        </QueryState>
+      </Modal>
+      {edit && row && (
+        <InvoiceForm
+          current={row}
+          onClose={() => setEdit(false)}
+          onSaved={(saved) => {
+            setOverride(saved);
+            setEdit(false);
+            onChanged();
+          }}
+        />
+      )}
       {action && row && (
         <Modal
           title={action === "issue" ? "Confirmar emisión" : "Registrar cobro"}
@@ -831,8 +940,7 @@ function InvoiceDetail({
                 disabled={
                   busy ||
                   (action === "payment" &&
-                    (decimal(cash) <= 0 ||
-                      decimal(cash) > row.totalCents - row.paidCents))
+                    (!date || !(decimal(cash) > 0 && decimal(cash) <= balance)))
                 }
               >
                 {busy
@@ -845,6 +953,6 @@ function InvoiceDetail({
           </form>
         </Modal>
       )}
-    </section>
+    </>
   );
 }

@@ -40,7 +40,7 @@ import {
   useAccountingQuery,
 } from "./accounting-shared";
 
-import "./accounting-costs.css";
+import "./accounting-records.css";
 
 const path = accountingPath + "/costs";
 type CostPage = { items: AccountingCost[]; hasMore: boolean };
@@ -48,7 +48,7 @@ type CostPage = { items: AccountingCost[]; hasMore: boolean };
 function CostProofStatus({ row }: { row: AccountingCost }) {
   return (
     <span
-      className="cost-proof-status"
+      className="accounting-record-status"
       data-state={row.proof ? "attached" : "missing"}
     >
       {row.proof ? "Con sustento" : "Falta sustento"}
@@ -187,17 +187,17 @@ export function AccountingCosts({
           empty="Todavía no hay compras ni gastos guardados en este periodo."
         >
           {rows.length > 0 && (
-            <ul className="saved-cost-list">
+            <ul className="accounting-record-list">
               {rows.map((row) => (
                 <li key={row.id}>
-                  <div className="saved-cost-label">
+                  <div className="accounting-record-label">
                     <strong>{row.description}</strong>
                     <small>
                       {COST_KIND_LABELS[row.kind]} · {displayDate(row.date)}
                     </small>
                   </div>
-                  <div className="saved-cost-meta">
-                    <strong className="saved-cost-total">
+                  <div className="accounting-record-meta">
+                    <strong className="accounting-record-amount">
                       {amount(row.netCents + row.taxCents)}
                     </strong>
                     <CostProofStatus row={row} />
@@ -309,8 +309,8 @@ export function AccountingCosts({
           }
         >
           <div className="cost-detail">
-            <dl className="cost-detail-facts">
-              <div className="cost-detail-total">
+            <dl className="accounting-record-facts">
+              <div className="accounting-record-total">
                 <dt>Total</dt>
                 <dd>{amount(active.netCents + active.taxCents)}</dd>
               </div>

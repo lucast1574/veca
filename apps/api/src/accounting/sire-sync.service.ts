@@ -5,6 +5,7 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from "@nestjs/common";
+import type { SireBook } from "@veca/content";
 import { randomUUID } from "node:crypto";
 import { MongoServerError } from "mongodb";
 import { Database } from "../database/database.module";
@@ -58,29 +59,41 @@ export class SireSyncService
       const previous = new Date(Date.UTC(year, month - 2, 1))
         .toISOString()
         .slice(0, 7);
-      const pending = await this.db.db
-        .collection<Sync>("sire_purchase_syncs")
-        .find({ job: { $exists: true } })
-        .project({ _id: 1 })
-        .limit(12)
-        .toArray();
-      for (const period of new Set([
-        current,
-        previous,
-        ...pending.map((row) => row._id),
-      ]))
-        await this.sync(period);
-    } catch {
-      this.logger.warn(
-        "La actualización automática de compras se reintentará.",
-      );
+      for (const book of ["purchases", "sales"] as const) {
+        try {
+          const pending = await this.records(book)
+            .find({ job: { $exists: true } })
+            .project({ _id: 1 })
+            .limit(12)
+            .toArray();
+          for (const period of new Set([
+            current,
+            previous,
+            ...pending.map((row) => row._id),
+          ]))
+            await this.sync(period, book);
+        } catch {
+          this.logger.warn(
+            `La sincronización fiscal de ${book} se reintentará.`,
+          );
+        }
+      }
     } finally {
       this.busy = false;
     }
   }
-  private async sync(period: string) {
-    const records = this.db.db.collection<Sync>("sire_purchase_syncs");
-    const previous = await records.findOne({ _id: period });
+  private records(book: SireBook) {
+    return this.db.db.collection<Sync>(
+      book === "purchases" ? "sire_purchase_syncs" : "sire_sales_syncs",
+    );
+  }
+
+  private async sync(period: string, book: SireBook) {
+    const records = this.records(book);
+    const previous = await records.findOne(
+      { _id: period },
+      { projection: { job: 1, syncedAt: 1, retryAt: 1 } },
+    );
     const now = new Date();
     if (previous?.retryAt && previous.retryAt > now) return;
     if (
@@ -98,7 +111,7 @@ export class SireSyncService
           $or: [{ lockUntil: { $lt: now } }, { lockUntil: { $exists: false } }],
         },
         { $set: { lease, lockUntil: new Date(now.getTime() + 120_000) } },
-        { upsert: true, returnDocument: "after" },
+        { upsert: true, returnDocument: "after", projection: { job: 1 } },
       );
     } catch (error) {
       if (error instanceof MongoServerError && error.code === 11000) return;
@@ -106,7 +119,7 @@ export class SireSyncService
     }
     if (!state) return;
     try {
-      const result = await this.sire.automatic(period, "purchases", state.job);
+      const result = await this.sire.automatic(period, book, state.job);
       await records.updateOne(
         { _id: period, lease },
         result.status === "pending"
@@ -130,7 +143,7 @@ export class SireSyncService
         },
       );
       this.logger.warn(
-        "No se pudieron actualizar las compras. Se reintentará automáticamente.",
+        `Falló la sincronización fiscal de ${book}. Se reintentará automáticamente.`,
       );
     }
   }

@@ -1,0 +1,287 @@
+.saved-costs {
+  margin-top: 32px;
+}
+
+.saved-costs > h3 {
+  margin: 0 0 12px;
+}
+
+.accounting-record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  background: var(--panel-surface);
+}
+
+.accounting-record-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6rem, auto) 9rem auto;
+  align-items: center;
+  justify-items: start;
+  gap: 12px 20px;
+  padding: 14px 0;
+}
+
+.accounting-record-list > li + li {
+  border-top: 1px solid var(--panel-edge);
+}
+
+.accounting-record-label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.accounting-record-label small,
+.accounting-record-facts dt {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+
+.accounting-record-meta {
+  display: contents;
+}
+
+.accounting-record-amount,
+.accounting-record-total dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.accounting-record-amount {
+  white-space: nowrap;
+}
+
+.accounting-record-status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: var(--panel-soft);
+  color: var(--panel-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.accounting-record-status[data-state="attached"] {
+  background: #e4eee4;
+  color: #426347;
+}
+
+.accounting-record-status[data-state="missing"] {
+  background: #fbebdf;
+  color: #845130;
+}
+
+.cost-detail {
+  display: grid;
+  gap: 20px;
+}
+
+.accounting-record-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.accounting-record-facts dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.accounting-record-total dd {
+  font-size: 18px;
+}
+
+.cost-detail-purchase,
+.cost-detail-support {
+  display: grid;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.cost-detail-purchase .accounting-section-head {
+  margin-bottom: 0;
+}
+
+.cost-detail-purchase .purchase-destination {
+  margin-top: 6px;
+}
+
+.cost-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.cost-detail-support > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cost-detail-support h3,
+.cost-detail-support > .hint,
+.cost-detail-support > .field,
+.cost-detail-support > .notice {
+  margin: 0;
+}
+
+.cost-detail-proof {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+}
+
+@media (max-width: 600px) {
+  .accounting-record-list > li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+  }
+
+  .accounting-record-label {
+    grid-column: 1 / -1;
+  }
+
+  .accounting-record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+  }
+
+  .accounting-record-list .btn {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 380px) {
+  .accounting-record-facts {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .accounting-record-total {
+    grid-column: 1 / -1;
+  }
+}
+
+.invoice-records-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.invoice-records-header h3 {
+  margin: 0;
+}
+
+.invoice-records-header .field {
+  width: min(100%, 13rem);
+  margin: 0;
+}
+
+.invoice-records {
+  margin-top: 24px;
+}
+
+.invoice-records > h3,
+.invoice-detail-section h3 {
+  margin: 0 0 12px;
+}
+
+.invoice-row-amount {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.invoice-row-amount small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.invoice-row-amount small,
+.invoice-detail-lines small {
+  color: var(--panel-secondary);
+  font-size: 12px;
+}
+
+.accounting-record-status[data-state="accepted"] {
+  background: #e4eee4;
+  color: #426347;
+}
+
+.accounting-record-status:is(
+  [data-state="rejected"],
+  [data-state="observed"],
+  [data-state="pending"]
+) {
+  background: #fbebdf;
+  color: #845130;
+}
+
+.invoice-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.invoice-detail-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.invoice-detail-lines {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.invoice-detail-lines > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.invoice-detail-lines > li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.invoice-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.invoice-detail-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+/* Sales from SUNAT have their own section and only expose the provider data. */
+@media (min-width: 601px) {
+  .accounting-record-list > .sunat-sale-row {
+    grid-template-columns: minmax(0, 1fr) minmax(6rem, auto) auto;
+  }
+}

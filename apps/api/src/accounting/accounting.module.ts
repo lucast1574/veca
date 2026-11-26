@@ -267,6 +267,14 @@ class AccountingController {
     return this.sire.connection();
   }
 
+  @Get("sire/sales")
+  salesInbox(@Query("month") month: string, @Query("page") page = "1") {
+    return this.sire.salesInbox(
+      parse(accountingMonth, month),
+      parse(pageIndex, page),
+    );
+  }
+
   @Get("sire/purchases")
   pendingPurchases(
     @Query("month") month: string,

@@ -208,6 +208,21 @@ export const margin: AccountingMargin = {
 };
 const base = "http://veca-storybook.invalid";
 export const handlers = [
+  http.get(base + "/admin/accounting/sire/sales", () =>
+    HttpResponse.json({
+      items: [
+        {
+          reference: "F001-1250",
+          taxId: "20100000005",
+          total: 354000,
+          currency: "PEN",
+          type: "01",
+        },
+      ],
+      hasMore: false,
+      syncedAt: "2026-11-25T14:00:00Z",
+    }),
+  ),
   http.get(`${base}/account/notifications`, () =>
     HttpResponse.json({ items: [], unread: 0 }),
   ),

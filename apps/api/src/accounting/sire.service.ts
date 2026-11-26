@@ -3,6 +3,7 @@ import type {
   SireBook,
   SireComparison,
   SireReconciliation,
+  SireSalePage,
 } from "@veca/content";
 import { purchaseDocumentKey } from "./purchase-document";
 import {
@@ -152,6 +153,25 @@ export class SireService {
     return this.provider.connection();
   }
 
+  async salesInbox(month: string, page: number): Promise<SireSalePage> {
+    const size = 10;
+    const offset = (page - 1) * size;
+    const saved = await this.db.db
+      .collection<
+        { _id: string; issuerRuc: string } & SireSalePage
+      >("sire_sales_syncs")
+      .findOne(
+        { _id: month, issuerRuc: fiscalIssuerRuc },
+        { projection: { items: { $slice: [offset, size + 1] }, syncedAt: 1 } },
+      );
+    const items = saved?.items || [];
+    return {
+      items: items.slice(0, size),
+      hasMore: items.length > size,
+      syncedAt: saved?.syncedAt,
+    };
+  }
+
   async automatic(
     month: string,
     book: SireBook,
@@ -190,10 +210,26 @@ export class SireService {
       throw new BadRequestException(
         "El periodo supera el límite de 10 000 comprobantes.",
       );
+    const result = await this.compare(month, book, incoming);
+    if (book === "sales") {
+      await this.db.db
+        .collection<{ _id: string }>("sire_sales_syncs")
+        .updateOne(
+          { _id: month },
+          {
+            $set: {
+              issuerRuc: fiscalIssuerRuc,
+              items: incoming.map(({ doc, type }) => ({ ...doc, type })),
+              syncedAt: new Date().toISOString(),
+            },
+          },
+          { upsert: true },
+        );
+    }
     return {
       job: proposal.job,
       status: "ready",
-      result: await this.compare(month, book, incoming),
+      result,
     };
   }
 

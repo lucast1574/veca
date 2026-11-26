@@ -148,6 +148,27 @@ const mocks = [
     }
     return HttpResponse.json(params.month === "2032-01" ? zero : report);
   }),
+  http.get("*/admin/accounting/sire/sales", () =>
+    HttpResponse.json({
+      items: [
+        {
+          reference: "F001-1250",
+          taxId: "20100000005",
+          total: 354000,
+          currency: "PEN",
+          type: "01",
+        },
+      ],
+      hasMore: false,
+      syncedAt: "2026-11-25T14:00:00Z",
+    }),
+  ),
+  http.get("*/admin/accounting/invoices/:id", ({ params }) =>
+    HttpResponse.json({
+      invoice: invoices.find((row) => row.id === params.id),
+      enabled: true,
+    }),
+  ),
   http.get("*/admin/accounting/works", () => HttpResponse.json([])),
   http.get("*/admin/accounting/invoices", ({ request }) => {
     const params = new URL(request.url).searchParams;
@@ -346,10 +367,9 @@ export const IrAVentas: Story = {
     await expect(await page.findByLabelText("Periodo de ventas")).toHaveValue(
       "2026-10",
     );
-    await expect(page.getByRole("link", { name: /^Todas$/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(
+      page.getByRole("combobox", { name: "Ver facturas" }),
+    ).toHaveTextContent("Todas");
     await expect(
       page.queryByRole("link", { name: "Revisión con SUNAT" }),
     ).not.toBeInTheDocument();
@@ -401,7 +421,7 @@ export const RevisionVentas: Story = {
     await expect(page.queryByRole("dialog")).not.toBeInTheDocument();
     await waitFor(() => expect(trigger).toHaveFocus());
     await expect(
-      page.getByRole("heading", { name: "Facturas del periodo" }),
+      page.getByRole("heading", { name: "Facturas en VECA" }),
     ).toBeVisible();
   },
 };
@@ -525,12 +545,11 @@ export const EnlaceAnteriorVentas: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await expect(
-      await page.findByRole("heading", { name: "Facturas del periodo" }),
+      await page.findByRole("heading", { name: "Facturas en VECA" }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Todas$/ })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(
+      page.getByRole("combobox", { name: "Ver facturas" }),
+    ).toHaveTextContent("Todas");
     await expect(page.getByLabelText("Periodo de ventas")).toHaveValue(
       "2026-10",
     );
@@ -549,12 +568,10 @@ export const SolicitadasSinFiltroMensual: Story = {
     await expect(
       await page.findByText("Solicitada", { exact: true }),
     ).toBeVisible();
+    await expect(page.getByLabelText("Periodo de ventas")).toBeVisible();
     await expect(
-      page.queryByLabelText("Periodo de ventas"),
-    ).not.toBeInTheDocument();
-    await expect(
-      page.queryByRole("region", { name: "Ventas del periodo" }),
-    ).not.toBeInTheDocument();
+      page.getByRole("region", { name: "Ventas en SUNAT" }),
+    ).toBeVisible();
     await expect(lastInvoiceMonth).toBe(null);
   },
 };
@@ -565,10 +582,10 @@ export const PorCobrarSinFiltroMensual: Story = {
   },
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
-    await expect(await page.findAllByText(/Por cobrar S/)).toHaveLength(3);
+    await expect(await page.findAllByText("Saldo por cobrar")).toHaveLength(3);
     await expect(
-      page.queryByRole("region", { name: "Ventas del periodo" }),
-    ).not.toBeInTheDocument();
+      page.getByRole("region", { name: "Ventas en SUNAT" }),
+    ).toBeVisible();
     await expect(lastInvoiceMonth).toBe(null);
   },
 };
@@ -580,7 +597,7 @@ export const NuevaFacturaDesdeTodas: Story = {
   play: async ({ canvasElement }) => {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(
-      await page.findByRole("link", { name: "Nueva factura" }),
+      await page.findByRole("button", { name: "Nueva factura" }),
     );
     await expect(
       await page.findByRole("dialog", { name: "Nueva factura" }),
@@ -590,5 +607,43 @@ export const NuevaFacturaDesdeTodas: Story = {
     await expect(await page.findByLabelText("Periodo de ventas")).toHaveValue(
       "2026-10",
     );
+  },
+};
+
+export const DetalleFacturaFiltrada: Story = {
+  name: "Facturas: detalle en modal y filtro por cobrar",
+  beforeEach() {
+    history.replaceState(null, "", "#accounting/facturas?month=2026-11");
+  },
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    const sunat = await page.findByRole("region", { name: "Ventas en SUNAT" });
+    await userEvent.click(
+      await within(sunat).findByRole("button", { name: "Ver detalle" }),
+    );
+    await expect(
+      await page.findByRole("dialog", { name: "F001-1250" }),
+    ).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    const filter = page.getByRole("combobox", { name: "Ver facturas" });
+    await userEvent.click(filter);
+    await userEvent.click(
+      await page.findByRole("option", { name: "Por cobrar" }),
+    );
+    const list = page.getByRole("region", { name: "Facturas en VECA" });
+    const detail = (
+      await within(list).findAllByRole("button", { name: "Ver detalle" })
+    )[0];
+    await waitFor(() => expect(lastInvoiceMonth).toBeNull());
+    await userEvent.click(detail);
+    const modal = await page.findByRole("dialog", {
+      name: "Edificio Alameda · Ejemplo",
+    });
+    await expect(
+      within(modal).getByRole("button", { name: "Registrar cobro" }),
+    ).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect(filter).toHaveTextContent("Por cobrar");
+    await waitFor(() => expect(detail).toHaveFocus());
   },
 };

@@ -82,7 +82,7 @@ export function AccountingWorkspace({
                 : route.id || ""
             }
             initialMonth={route.month}
-            queue={
+            initialQueue={
               route.id === "solicitadas"
                 ? "requested"
                 : route.id === "por-cobrar"

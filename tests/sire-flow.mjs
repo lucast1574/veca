@@ -47,6 +47,12 @@ try {
     return { status: r.status, data: await r.json() };
   };
   const startPath = (book) => `${root}${period}/reconcile/${book}/automatic`;
+  const salesInbox = `/admin/accounting/sire/sales?month=${period}`;
+  assert.equal((await request(salesInbox, "GET", false)).status, 401);
+  assert.deepEqual((await request(salesInbox)).data, {
+    items: [],
+    hasMore: false,
+  });
   assert.equal(
     (await request(startPath("purchases"), "POST", false)).status,
     401,
@@ -110,6 +116,27 @@ try {
       );
       assert.equal((await request(other)).status, 400);
     }
+    const syncedSales = (await request(salesInbox)).data;
+    assert.ok(syncedSales.syncedAt);
+    assert.deepEqual(
+      syncedSales.items.map(({ reference, total }) => [reference, total]),
+      [
+        ["FQA-1", 11800],
+        ["FQA-2", 11800],
+      ],
+    );
+    assert.deepEqual((await request(salesInbox + "&page=2")).data.items, []);
+    assert.deepEqual(
+      (await request("/admin/accounting/sire/sales?month=2032-01")).data.items,
+      [],
+    );
+    assert.equal(
+      await db
+        .collection("accounting_invoices")
+        .countDocuments({ issueDate: period + "-05" }),
+      1,
+      "consulting SUNAT does not create invoices in VECA",
+    );
     const mismatchPath = root + "2026-01/reconcile/purchases/automatic";
     const mismatch = await request(mismatchPath, "POST");
     assert.equal(
@@ -134,6 +161,7 @@ try {
         .collection("users")
         .updateOne({ _id: admin._id }, { $set: { role: "operations" } });
       assert.equal((await request(startPath("sales"), "POST")).status, 403);
+      assert.equal((await request(salesInbox)).status, 403);
       assert.equal(
         (await request("/admin/accounting/sire/connection")).status,
         403,
@@ -149,6 +177,7 @@ try {
   } finally {
     await db.collection("accounting_invoices").deleteOne({ _id: invoiceId });
     await db.collection("accounting_costs").deleteOne({ _id: costId });
+    await db.collection("sire_sales_syncs").deleteOne({ _id: period });
   }
 } finally {
   await client.close();
