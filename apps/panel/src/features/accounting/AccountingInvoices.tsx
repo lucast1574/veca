@@ -448,7 +448,6 @@ function InvoiceForm({
             <AccountingProofField
               file={proofFile}
               onClear={() => setProofFile(null)}
-              hint="Adjunta una foto o PDF de hasta 8 MB si tienes un sustento interno para esta factura."
               onSelect={(file) => {
                 setProofFile(file);
                 setDirty(true);

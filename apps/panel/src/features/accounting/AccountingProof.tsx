@@ -15,21 +15,27 @@ export function AccountingProofField({
   file,
   onSelect,
   onClear,
-  hint = "Opcional al guardar. Adjunta una foto JPG, PNG o WebP, o un PDF de hasta 8 MB.",
+  hint = "Foto o PDF de hasta 8 MB.",
+  optionalAtSave = true,
   disabled,
 }: {
   file?: File | null;
   onSelect: (file: File) => void;
   onClear?: () => void;
   hint?: string;
+  optionalAtSave?: boolean;
   disabled?: boolean;
 }) {
   const [error, setError] = useState("");
   return (
     <>
       <FileInput
-        label="Sustento del comprobante"
-        hint={hint}
+        label={
+          optionalAtSave
+            ? "Sustento del comprobante*"
+            : "Sustento del comprobante"
+        }
+        hint={optionalAtSave ? `* Opcional al guardar. ${hint}` : hint}
         file={file}
         disabled={disabled}
         accept="image/jpeg,image/png,image/webp,application/pdf,.jpg,.jpeg,.png,.webp,.pdf"

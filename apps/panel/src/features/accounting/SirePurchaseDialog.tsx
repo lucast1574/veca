@@ -445,7 +445,7 @@ function PurchaseForm({
             <AccountingProofField
               file={proofFile}
               onClear={() => setProofFile(null)}
-              hint="Puedes adjuntar una foto o PDF ahora o después. El sustento es necesario para marcar el registro como revisado. Hasta 8 MB."
+              hint="Foto o PDF de hasta 8 MB. Se requiere al marcar como revisado."
               onSelect={(file) => {
                 setProofFile(file);
                 setDirty(true);
