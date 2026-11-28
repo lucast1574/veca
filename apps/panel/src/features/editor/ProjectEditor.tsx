@@ -354,9 +354,9 @@ export function ProjectEditor({
                   />
                 </Field>
                 <Field
-                  label="Resumen"
+                  label="Texto central"
                   htmlFor="excerpt"
-                  hint={`${draft.excerpt.length}/320 · También se utiliza para la descripción en buscadores.`}
+                  hint={`${draft.excerpt.length}/320 · Abre la página y acompaña todas las fotos en redes.`}
                 >
                   <textarea
                     id="excerpt"

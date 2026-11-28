@@ -178,11 +178,11 @@ export class ProjectsService {
   async publish(id: string, version: number) {
     const d = await this.repo.get(id);
     const value = await this.validated(d.draft);
-    const issues = publicationIssues(value);
-    if (issues.length) throw new BadRequestException(issues[0]);
-    const now = new Date().toISOString();
     const firstPublishedAt = d.firstPublishedAt ?? d.published?.publishedAt;
     const enqueueSocial = !firstPublishedAt && !d.socialShare;
+    const issues = publicationIssues(value, enqueueSocial);
+    if (issues.length) throw new BadRequestException(issues[0]);
+    const now = new Date().toISOString();
     const published = {
       version: version + 1,
       ...value,

@@ -216,7 +216,15 @@ function metaDestination(stage, account = "vecavidrios") {
   };
 }
 
-function metaPublishedProject(platform, title, description, url) {
+function publicationCaption(job, channel) {
+  if (job.caption) return job.caption;
+  return [job.title, job.description, channel === "linkedin" ? job.url : ""]
+    .filter(Boolean)
+    .join("\n\n")
+    .slice(0, 2000);
+}
+
+function metaPublishedProject(platform, content, url) {
   if (
     location.origin !== "https://business.facebook.com" ||
     !location.pathname.startsWith("/latest/posts/published_posts") ||
@@ -229,9 +237,7 @@ function metaPublishedProject(platform, title, description, url) {
       .replace(/[\u200B-\u200D\uFEFF]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-  const caption = text([title, description].filter(Boolean).join(" "))
-    .slice(0, 100)
-    .trimEnd();
+  const caption = text(content).slice(0, 100).trimEnd();
   const rows = [...document.querySelectorAll('tr,[role="row"]')].filter(
     (row) =>
       row.getClientRects().length &&
@@ -240,8 +246,7 @@ function metaPublishedProject(platform, title, description, url) {
         (cell) => {
           const contents = text(cell.innerText);
           return (
-            contents.includes(url) ||
-            (description && contents.includes(caption))
+            contents.includes(url) || (caption && contents.includes(caption))
           );
         },
       ),
@@ -895,10 +900,7 @@ export function createSocialActions({
     await open(url);
     await assertPage(root, url, signals);
     const meta = platform === "instagram" || platform === "facebook";
-    const caption = [job.title, job.description, ...(meta ? [] : [job.url])]
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 2000);
+    const caption = publicationCaption(job, platform);
     const dialog = '[role="dialog"]';
     let photo;
     let destination;
@@ -929,7 +931,7 @@ export function createSocialActions({
           "Enter the text you want to include in the dialog box.",
         ],
         "body",
-        caption.replace(/\s+/g, " "),
+        job.caption ? caption : caption.replace(/\s+/g, " "),
         trace,
         true,
       );
@@ -1061,8 +1063,7 @@ export function createSocialActions({
             () =>
               run(root, metaPublishedProject, [
                 channel,
-                job.title,
-                job.description,
+                publicationCaption(job, channel),
                 job.url,
               ]),
             18000,
@@ -1083,7 +1084,11 @@ export function createSocialActions({
         }
       } catch (error) {
         if (!submitted) {
-          outcome = error.message === "withdrawn" ? "review" : "retry";
+          outcome =
+            error.message === "withdrawn" ||
+            (error.message === "media" && job.images?.length > 10)
+              ? "review"
+              : "retry";
           reason = ["session", "editor", "media", "withdrawn"].includes(
             error.message,
           )
@@ -1218,6 +1223,8 @@ export function createSocialActions({
     const test = {
       title: "Vista previa técnica · Vidrios VECA",
       description: "Comprobación de texto y portada.",
+      caption:
+        "Vista previa técnica · Vidrios VECA\nComprobación de texto y dos fotos.",
       url: website + "/",
       cover: composerSamples[0],
       images: composerSamples,

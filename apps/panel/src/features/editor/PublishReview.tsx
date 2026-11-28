@@ -42,7 +42,7 @@ export function PublishReview({
   saved: Project | null;
 }) {
   const [confirming, setConfirming] = useState(false);
-  const issues = publicationRequirements(draft),
+  const issues = publicationRequirements(draft, !hasBeenPublished),
     cover = draft.images.find((image) => image.id === draft.coverId),
     seo = seoFor(draft, slug);
   return (
@@ -175,7 +175,7 @@ export function PublishReview({
       {confirming && (
         <Modal
           title="¿Publicar esta obra?"
-          description="La obra quedará visible en veca.com.pe. Su portada, fotos y descripción entrarán a la cola para Instagram, Facebook y LinkedIn. Puedes consultar el resultado de cada red después."
+          description="La obra quedará visible en veca.com.pe. El texto central y todas las fotos adjuntas entrarán a la cola para Instagram, Facebook y LinkedIn. La portada va primero. Puedes consultar el resultado de cada red después."
           onClose={() => setConfirming(false)}
           footer={
             <footer className="ve-modal-actions publication-confirm-actions">

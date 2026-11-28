@@ -239,6 +239,7 @@ export type PublicationRequirement = {
 };
 export function publicationRequirements(
   project: ProjectInput,
+  requireSocialText = false,
 ): PublicationRequirement[] {
   const requirements: PublicationRequirement[] = [];
   const cover = project.images.find((image) => image.id === project.coverId);
@@ -256,6 +257,11 @@ export function publicationRequirements(
     requirements.push({
       message: "Escribe un título de al menos 4 caracteres.",
       target: "title",
+    });
+  if (requireSocialText && !project.excerpt.trim())
+    requirements.push({
+      message: "Escribe el texto central que acompañará las fotos en redes.",
+      target: "excerpt",
     });
   if (!project.location?.trim())
     requirements.push({
@@ -304,8 +310,13 @@ export function publicationRequirements(
     });
   return requirements;
 }
-export function publicationIssues(project: ProjectInput): string[] {
-  return publicationRequirements(project).map(({ message }) => message);
+export function publicationIssues(
+  project: ProjectInput,
+  requireSocialText = false,
+): string[] {
+  return publicationRequirements(project, requireSocialText).map(
+    ({ message }) => message,
+  );
 }
 
 export function seoFor(project: ProjectInput, slug: string) {
