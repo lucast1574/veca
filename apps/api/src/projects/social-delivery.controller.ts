@@ -158,6 +158,14 @@ export class SocialDeliveryController {
         description: project.excerpt || project.seo.description,
         url: new URL(`/proyectos/${job.slug}/`, config.SITE_ORIGIN).href,
         cover: new URL(`/media/${project.coverId}`, config.PUBLIC_API_URL).href,
+        images: [
+          project.coverId,
+          ...project.images
+            .map(({ id }) => id)
+            .filter((id) => id !== project.coverId),
+        ]
+          .slice(0, 10)
+          .map((id) => new URL(`/media/${id}`, config.PUBLIC_API_URL).href),
       },
     };
   }

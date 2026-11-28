@@ -175,7 +175,7 @@ export function PublishReview({
       {confirming && (
         <Modal
           title="¿Publicar esta obra?"
-          description="La obra quedará visible en veca.com.pe. Su portada y descripción entrarán a la cola para Instagram, Facebook y LinkedIn. Puedes consultar el resultado de cada red después."
+          description="La obra quedará visible en veca.com.pe. Su portada, fotos y descripción entrarán a la cola para Instagram, Facebook y LinkedIn. Puedes consultar el resultado de cada red después."
           onClose={() => setConfirming(false)}
           footer={
             <footer className="ve-modal-actions publication-confirm-actions">

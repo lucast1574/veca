@@ -11,6 +11,9 @@ const elementId = "element-6066-11e4-a52e-4f735466cecf";
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const api = "https://api.veca.com.pe";
 const website = "https://veca.com.pe";
+const composerSamples = ["/assets/vivienda.webp", "/assets/oficina.webp"].map(
+  (path) => website + path,
+);
 const submitLabels = ["Compartir", "Share", "Publicar", "Publish", "Post"];
 
 function matchControl(labels, scope, kind) {
@@ -61,7 +64,8 @@ function findMediaInput(scope) {
   return photos.length === 1 ? photos[0] : null;
 }
 
-function photoPreview(scope) {
+function photoPreview(scope, expected) {
+  const found = new Map();
   const visible = (element) =>
     element.getClientRects().length && !element.closest("[aria-hidden=true]");
   const dialogs = [...document.querySelectorAll(scope)].filter(visible);
@@ -75,7 +79,10 @@ function photoPreview(scope) {
         continue;
       const source = image.currentSrc || image.src;
       if (/^(blob:|data:image\/)/i.test(source)) {
-        return { width: image.naturalWidth, height: image.naturalHeight };
+        found.set(source, {
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+        });
       }
     }
     for (const element of dialog.querySelectorAll("[style]")) {
@@ -84,18 +91,24 @@ function photoPreview(scope) {
       if (/^url\(["']?(blob:|data:image\/)/i.test(image)) {
         const box = element.getBoundingClientRect();
         if (Math.min(box.width, box.height) >= 120) {
-          return {
-            width: Math.round(box.width),
-            height: Math.round(box.height),
-          };
+          const source = image
+            .replace(/^url\(["']?/, "")
+            .replace(/["']?\)$/, "");
+          if (!found.has(source))
+            found.set(source, {
+              width: Math.round(box.width),
+              height: Math.round(box.height),
+            });
         }
       }
     }
   }
-  return null;
+  return found.size === expected
+    ? { ...found.values().next().value, count: found.size }
+    : null;
 }
 
-function metaPhotoPreview() {
+function metaPhotoPreview(expected) {
   const visible = (element) =>
     element.getClientRects().length && !element.closest("[aria-hidden=true]");
   const buttons = [...document.querySelectorAll("button,[role=button]")].filter(
@@ -107,7 +120,7 @@ function metaPhotoPreview() {
           .trim(),
       ),
   );
-  if (buttons.length !== 1) return null;
+  if (buttons.length !== expected) return null;
   // Meta replaces the local JPEG with its CDN copy in the attachment row.
   for (
     let row = buttons[0].parentElement;
@@ -125,9 +138,18 @@ function metaPhotoPreview() {
       );
     });
     if (!thumbnails.length) continue;
-    if (thumbnails.length !== 1) return null;
+    if (
+      thumbnails.length < expected ||
+      !buttons.every((button) => row.contains(button))
+    )
+      continue;
+    if (thumbnails.length !== expected) return null;
     const [photo] = thumbnails;
-    return { width: photo.naturalWidth, height: photo.naturalHeight };
+    return {
+      width: photo.naturalWidth,
+      height: photo.naturalHeight,
+      count: expected,
+    };
   }
   return null;
 }
@@ -192,12 +214,15 @@ function metaPublishedProject(platform, title, description, url) {
     (row) =>
       row.getClientRects().length &&
       row.querySelector(`img[alt="${social}"]`) &&
-      [...row.querySelectorAll('td,[role="cell"]')].some((cell) => {
-        const contents = text(cell.innerText);
-        return (
-          contents.includes(url) || (description && contents.includes(caption))
-        );
-      }),
+      [...row.querySelectorAll('td,[role="cell"],[role="gridcell"]')].some(
+        (cell) => {
+          const contents = text(cell.innerText);
+          return (
+            contents.includes(url) ||
+            (description && contents.includes(caption))
+          );
+        },
+      ),
   );
   return rows.length === 1;
 }
@@ -387,8 +412,50 @@ function publishedNotice(platform) {
   );
 }
 
-function zipCover(bytes) {
-  const name = Buffer.from("veca-portada.jpg");
+function metaSubmissionProblem() {
+  if (location.origin !== "https://business.facebook.com") return null;
+  const messages = [
+    ...document.querySelectorAll(
+      '[role="alert"],[role="status"],[role="dialog"],[aria-live]',
+    ),
+  ].filter(
+    (node) =>
+      node.getClientRects().length && !node.closest("[aria-hidden=true]"),
+  );
+  const text = messages.map((node) => node.innerText || "").join(" ");
+  if (
+    /elimina tu enlace para terminar de publicar|remove your link to finish publishing/i.test(
+      text,
+    )
+  ) {
+    return "link-limit";
+  }
+  if (
+    /se requiere verificaci[oó]n|verification required|verify your identity|verifica tu identidad|nuevo dispositivo o ubicaci[oó]n/i.test(
+      text,
+    )
+  ) {
+    return "verification-required";
+  }
+  if (
+    /no se pudo publicar|couldn.t publish|failed to publish|publicaci[oó]n no publicada/i.test(
+      text,
+    )
+  ) {
+    return "posting-rejected";
+  }
+  if (
+    /no se pudo (subir|cargar)|unable to upload|upload failed|formato no (compatible|admitido)/i.test(
+      text,
+    )
+  ) {
+    return "upload-rejected";
+  }
+  return null;
+}
+
+function zipPhoto(bytes, index) {
+  const name = Buffer.from("veca-foto-" + (index + 1) + ".jpg");
   const local = Buffer.alloc(30);
   const central = Buffer.alloc(46);
   const end = Buffer.alloc(22);
@@ -416,28 +483,26 @@ function zipCover(bytes) {
   );
 }
 
-function convertCover(uri, done) {
+function convertPhoto(uri, square, done) {
   const image = new Image();
   image.onload = () => {
     const canvas = document.createElement("canvas");
-    const ratio = Math.min(Math.max(image.width / image.height, 0.8), 1.91);
-    const sourceWidth = Math.min(image.width, image.height * ratio);
-    const sourceHeight = Math.min(image.height, image.width / ratio);
-    canvas.width = Math.min(Math.max(480, Math.round(sourceWidth)), 1440);
-    canvas.height = Math.round(canvas.width / ratio);
+    const scale = square
+      ? Math.min(1000 / image.width, 1000 / image.height)
+      : Math.min(1440 / image.width, 1440 / image.height, 1);
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    canvas.width = square ? 1080 : width;
+    canvas.height = square ? 1080 : height;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(
       image,
-      (image.width - sourceWidth) / 2,
-      (image.height - sourceHeight) / 2,
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
+      (canvas.width - width) / 2,
+      (canvas.height - height) / 2,
+      width,
+      height,
     );
     done(canvas.toDataURL("image/jpeg", 0.88).split(",")[1]);
   };
@@ -596,16 +661,27 @@ export function createSocialActions({
     await at("/element/" + element[elementId] + "/click", "POST", {});
     return true;
   }
-  async function upload(root, jpeg, scope, trace) {
+  async function transfer(photos) {
+    const paths = [];
+    for (const [index, photo] of photos.entries()) {
+      paths.push(
+        await at("/se/file", "POST", {
+          file: zipPhoto(Buffer.from(photo, "base64"), index),
+        }),
+      );
+    }
+    return paths;
+  }
+  async function upload(root, photos, scope, trace) {
     trace("media-input");
     const input = await waitFor(() => run(root, findMediaInput, [scope]));
     requireMatch(input, "media");
     trace("media-transfer");
-    const path = await at("/se/file", "POST", {
-      file: zipCover(Buffer.from(jpeg, "base64")),
-    });
+    const paths = await transfer(photos);
     trace("media-select");
-    await at("/element/" + input[elementId] + "/value", "POST", { text: path });
+    await at("/element/" + input[elementId] + "/value", "POST", {
+      text: paths.join("\n"),
+    });
   }
   async function chooseMetaDestination(root, platform) {
     const chosen = platform === "instagram" ? "vecavidrios" : "Vidrios VECA";
@@ -658,14 +734,12 @@ export function createSocialActions({
       await waitFor(() => run(root, metaDestination, ["vecavidrios"]), 3000),
     );
   }
-  async function uploadMeta(root, jpeg) {
+  async function uploadMeta(root, photos) {
     const button = requireMatch(
       await control(root, ["Añadir foto o vídeo", "Add photo or video"]),
       "media",
     );
-    const path = await at("/se/file", "POST", {
-      file: zipCover(Buffer.from(jpeg, "base64")),
-    });
+    const paths = await transfer(photos);
     const handle = await at("/window");
     await withChrome(
       currentSession(),
@@ -693,7 +767,7 @@ export function createSocialActions({
           });
           await at("/element/" + button[elementId] + "/click", "POST", {});
           const backendNodeId = requireMatch(await opened, "media");
-          await send("DOM.setFileInputFiles", { backendNodeId, files: [path] });
+          await send("DOM.setFileInputFiles", { backendNodeId, files: paths });
         } finally {
           listener.abort();
           await send("Page.setInterceptFileChooserDialog", { enabled: false });
@@ -753,9 +827,9 @@ export function createSocialActions({
     if (!res.ok) throw Error("delivery_api");
     return res.json();
   }
-  async function fileFor(root, cover) {
+  async function fileFor(root, cover, square) {
     const url = new URL(cover);
-    const sample = url.href === website + "/assets/vivienda.webp";
+    const sample = composerSamples.includes(url.href);
     if (
       !sample &&
       (url.origin !== api || !/^\/media\/[a-f0-9]{24}$/.test(url.pathname))
@@ -776,12 +850,13 @@ export function createSocialActions({
     if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw Error("media");
     const jpeg = await run(
       root,
-      convertCover,
+      convertPhoto,
       [
         "data:" +
           fetched.headers.get("content-type") +
           ";base64," +
           bytes.toString("base64"),
+        square,
       ],
       true,
     );
@@ -790,16 +865,19 @@ export function createSocialActions({
   }
   async function prepare(root, platform, url, signals, job, trace = () => {}) {
     trace("cover");
-    const file = await fileFor(root, job.cover);
+    const urls = job.images?.length ? job.images : [job.cover];
+    const photos = [];
+    for (const source of urls)
+      photos.push(await fileFor(root, source, platform === "instagram"));
     trace("account");
     await open(url);
     await assertPage(root, url, signals);
-    const caption = [job.title, job.description, job.url]
+    const meta = platform === "instagram" || platform === "facebook";
+    const caption = [job.title, job.description, ...(meta ? [] : [job.url])]
       .filter(Boolean)
       .join("\n\n")
       .slice(0, 2000);
     const dialog = '[role="dialog"]';
-    const meta = platform === "instagram" || platform === "facebook";
     let photo;
     let destination;
     const checkPhoto = async () => {
@@ -808,8 +886,8 @@ export function createSocialActions({
         await waitFor(
           () =>
             meta
-              ? run(root, metaPhotoPreview)
-              : run(root, photoPreview, [dialog]),
+              ? run(root, metaPhotoPreview, [photos.length])
+              : run(root, photoPreview, [dialog, photos.length]),
           meta ? 15000 : 8500,
         ),
         "media",
@@ -819,7 +897,7 @@ export function createSocialActions({
       trace("meta-destination");
       destination = await chooseMetaDestination(root, platform);
       trace("upload");
-      await uploadMeta(root, file);
+      await uploadMeta(root, photos);
       await checkPhoto();
       trace("caption");
       await setText(
@@ -875,7 +953,7 @@ export function createSocialActions({
           "Photo",
         ]);
       trace("upload");
-      await upload(root, file, dialog, trace);
+      await upload(root, photos, dialog, trace);
       await checkPhoto();
       await click(root, ["Siguiente", "Next", "Hecho", "Done"], dialog, 3500);
       trace("caption");
@@ -922,6 +1000,7 @@ export function createSocialActions({
       let submitted = false;
       let outcome = "review";
       let reason = "confirmation";
+      let signal = "";
       try {
         const confirmed = await scratch(async (root) => {
           const { submit, destination } = await prepare(
@@ -944,15 +1023,19 @@ export function createSocialActions({
           }
           submitted = true;
           await at("/element/" + submit[elementId] + "/click", "POST", {});
-          const notice = await waitFor(
-            () => run(root, publishedNotice, [channel]),
-            9000,
-          );
-          if (notice || !destination) return notice;
+          const notice = await waitFor(async () => {
+            if (await run(root, publishedNotice, [channel])) return "published";
+            return destination ? run(root, metaSubmissionProblem) : null;
+          }, 12000);
+          if (notice && notice !== "published") {
+            signal = notice;
+            return false;
+          }
+          if (!destination) return notice === "published";
           await open(
             "https://business.facebook.com/latest/posts/published_posts/?asset_id=103191075272076",
           );
-          return waitFor(
+          const inHistory = await waitFor(
             () =>
               run(root, metaPublishedProject, [
                 channel,
@@ -960,12 +1043,21 @@ export function createSocialActions({
                 job.description,
                 job.url,
               ]),
-            14000,
+            18000,
           );
+          if (inHistory) signal = "meta-history";
+          else if (notice === "published") signal = "published-notice";
+          return inHistory || notice === "published";
         });
         if (confirmed) {
           outcome = "published";
           reason = "";
+        } else if (signal === "verification-required") {
+          reason = "session";
+        } else if (signal === "upload-rejected") {
+          reason = "media";
+        } else if (signal === "posting-rejected" || signal === "link-limit") {
+          reason = "editor";
         }
       } catch (error) {
         if (!submitted) {
@@ -982,7 +1074,12 @@ export function createSocialActions({
         outcome,
         reason,
       });
-      results.push({ channel, status: outcome, reason });
+      results.push({
+        channel,
+        status: outcome,
+        reason,
+        ...(signal && { signal }),
+      });
     }
     return { mode: "live", deliveries: results };
   }
@@ -1100,7 +1197,8 @@ export function createSocialActions({
       title: "Vista previa técnica · Vidrios VECA",
       description: "Comprobación de texto y portada.",
       url: website + "/",
-      cover: website + "/assets/vivienda.webp",
+      cover: composerSamples[0],
+      images: composerSamples,
     };
     const composers = [];
     for (const [name, url, signals] of targets.publications) {
