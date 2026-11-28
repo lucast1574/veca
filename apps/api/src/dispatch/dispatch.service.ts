@@ -33,6 +33,12 @@ import { randomUUID, createHash } from "node:crypto";
 import { CrmRepository } from "../crm/crm.repository";
 import { InventoryService } from "../inventory/inventory.service";
 import { Database } from "../database/database.module";
+import { config } from "../common/config";
+import {
+  canReplayFiscalAttempt,
+  fiscalAttemptScope,
+  type FiscalAttemptContext,
+} from "../common/fiscal-config";
 import { parse } from "../common/validation";
 import {
   GuideProvider,
@@ -57,6 +63,7 @@ type DispatchRecord = {
   guideNumber: string;
   externalId?: string;
   attemptKey?: string;
+  attemptContext?: FiscalAttemptContext & { issueDate: string; series: string };
   departedAt?: string;
   departureSource?: string;
   departureEpoch?: number;
@@ -94,7 +101,12 @@ function view(record: DispatchRecord): Dispatch {
       : record.observation,
     guideNumber: record.guideNumber,
     departedAt: record.departedAt,
-    canCheckStatus: record.status === "pending" && Boolean(record.externalId),
+    canCheckStatus:
+      (record.status === "pending" || stalled) &&
+      Boolean(
+        record.externalId ||
+        (record.attemptKey && canReplayFiscalAttempt(record.attemptContext)),
+      ),
   };
 }
 
@@ -803,6 +815,12 @@ export class DispatchService {
     await this.stockLines(doc.data.items);
     await this.provider.assertIssuerEnabled();
     const attemptKey = randomUUID();
+    const attemptContext = {
+      startedAt: new Date().toISOString(),
+      scope: fiscalAttemptScope,
+      issueDate: limaDate(),
+      series: config.APISUNAT_GUIDE_SERIES,
+    };
     const locked = await this.change(
       doc,
       version,
@@ -810,38 +828,84 @@ export class DispatchService {
       {
         status: "sending",
         attemptKey,
+        attemptContext,
         externalId: "",
         guideNumber: "",
       },
       actor,
     );
+    return this.sendGuide(
+      doc,
+      locked.version,
+      attemptKey,
+      attemptContext,
+      actor,
+    );
+  }
+
+  private async sendGuide(
+    doc: DispatchRecord,
+    version: number,
+    key: string,
+    context: NonNullable<DispatchRecord["attemptContext"]>,
+    actor: string,
+    recovering = false,
+  ) {
     let result: GuideResult;
     try {
-      result = await this.provider.issue(doc.data, attemptKey, limaDate());
+      result = await this.provider.issue(
+        doc.data,
+        key,
+        context.issueDate,
+        context.series,
+      );
     } catch (error) {
-      const rejected = error instanceof GuideRequestError && error.definitive;
+      const rejected =
+        !recovering && error instanceof GuideRequestError && error.definitive;
       return this.change(
         doc,
-        locked.version,
+        version,
         ["sending"],
         {
           status: rejected ? "rejected" : "pending",
           observation: rejected
-            ? "El envío fue rechazado. Revisa los datos o consulta con administración."
+            ? error.message
             : "No se pudo confirmar el envío. Administración debe verificarlo antes de volver a emitir.",
         },
         actor,
       );
     }
-    return this.recordResult(doc, locked.version, ["sending"], result, actor);
+    return this.recordResult(doc, version, ["sending"], result, actor);
   }
 
   async check(id: string, version: number, actor: string) {
     const doc = await this.get(id);
-    if (doc.status !== "pending" || !doc.externalId)
+    if (!view(doc).canCheckStatus || doc.version !== version)
       throw new ConflictException(
         "Este envío no se puede consultar desde el panel.",
       );
+    if (!doc.externalId) {
+      const { attemptKey, attemptContext } = doc;
+      if (!attemptKey || !attemptContext)
+        throw new ConflictException(
+          "Este envío no se puede recuperar desde el panel.",
+        );
+      const locked = await this.change(
+        doc,
+        version,
+        [doc.status],
+        { status: "sending" },
+        actor,
+      );
+      return this.sendGuide(
+        doc,
+        locked.version,
+        attemptKey,
+        attemptContext,
+        actor,
+        true,
+      );
+    }
     let result: GuideResult;
     try {
       result = await this.provider.status(doc.externalId);
@@ -854,7 +918,7 @@ export class DispatchService {
       throw new ServiceUnavailableException(
         "La consulta no pudo confirmar la identidad de la guía.",
       );
-    return this.recordResult(doc, version, ["pending"], result, actor);
+    return this.recordResult(doc, version, [doc.status], result, actor);
   }
 
   async stockLines(items: DispatchInput["items"]) {
@@ -1091,6 +1155,7 @@ export class DispatchService {
         | "externalId"
         | "guideNumber"
         | "attemptKey"
+        | "attemptContext"
       >
     >,
     actor: string,

@@ -402,6 +402,36 @@ try {
         (row) => row.id === accountingDraft.id,
       ),
     );
+    for (const [arrivalAddress, status] of [
+      ["Obra QA sin credenciales GRE", "rejected"],
+      ["Obra QA respuesta perdida", "pending"],
+    ]) {
+      const dispatch = await request(fiscal, 201, "POST", {
+        ...newGuide,
+        id: new ObjectId().toHexString(),
+        data: { ...ownTransport, arrivalAddress },
+      });
+      const guidePath = `${fiscal}/${dispatch.id}`;
+      const attempt = await request(`${guidePath}/issue`, 201, "POST", {
+        version: dispatch.version,
+      });
+      assert.equal(attempt.status, status);
+      if (status === "rejected") {
+        assert.match(attempt.observation, /credenciales de guías de remisión/);
+        assert.equal(attempt.canCheckStatus, false);
+        continue;
+      }
+      assert.equal(attempt.canCheckStatus, true);
+      const resumed = await request(`${guidePath}/check`, 201, "POST", {
+        version: attempt.version,
+      });
+      assert.equal(resumed.status, "pending");
+      assert.match(resumed.guideNumber, /^T001-/);
+      const recovered = await request(`${guidePath}/check`, 201, "POST", {
+        version: resumed.version,
+      });
+      assert.equal(recovered.status, "accepted");
+    }
   }
   assert.equal(
     await db.collection("inventory_movements").countDocuments(),

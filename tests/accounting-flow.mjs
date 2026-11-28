@@ -376,6 +376,49 @@ try {
       assert.equal(confirmed.status, "accepted");
       assert.equal(confirmed.canCheck, false);
 
+      const lost = await request(root + "/invoices", 201, "POST", {
+        id: requestId(),
+        data: { ...creation.data, customer: "Cliente QA respuesta perdida" },
+      });
+      const lostPath = `${root}/invoices/${lost.id}`;
+      const uncertain = await request(lostPath + "/issue", 201, "POST", {
+        version: lost.version,
+      });
+      assert.equal(uncertain.status, "pending");
+      assert.equal(uncertain.canCheck, true);
+      const invoiceRows = db.collection("accounting_invoices");
+      const lostId = new ObjectId(lost.id);
+      const { attemptContext } = await invoiceRows.findOne({ _id: lostId });
+      await invoiceRows.updateOne(
+        { _id: lostId },
+        {
+          $set: { "attemptContext.startedAt": "2020-01-01T00:00:00.000Z" },
+        },
+      );
+      assert.equal((await request(lostPath)).invoice.canCheck, false);
+      await request(lostPath + "/check", 409, "POST", {
+        version: uncertain.version,
+      });
+      await invoiceRows.updateOne(
+        { _id: lostId },
+        {
+          $set: {
+            attemptContext,
+            status: "sending",
+            updatedAt: new Date(Date.now() - 60_000).toISOString(),
+          },
+        },
+      );
+      assert.equal((await request(lostPath)).invoice.status, "pending");
+      const recovered = await request(lostPath + "/check", 201, "POST", {
+        version: uncertain.version,
+      });
+      assert.equal(recovered.status, "accepted");
+      assert.match(recovered.number, /^F001-/);
+      await request(lostPath + "/check", 409, "POST", {
+        version: uncertain.version,
+      });
+
       const beforeFullPayment = (await request(path)).invoice;
       const fullPayment = await request(path + "/payment", 201, "POST", {
         version: beforeFullPayment.version,

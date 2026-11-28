@@ -193,7 +193,7 @@ export class InvoiceProvider {
 
   async file(id: string, type: "pdf" | "xml" | "cdr") {
     const response = await this.request(
-      `/documents/${encodeURIComponent(id)}/${type}`,
+      `/documents/${encodeURIComponent(id)}/${type}${type === "pdf" ? "" : "?delivery=direct"}`,
     );
     const file = Buffer.from(await response.arrayBuffer());
     if (type === "pdf" && file.subarray(0, 5).toString() !== "%PDF-")

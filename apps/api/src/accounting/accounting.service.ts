@@ -43,7 +43,12 @@ import { CrmRepository } from "../crm/crm.repository";
 import { StorageService } from "../media/storage.service";
 import { limaDate } from "../dispatch/guide-provider";
 import { LaborCostsService } from "./labor-costs.service";
-import { fiscalIssuerRuc } from "../common/fiscal-config";
+import {
+  canReplayFiscalAttempt,
+  fiscalAttemptScope,
+  fiscalIssuerRuc,
+  type FiscalAttemptContext,
+} from "../common/fiscal-config";
 import { InvoiceProvider, type FiscalInvoice } from "./invoice-provider";
 
 type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck" | "proof"> & {
@@ -51,6 +56,7 @@ type InvoiceRecord = Omit<AccountingInvoice, "id" | "canCheck" | "proof"> & {
   externalId?: string;
   fiscalNumberKey?: string;
   attempt?: string;
+  attemptContext?: FiscalAttemptContext;
   creationHash?: string;
   updatedAt: string;
   actor: string;
@@ -102,6 +108,7 @@ function invoiceView({
   externalId,
   fiscalNumberKey: _fiscalNumberKey,
   attempt,
+  attemptContext,
   creationHash,
   actor,
   updatedAt,
@@ -117,7 +124,12 @@ function invoiceView({
     observation: stalled
       ? "Envío sin confirmar. Requiere verificación antes de repetirlo."
       : row.observation,
-    canCheck: row.status === "pending" && Boolean(externalId),
+    canCheck:
+      (row.status === "pending" || stalled) &&
+      Boolean(
+        externalId ||
+        (attempt && row.issueDate && canReplayFiscalAttempt(attemptContext)),
+      ),
     proof: Boolean(proofKey),
   };
 }
@@ -529,30 +541,53 @@ export class AccountingService {
     const locked = await this.changeInvoice(id, version, issuable, {
       status: "sending",
       attempt,
+      attemptContext: {
+        startedAt: new Date().toISOString(),
+        scope: fiscalAttemptScope,
+      },
       issueDate,
       actor,
     });
+    return this.sendInvoice(locked, attempt);
+  }
+
+  private async sendInvoice(
+    invoice: AccountingInvoice,
+    attempt: string,
+    recovering = false,
+  ) {
     let result: FiscalInvoice;
     try {
-      result = await this.fiscal.issue(locked, attempt);
+      result = await this.fiscal.issue(invoice, attempt);
     } catch (error) {
-      const rejected = error instanceof BadRequestException;
-      return this.changeInvoice(id, locked.version, ["sending"], {
+      const rejected = !recovering && error instanceof BadRequestException;
+      return this.changeInvoice(invoice.id, invoice.version, ["sending"], {
         status: rejected ? "rejected" : "pending",
         observation: rejected
           ? error.message
           : "Envío sin confirmar. Requiere verificación antes de repetirlo.",
       });
     }
-    return this.fiscalResult(locked, result, "sending");
+    return this.fiscalResult(invoice, result, "sending");
   }
 
   async check(id: string, version: number) {
     const current = await this.invoiceRecord(id);
-    if (current.status !== "pending" || !current.externalId)
+    const invoice = invoiceView(current);
+    if (!invoice.canCheck || current.version !== version)
       throw new ConflictException(
         "Este envío no tiene una consulta disponible.",
       );
+    if (!current.externalId) {
+      if (!current.attempt)
+        throw new ConflictException(
+          "Este envío no se puede recuperar desde el panel.",
+        );
+      const locked = await this.changeInvoice(id, version, [current.status], {
+        status: "sending",
+      });
+      return this.sendInvoice(locked, current.attempt, true);
+    }
     let result: FiscalInvoice;
     try {
       result = await this.fiscal.status(current.externalId);
@@ -563,11 +598,7 @@ export class AccountingService {
     }
     if (result.id !== current.externalId)
       throw new ConflictException("La consulta no corresponde a esta factura.");
-    return this.fiscalResult(
-      invoiceView({ ...current, version }),
-      result,
-      "pending",
-    );
+    return this.fiscalResult(invoice, result, current.status);
   }
 
   private async fiscalResult(

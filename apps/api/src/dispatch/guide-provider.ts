@@ -12,8 +12,13 @@ export type GuideResult = {
 };
 
 export class GuideRequestError extends Error {
-  constructor(readonly definitive: boolean) {
-    super("No se pudo confirmar la operación fiscal.");
+  constructor(
+    readonly definitive: boolean,
+    message = definitive
+      ? "El envío fue rechazado. Revisa los datos o consulta con administración."
+      : "No se pudo confirmar la operación fiscal.",
+  ) {
+    super(message);
   }
 }
 
@@ -63,6 +68,7 @@ export class GuideProvider {
     data: DispatchInput,
     key: string,
     date: string,
+    series = config.APISUNAT_GUIDE_SERIES,
   ): Promise<GuideResult> {
     const isExternal = data.transportMode === "01";
     return this.result(
@@ -71,7 +77,7 @@ export class GuideProvider {
         headers: { "Content-Type": "application/json", "Idempotency-Key": key },
         body: JSON.stringify({
           ruc: fiscalIssuerRuc,
-          series: config.APISUNAT_GUIDE_SERIES || undefined,
+          series: series || undefined,
           issueDate: date,
           transferDate: data.transferAt.slice(0, 10),
           startAddress: data.startAddress,
@@ -139,6 +145,14 @@ export class GuideProvider {
       signal: AbortSignal.timeout(15_000),
       redirect: "error",
     });
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null);
+      if (body?.error?.code === "GUIDE_CREDENTIALS_REQUIRED")
+        throw new GuideRequestError(
+          true,
+          "Faltan las credenciales de guías de remisión del emisor. Pide a Administración habilitarlas en API SUNAT.",
+        );
+    }
     // The contract rejects these statuses before creating a guide.
     if (!response.ok)
       throw new GuideRequestError(
