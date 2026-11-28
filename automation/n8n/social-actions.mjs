@@ -103,9 +103,31 @@ function photoPreview(scope, expected) {
       }
     }
   }
-  return found.size === expected
-    ? { ...found.values().next().value, count: found.size }
-    : null;
+  // LinkedIn's media editor renders one full image at a time and lists the
+  // other uploaded images by filename in its thumbnail controls.
+  const selected = new Set(
+    dialogs
+      .flatMap((dialog) => [...dialog.querySelectorAll("button,[role=button]")])
+      .filter(visible)
+      .map(
+        (button) =>
+          (
+            button.getAttribute("aria-label") ||
+            button.getAttribute("title") ||
+            ""
+          ).match(/^(?:Seleccionar|Select) veca-foto-(\d+)\.jpg$/i)?.[1],
+      )
+      .filter(Boolean)
+      .map(Number),
+  );
+  const accepted =
+    found.size === expected ||
+    (found.size > 0 &&
+      selected.size === expected &&
+      Array.from({ length: expected }, (_, index) => index + 1).every((index) =>
+        selected.has(index),
+      ));
+  return accepted ? { ...found.values().next().value, count: expected } : null;
 }
 
 function metaPhotoPreview(expected) {
